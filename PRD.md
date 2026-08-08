@@ -177,6 +177,7 @@ Both surfaces require explicit loading, empty, validation, failure, retry, and s
 
 **Design requirements:**
 
+- Clerk provides sign-in and session management for the seeded demo accounts. Each Clerk user is mapped to one local patient record; this does not turn the separate single-use upload link into a user account.
 - Upload reuses the same extraction pipeline as §4.1/§4.4 — no separate logic, just an authenticated entry point instead of a tokenized one.
 - The authenticated upload screen uses the same check-first coverage-reuse step as the tokenized link. The account's patient record is used for the lookup; the patient can reuse the prior document or upload a replacement.
 - Queue number/station is a read view onto the same queue assignment staff already see (§4.2) — the patient sees their own queue position, not a parallel system.

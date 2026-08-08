@@ -133,7 +133,9 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 
 ```
 
+- Clerk supplies the sign-in/session flow. The wireframe may use Clerk's prebuilt component or a Clerk-backed custom form while preserving the same states and project styling.
 - Read-only navigation uses the active staff session. Re-authentication is required immediately before confirming/correcting extracted data, revealing NRIC, overriding a match, confirming billing, or recording a manual identity/e-card check.
+- Sensitive actions use Clerk reverification. The backend validates that the signed session reflects sufficiently recent verification before committing the action; a frontend-only modal is not sufficient authorization.
 - Invalid credentials show an inline error without clearing the email. Repeated failure preserves the uncommitted action and offers Cancel; session expiry returns to sign-in and restores the intended route after success.
 
 ### 2.2 Queue Overview
@@ -545,16 +547,17 @@ patients
 
 staff_accounts
 ├── id (uuid, PK)
+├── clerk_user_id (text, UNIQUE)
 ├── full_name
 ├── email
 ├── role                         -- registration / pharmacist / billing / admin
 ├── active (boolean)
 └── created_at
-    -- authentication provider stores credentials; this table supplies app role/audit identity
+    -- Clerk stores credentials; this table supplies app role/audit identity
 
 upload_links
 ├── id (uuid, PK)
-├── token                    -- opaque, single-use, unguessable
+├── token_hash               -- hash of opaque, single-use, unguessable token
 ├── patient_id (FK → patients, nullable until identity is known at booking)
 ├── appointment_reference       -- links to the specific scheduled visit
 ├── expires_at                     -- appointment date, or first use, whichever first
@@ -566,9 +569,9 @@ upload_links
 
 patient_accounts
 ├── id (uuid, PK)
+├── clerk_user_id (text, UNIQUE)
 ├── patient_id (FK → patients)
-├── email / phone              -- login identifier
-├── password_hash                 -- Supabase Auth handles this natively
+├── email / phone              -- cached display/contact value; Clerk owns login identity
 └── created_at
     -- DELIBERATELY SEPARATE from upload_links above. This table backs the small,
     -- fixed demo pool of patient logins (PRD §4.6) — e.g. a handful of seeded
@@ -777,20 +780,20 @@ audit_log
 ## 5. Auth & Review Flow Summary
 
 ```text
-Staff logs in (individual account)
+Staff logs in through Clerk (individual account)
    ↓
 Read-only actions (view queue, view records, view audit log) → no re-auth required
    ↓
 Any confirmation or correction action (record a manually completed identity/e-card
 check, confirm extracted data/billing, override a match, reveal NRIC, edit a field)
-→ staff re-authentication before the change commits
+→ Clerk reverification before the change commits
    ↓ (on success)
 Action commits → audit_log entry created automatically → record status updates
 ```
 
-This mirrors the accountability pattern established earlier in this project's design work (password re-confirmation on any edit, automatic audit logging via the data layer) — carried forward because it directly serves the Governance & Safety judging criterion (human oversight, audit trail) in the new brief.
+This mirrors the accountability pattern established earlier in this project's design work (credential/factor reverification on any sensitive edit, automatic audit logging via the data layer) — carried forward because it directly serves the Governance & Safety judging criterion (human oversight, audit trail) in the new brief.
 
-**Note on patient-side auth:** the tokenized upload flow (§3.2–§3.3) and the small demo patient account (§3.1–§3.6) are separate, lighter-weight mechanisms from staff auth above — see the `upload_links` vs. `patient_accounts` design note in §4 for why these are kept distinct rather than unified into one login system. A patient may record a reuse/replacement choice within that scoped session without staff re-authentication, but the resulting eligibility match is not final until a staff member reviews and confirms it.
+**Note on patient-side auth:** Clerk authenticates the small demo patient account (§3.1–§3.6), while the tokenized upload flow (§3.2–§3.3) remains a separate appointment-scoped capability rather than a Clerk user session. See the `upload_links` vs. `patient_accounts` design note in §4 for why these are kept distinct. A patient may record a reuse/replacement choice within either authorized scope without staff re-authentication, but the resulting eligibility match is not final until a staff member reviews and confirms it.
 
 ---
 
