@@ -10,7 +10,7 @@
 
 ### 1.1 Current Workflow
 
-Every patient — whether a GP consultation or a corporate health screening — currently requires front-desk staff to manually determine identity, employer/insurer, applicable benefits, screening package, and billing arrangement after the patient has already reached the counter. This is complicated by a lack of standardisation: different employers, insurers, and Third-Party Administrators (TPAs) issue differently formatted chits, vouchers, authorisation letters, and codes (confirmed directly in the provided sample chit letters — e.g., distinct formats and internal codes like MRDEB for Meridian Life Assurance and EVWPA for Everwell Insurance Group, each listing a different set of required tests/packages in free-form layouts). Staff must read and interpret each document individually, cross-reference it against the right coverage rules, and manually key the result into one or more systems — sometimes twice, once into the clinic's own system and again into a separate TPA portal after the visit.
+Every patient — whether a GP consultation or a corporate health screening — currently requires front-desk staff to manually determine identity, employer/insurer, applicable benefits, screening package, and billing arrangement after the patient has already reached the counter. This is complicated by a lack of standardisation: the supplied synthetic bundle contains nine distinct medical-document examples across seven issuer/code families, including referral letters, vouchers, underwriting requests, government authorisation forms, and an employer appointment email. The same issuer code can also appear on different document types. Staff must interpret the selected tests, packages, dates, and instructions in context, cross-reference the right coverage rules, and manually key the result into one or more systems — sometimes twice, once into the clinic's own system and again into a separate TPA portal after the visit.
 
 ### 1.2 Quantified Pain Point (from the Official Problem Statement)
 
@@ -81,29 +81,31 @@ This bottleneck affects every patient passing through registration, not a narrow
 
 ### 4.1 Primary Feature — Automated Document Interpretation & Eligibility Matching
 
-**What it does:** Ingests a patient's coverage document (medical chit, insurer voucher, corporate referral letter, TPA authorisation form) — via photo/scan/upload — and automatically extracts the structured fields staff currently read manually: issuing insurer/employer/TPA (identified via document layout and/or internal code, e.g. MRDEB, EVWPA), policy/voucher number, patient name and ID, requested tests/package contents, validity window, and any special instructions. This is matched against a coverage/package rules table to determine the correct screening package and billing arrangement.
+**What it does:** Ingests a patient's medical-administration document (medical chit, insurer voucher, corporate referral/underwriting letter, TPA/government authorisation form, or employer appointment notice) — via photo/scan/upload — and automatically extracts the fields staff currently read manually: document type; issuer/employer/TPA and code; patient name and identifier when present; policy, voucher, proposal, contract, certificate, package, or check-up references; selected tests/package contents; issue, appointment, fulfil-by, and validity dates; venue; billing/policyholder details; and special instructions. Fields are nullable because the samples do not all contain the same facts. The extracted facts are matched against a versioned rules table to determine the applicable package and billing arrangement or to produce a staff-review reason.
 
 **Why this is the highest-value target:** This is the single most time-consuming, most error-prone, and most duplicated step in the current workflow (document interpretation ~3–5 min + eligibility check ~3–5 min + package verification ~2–4 min = up to ~14 of the ~23–32 total administrative minutes per patient, before even reaching billing). It is also the step most directly caused by lack of standardisation across payers — exactly the kind of unstructured-document variation an LLM-based extraction layer is well suited to normalise, since the underlying documents (as seen in the sample chit letters) vary in layout and wording but contain a consistent underlying set of facts (who, what coverage, what's requested, what's valid).
 
 **Design requirements:**
 
 - **Extraction only, not judgment.** The system extracts and structures what the document says; a hard-coded/rules-based eligibility table (not LLM inference) determines what package/coverage that maps to, to avoid hallucinated coverage decisions. The LLM's job is parsing messy input into structured fields — the same "reliable backbone + LLM for parsing unstructured input" pattern used successfully in earlier research on this project.
-- **Confidence-aware.** Any field the system cannot extract with high confidence is flagged for staff review rather than guessed.
+- **Readiness-gated, not self-confidence-driven.** A document passes extraction only when its schema is valid, every required field for that document type is present, each required fact has source evidence, any patient identifier matches exactly within the authorized scope, validity can be established, and the rules engine produces one clean result. Model-provided confidence is advisory only. Any failed gate routes the case to staff review rather than being guessed.
 - **Always staff-reviewable before finalising.** Extracted/matched data is presented to staff for confirmation, not silently auto-committed — consistent with the human-in-the-loop principle carried through this project's design.
-- **Explainable.** Staff can see exactly which part of the source document produced each extracted field (e.g., highlight the region of the chit that produced "Package: Executive Health Screening").
+- **Explainable.** Staff can see the page and supporting source excerpt for every extracted field. Precise bounding-box highlighting is shown only when a future OCR adapter supplies reliable coordinates; it is not required for the no-Azure demo baseline.
+- **Checkbox-aware.** For forms and vouchers, checked and unchecked options are preserved separately. Only explicitly selected options may become requested tests or package inputs.
+- **Patient-match-safe.** Documents without an explicit patient identifier, or with a conflicting identifier, always require staff review. Name-only matching never silently attaches a document to a patient.
 - **Recoverable capture and processing.** Staff/patient upload flows show file preview, supported type/size, upload and processing progress, success, and actionable camera/file/network/timeout/extraction errors without duplicate submission.
 - **Controlled correction.** Editing an extracted fact displays the original and corrected values, requires a reason and staff re-authentication, preserves failed edits for retry, and writes an immutable audit entry.
 
 ### 4.2 Core Add-On Feature — Pre-Cleared Fast Queue and Review Queue
 
-**What it does:** Rather than a single serial line, the system uses a strict two-queue rule. The **fast queue** is reserved for booked patients who completed pre-registration before arrival and whose required documents were all extracted, validated, and matched cleanly. Everyone else enters the **review queue (slow path)**: all walk-ins, booked patients who did not complete pre-registration, and any case with a missing, expired, low-confidence, unfamiliar, or ambiguous document or eligibility match.
+**What it does:** Rather than a single serial line, the system uses a strict two-queue rule. The **fast queue** is reserved for booked patients who completed pre-registration before arrival and whose required documents pass every extraction/validity gate and match cleanly. Everyone else enters the **review queue (slow path)**: all walk-ins, booked patients who did not complete pre-registration, and any case with a missing, expired, incomplete, unfamiliar, unsupported, or ambiguous document or eligibility match.
 
 **Routing rule:**
 
 ```text
 IF appointment is booked
    AND pre-registration is complete before arrival
-   AND every required document is present, valid, and high-confidence
+   AND every required document is present, valid, and readiness_status = pass
    AND every eligibility/package match is clean
 THEN → FAST QUEUE
 ELSE → REVIEW QUEUE (SLOW PATH)
@@ -116,7 +118,7 @@ ELSE → REVIEW QUEUE (SLOW PATH)
 - A booked patient's routing decision is made during pre-registration, before arrival. Fast-queue status is granted only after every prerequisite passes; it is never inferred from booking status alone.
 - Walk-ins always enter the review queue, even if their document later extracts cleanly. Walk-ins are less common and are intentionally grouped with cases needing more staff handling rather than given a separate queue.
 - The review queue is not a penalty state. Patients routed there still receive full staff attention; the point is to protect the predictable pre-cleared path, not deprioritise anyone's care.
-- Queue assignment is visible to staff with a machine-readable reason such as `walk_in`, `prereg_incomplete`, `missing_document`, `low_confidence`, `expired_document`, or `ambiguous_match`.
+- Queue assignment is visible to staff with a machine-readable reason such as `walk_in`, `prereg_incomplete`, `missing_document`, `extraction_needs_review`, `expired_document`, or `ambiguous_match`.
 - Staff can see queue composition to manage counter allocation in real time, but manually moving a patient into the fast queue requires all fast-queue prerequisites to be satisfied.
 - The staff queue board tracks appointment date/time and separates patients into **Incoming**, **Ongoing**, and **Finished** views:
   - **Incoming:** booked patients who have not checked in. Shows scheduled date/time, expected queue number, fast/review assignment, and expected counter number.
@@ -152,7 +154,7 @@ The questionnaire/consent surface visibly separates read-only prefilled identity
 
 **Submission mechanism — patient upload link, not a full patient account.** Rather than building a full patient-facing account system (separate login, credential management, its own auth surface), a scheduled patient receives a tokenized, single-use upload link tied to their specific appointment — e.g., sent by SMS/email at booking. The link opens a minimal, unauthenticated-but-scoped page: upload the coverage document, done. No password, no account, no persistent session. For corporate batch screening, the same mechanism extends naturally — each employee gets their own tokenized link ahead of the scheduled screening day, rather than staff manually collecting documents from a group.
 
-**Check-first coverage reuse.** Before showing the upload control, the system checks whether the appointment-bound patient matches an existing patient record by normalised NRIC or email and has a coverage document from a prior visit. A new patient, or a patient with no prior document, proceeds directly to the standard upload flow. A returning patient sees only the prior issuer and document date — for example, "We have your Meridian coverage on file from 12 February 2026. Still the same?" — with two choices:
+**Check-first coverage reuse.** Before showing the upload control, the system resolves the appointment-bound patient by normalized NRIC/FIN/passport, using email only as an unambiguous fallback inside the already authorized scope, and checks for a prior coverage document. A new patient, a conflicting/name-only match, or a patient with no prior document proceeds directly to the standard upload flow. A returning patient sees only the prior issuer and document date — for example, "We have your Meridian coverage on file from 12 February 2026. Still the same?" — with two choices:
 
 - **Yes, same coverage:** reuse the prior document as the input for this appointment, then re-run validity and eligibility rules and place the result through the normal staff-review gate. This confirms reuse of the document; it does not guarantee that coverage is still valid.
 - **No, upload new document:** continue to the existing photo/file upload flow and process the new document through the standard extraction pipeline.
@@ -232,11 +234,11 @@ Both surfaces require explicit loading, empty, validation, failure, retry, and s
 ```text
 Patient's coverage document (chit/voucher/referral letter)
    → captured via upload/scan (pre-arrival) or at check-in (walk-in)
-   → Document Extraction Layer (LLM-based parsing of unstructured/varied layouts)
-   → Structured fields: issuer/TPA code, policy/voucher no., patient identifiers,
-     requested package/tests, validity window
+   → Document Extraction Layer (schema-constrained parsing of varied layouts)
+   → Typed facts + selected options + page/source-excerpt evidence
+   → Readiness gates: required fields, identifier, validity, and evidence
    → Eligibility & Package Matching Engine (rules-based lookup, not LLM judgment)
-   → Queue Assignment: booked + pre-registration complete + all documents/matches clean
+   → Queue Assignment: booked + pre-registration complete + all readiness gates/matches clean
      → fast queue; every other case (including all walk-ins) → review queue
    → Staff review/confirmation screen
    → Confirmed record feeds: registration system, questionnaire pre-fill,
@@ -251,12 +253,12 @@ Patient's coverage document (chit/voucher/referral letter)
 
 | Layer | Function | Notes |
 | --- | --- | --- |
-| Document Extraction Layer | LLM-based parsing of chits/vouchers/referral letters into structured fields | Handles the cross-payer format variation confirmed in the sample chit letters |
-| Eligibility & Package Matching Engine | Rules-based lookup mapping extracted issuer/code/package to the clinic's actual coverage rules | Deliberately rules-based, not LLM inference, to avoid hallucinated coverage/billing decisions |
+| Document Extraction Layer | Schema-constrained parsing of PDFs/images into typed facts, selected options, and page/source-excerpt evidence | Handles the nine supplied document variants without assuming every field exists |
+| Eligibility & Package Matching Engine | Versioned rules lookup using issuer code plus document type, package/check-up code, and requested items | Issuer code alone is insufficient because one code can occur on different document types; decisions remain deterministic, not LLM inference |
 | Patient/Registration Record Store | Single structured record per patient, reused across registration and questionnaire steps | Eliminates the duplicate-entry problem named in §1.1/§4.3 |
-| Staff Review Interface | Presents extracted + matched data for confirmation before finalising | Human-in-the-loop; explainable (source-highlighted) |
+| Staff Review Interface | Presents extracted + matched data for confirmation before finalising | Human-in-the-loop; each field shows page/excerpt evidence, with region highlighting only when coordinates exist |
 | Pre-Arrival Intake Channel | Where scheduled patients submit documents ahead of arrival, via a tokenized single-use upload link (no patient account/login) tied to their appointment | Directly addresses the "before they reach the front desk" requirement in the brief, without the added auth/security surface of a full patient account (see §4.4) |
-| Coverage Reuse Check | Matches the appointment-bound or authenticated patient to prior coverage by normalised NRIC/email, then records reuse or replacement | Avoids duplicate uploads without exposing a public patient lookup or bypassing validity, eligibility, and staff review |
+| Coverage Reuse Check | Resolves the appointment-bound/authenticated patient by normalized identifier, with unambiguous scoped email fallback, then records reuse or replacement | Avoids duplicate uploads without exposing a public patient lookup or bypassing validity, eligibility, and staff review |
 | Queue Operations Board | Tracks scheduled date/time, Incoming/Ongoing/Finished status, fast/review routing, and expected vs. actual queue/counter numbers | Gives staff one date-aware operational view from pre-arrival planning through visit completion |
 | Manual Check Attestation | Records which staff member confirmed completion of the approved manual identity/e-card process and when | Stores no automated verification decision; check-in fails safely if the attestation cannot be saved |
 | Review and Exception Workspace | Lists slow-path cases and supports reasoned, re-authenticated corrections with source evidence | Keeps original/corrected values and immutable audit history |
@@ -265,7 +267,24 @@ Patient's coverage document (chit/voucher/referral letter)
 
 ### 6.3 Data Sources (Demo)
 
-Built against the actual provided synthetic datasets: patient_registration_synthetic.csv (identity/contact fields), general_health_questionnaire_mock_patients.csv and occupational_health_questionnaire_mock_patients.csv (questionnaire fields), and the sample Medical Chit Letters (unstructured coverage documents from multiple fictional insurers/TPAs, each with distinct codes and formats) as the extraction target.
+The supplied archive is the complete demo-data contract:
+
+| Source | Contents | Import/use decision |
+| --- | --- | --- |
+| `patient_registration_synthetic.csv` | 300 rows, 12 identity/contact/allergy columns, 300 unique nonblank identifiers | Canonical patient seed. Normalize DOB from `DD/MM/YY` to a database date and retain an import warning where the century required a pivot rule. |
+| `general_health_questionnaire_mock_patients.csv` | 30 rows, 41 columns | Reduced mock export for demo history/prefill. Blank conditional fields remain `null`, not `false`. |
+| `occupational_health_questionnaire_mock_patients.csv` | 30 rows, 27 columns | Reduced mock export for demo history/prefill. Preserve the employer/insurer disclosure-consent field independently. |
+| `Parkway_Shenton_Questionnaires_Field_Reference.docx` | Full live-field reference for both questionnaire types | UI/schema reference. It contains more conditional fields, matrices, screening/vaccination details, and signatures than the mock CSVs; absent CSV fields must not be fabricated. |
+| `Sample Medical Chit Letters (v2).docx` | Nine synthetic one-page documents across seven code families | Split/render into nine individual PDF/image fixtures before extraction tests. The combined DOCX itself is not a patient upload fixture. |
+
+Dataset reconciliation rules:
+
+- Normalize and join questionnaires to patients by exact NRIC/FIN/passport first. Across both questionnaire files there are 57 unique people: 51 match the registration dataset and six do not. Unmatched responses enter an import-exception list and do not silently create patient records.
+- Three people have both questionnaire types; preserve both appointment/questionnaire records.
+- Names agree for matched rows, but questionnaire emails frequently differ from registration emails. Questionnaire email is retained as source data but never overwrites the canonical registration email automatically. Email remains an unambiguous, scoped fallback only when no identifier is available.
+- Registration DOB uses `DD/MM/YY`; questionnaire DOB uses `DD/MM/YYYY`. Four-digit questionnaire DOB disambiguates matching rows. Remaining two-digit years use a documented import pivot and are flagged if they produce an implausible age.
+- Six medical-document fixtures contain explicit patient identifiers and all six match registration records. The three fixtures without an identifier must exercise the staff-review path; they may not be attached automatically by name.
+- Because the questionnaire CSVs are reduced exports, demo completeness is measured against the columns actually supplied. The fuller field-reference document guides future UI expansion but does not turn absent answers or signatures into completed consent.
 
 ### 6.4 Copilot Studio / Microsoft Ecosystem Portability
 
@@ -281,7 +300,7 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 - The interface only records a staff attestation after those checks are completed manually. It does not capture evidence, scan identity/e-card data, suggest a result, or treat a failed save as a successful check.
 - No eligibility/coverage/billing determination is finalised without staff confirmation.
 - Every extracted field is explainable — traceable to the specific part of the source document that produced it.
-- Low-confidence extractions are flagged, not guessed.
+- Any failed extraction-readiness gate is flagged with a reason rather than guessed; model confidence is advisory only.
 - Reusing a prior coverage document never reuses an old eligibility decision. Validity and eligibility rules run again for the new appointment, followed by staff confirmation.
 - All actions are logged, supporting both audit and the ability to correct systematic extraction errors over time.
 - Patient views expose only patient-scoped outcomes; extraction confidence, review reasons, internal eligibility rules, staff audit data, and other patients are never shown.
@@ -289,7 +308,7 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 
 ## 8. Regulatory & Compliance Posture (Singapore Context)
 
-- **PDPA:** Patient identity and health data are involved throughout; the system should minimise data retention to what's operationally necessary, keep processing internal/on-premises where feasible, and ensure any conceptual TPA/insurer submission is treated as a disclosure event requiring the same care as existing consent flows (the provided questionnaires already capture explicit consent to disclose to employer/insurer — this system should respect, not bypass, that consent structure).
+- **PDPA:** Patient identity and health data are involved throughout. The demo uses only the supplied synthetic data. Any real deployment must minimise retained fields, encrypt direct identifiers, disclose only the minimum necessary content to approved processors, configure retention/deletion, and complete the required provider and cross-border/data-residency review before OpenAI or any external service processes a patient document. A conceptual TPA/insurer submission remains a separate disclosure event. The occupational questionnaire's employer/insurer disclosure consent is stored independently and never inferred from the general declaration or a missing field.
 - **AIHGle 2.0 (MOH/HSA):** This is squarely a "Clinical-Ops" administrative automation tool — it does not diagnose, treat, or make clinical judgments, which is a favourable regulatory posture. The constraint that identity verification stays in-person further limits risk exposure.
 - **Governance & Safety (judging criterion):** Hallucination mitigation is addressed structurally (§6.2) by separating LLM-based extraction from rules-based eligibility determination — the LLM never decides coverage, it only reads documents.
 
@@ -297,7 +316,9 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 
 | Metric | Target |
 | --- | --- |
-| Document extraction accuracy | High-confidence correct extraction across the varied sample chit formats provided (Meridian, Everwell, and others in the dataset) |
+| Document extraction accuracy | All nine split document fixtures produce schema-valid output or an explicit review reason; required extracted facts and selected checkboxes are correct against fixture expectations |
+| Patient matching safety | All six identifier-bearing document fixtures match the intended registration record; all three identifier-free fixtures require staff review rather than name-only auto-linking |
+| Dataset import integrity | 300 registration rows load once; 51 uniquely matched questionnaire people link by normalized identifier; six unmatched people are reported without silent patient creation; three dual-questionnaire patients retain both records |
 | Time saved (demo comparison) | Visibly faster path from "document received" to "package/eligibility confirmed" vs. the ~14-minute manual baseline (interpretation + eligibility + package verification) stated in the brief |
 | Queue-splitting impact (demo comparison) | Simulated queue visibly shows a booked, fully pre-cleared patient entering the fast queue while walk-ins and any incomplete or uncertain cases enter the review queue, vs. a single-line baseline |
 | Queue lifecycle traceability | Every demo visit retains its appointment date and visibly transitions from Incoming to Ongoing to Finished, with expected counter shown before arrival and actual counter recorded after check-in |
@@ -313,9 +334,14 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 | Risk | Mitigation |
 | --- | --- |
 | LLM misreads a chit and assigns wrong coverage | Rules-based eligibility engine separated from extraction (§6.2); mandatory staff confirmation (§7) |
-| Extraction fails silently on an unusual document format | Confidence flagging (§4.1) routes uncertain cases to staff rather than guessing |
+| Extraction fails silently on an unusual document format | Schema, evidence, identifier, validity, and unique-rule readiness gates (§4.1) route unresolved cases to staff rather than guessing |
+| Issuer code maps to the wrong rule because one code appears on multiple document types | Rule lookup keys on issuer code plus document type and, where present, package/check-up code and selected requested items; ambiguous results route to review |
+| Checked and unchecked form options are flattened into one test list | Extraction preserves option state and only selected options feed matching; contract tests cover every checkbox-style fixture |
+| A document without an identifier attaches to the wrong same-name patient | Auto-linking requires an exact identifier within the authorized scope; identifier-free/conflicting documents always require staff review |
+| Questionnaire email overwrites the canonical patient email | Registration remains canonical; questionnaire contact values retain source provenance and mismatches are reviewable rather than auto-merged |
+| Two-digit and four-digit DOB formats are interpreted inconsistently | Import normalizes both formats, uses four-digit questionnaire DOB where available, documents the remaining century pivot, and flags implausible ages |
 | Queue-splitting creates a two-tier experience that feels unfair to review-queue patients | Explicit design requirement (§4.2) that the review queue is an operational routing decision, not a deprioritisation — patient-facing UX should call it the "review queue," not the "slow queue," and explain when more processing is needed |
-| A booked patient is incorrectly placed in the fast queue before all prerequisites pass | Fast-queue eligibility is a strict all-gates rule: booked appointment, pre-registration completed before arrival, every required document valid and high-confidence, and every match clean |
+| A booked patient is incorrectly placed in the fast queue before all prerequisites pass | Fast-queue eligibility is a strict all-gates rule: booked appointment, pre-registration completed before arrival, every required document valid with `readiness_status = pass`, and every match clean |
 | Overclaiming feasibility of real Clinic Assist/NEHR integration | Judging criteria explicitly ask for conceptual integration only — PRD and pitch should describe the integration pattern honestly, not claim a working live connection |
 | Identity verification scope creep | Treated as an explicit, permanent hard constraint (§2, §7) reinforced throughout, not just stated once |
 | A confirmation screen is mistaken for automated identity/e-card checking | Copy explicitly says staff completed the checks manually; the stored record is an attestation only, contains no automated result/evidence, and fails safely if it cannot be saved |
@@ -326,8 +352,8 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 | Demo patient account (§4.6) mistaken for a production-ready patient identity system | Stated explicitly in the pitch as a small, fixed demo pool distinct from the tokenized single-visit upload link (§4.4) — not presented as a solved production patient-authentication design |
 | A returning patient reuses stale or expired coverage | "Yes, same coverage" reuses only the source document; the system re-runs document validity and current eligibility rules and still requires staff confirmation before finalising |
 
-## 11. Open Questions
+## 11. Remaining Decisions
 
-- What does the eligibility/package rules table look like concretely for the demo — how many insurer/TPA codes and packages will be modelled (Meridian MRDEB, Everwell EVWPA, and how many others from the full chit sample set)?
-- Should the demo show a corporate batch pre-registration scenario (multiple employees, one screening day) in addition to a single walk-in/scheduled patient, to demonstrate scalability toward Parkway Shenton's corporate screening business?
+- Exact package/billing outcomes still require clinic-approved interpretation, but the demo rules fixture set is fixed at all seven supplied code families: `MRDEB`, `EVWPA`, `EVWME`, `BLPDE`, `BLPHS`, `NSTNBU`, and `MOL0199VME`. Rules use document type and selected package/check-up/requested items in addition to issuer code.
+- A dedicated corporate-batch workflow remains deferred. For the demo, scalability is shown by seeding multiple booked patients on one screening date/employer and using the existing date-filtered Incoming board rather than building a separate batch UI.
 - What specific operational cost estimate will be included to satisfy constraint #3 (e.g., API/inference cost per document processed)?

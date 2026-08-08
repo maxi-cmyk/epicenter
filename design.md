@@ -29,13 +29,13 @@
   Rules-based lookup: structured fields → confirmed package + billing arrangement
      ↓
 [All pre-registration gates passed before arrival?]
-  Required documents present + valid + high-confidence + every match clean
+  Required documents present + valid + readiness PASS + every match clean
      ├── YES → FAST QUEUE
      └── NO  → REVIEW QUEUE (SLOW PATH)
      ↓
 [Pre-Arrival Record Ready, queue pre-assigned]
   Registration + questionnaire data pre-filled, package/billing pre-matched
-  Any low-confidence field flagged for staff review
+  Any failed readiness gate flagged for staff review
      ↓
 [Patient Arrives]
      ↓
@@ -75,8 +75,8 @@ in seconds, patient proceeds                then confirms — patient's extra
 
 ### Flow notes
 
-- Fast-queue admission uses an all-gates rule: the patient must have a booked appointment, complete pre-registration before arrival, provide every required valid document, receive high-confidence extraction for every required field, and produce clean eligibility/package matches. If any gate fails, the patient enters the review queue.
-- Walk-ins always enter the review queue, regardless of eventual extraction confidence. Because walk-ins are less common, they share the staffed slow path with incomplete and uncertain cases rather than creating a third queue.
+- Fast-queue admission uses an all-gates rule: the patient must have a booked appointment, complete pre-registration before arrival, provide every required valid document, receive `readiness_status = pass` for each document, and produce clean eligibility/package matches. If any gate fails, the patient enters the review queue.
+- Walk-ins always enter the review queue, regardless of eventual document readiness. Because walk-ins are less common, they share the staffed slow path with incomplete and uncertain cases rather than creating a third queue.
 - **Queue assignment solves the compounding-delay problem named in the brief** by structurally protecting booked, fully pre-cleared patients from variable-time cases.
 - Identity/e-card checking always happens manually, in person, and outside system decision logic. The product only records the responsible staff member's confirmation after the manual process; it never scans, validates, or suggests a result.
 - Staff confirmation is always required before a record is treated as final in either queue.
@@ -89,8 +89,8 @@ This branch runs when a patient opens either a tokenized appointment link or the
 [Patient reaches coverage screen]
      ↓
 [Resolve patient within the current scope]
-  Tokenized link: appointment-bound patient, matched by normalized NRIC/email
-  Demo account: authenticated patient record, matched by normalized NRIC/email
+  Tokenized link: appointment-bound patient, resolved by normalized identifier
+  Demo account: authenticated patient record; no public identity search
      ↓
 [Prior coverage document on file?]
      ├── NO ──→ [Standard photo/file upload flow (§3.3)]
@@ -110,7 +110,7 @@ This branch runs when a patient opens either a tokenized appointment link or the
 ```
 
 - This is a scoped lookup, not a public NRIC/email search. The token or authenticated account first establishes which patient may be checked.
-- Matching requires one unambiguous exact match after normalisation. NRIC is preferred and email is the fallback; conflicting or multiple matches reveal no prior coverage and fall back to upload plus staff review.
+- Matching requires one unambiguous exact match after normalisation. NRIC/FIN/passport is preferred and email is a scoped fallback only; the supplied questionnaire audit shows that emails frequently differ even when names and identifiers match. Conflicting, multiple, or name-only matches reveal no prior coverage and fall back to upload plus staff review.
 - "Yes, same coverage" reuses the prior source document, not its old eligibility decision. Current validity and eligibility checks still run, and staff still confirms the result.
 - Both choices are logged so staff can see whether the patient reused a prior document or supplied a replacement.
 
@@ -134,7 +134,7 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 ```
 
 - Clerk supplies the sign-in/session flow. The wireframe may use Clerk's prebuilt component or a Clerk-backed custom form while preserving the same states and project styling.
-- Read-only navigation uses the active staff session. Re-authentication is required immediately before confirming/correcting extracted data, revealing NRIC, overriding a match, confirming billing, or recording a manual identity/e-card check.
+- Read-only navigation uses the active staff session. Re-authentication is required immediately before confirming/correcting extracted data, revealing a full NRIC/FIN/passport identifier, overriding a match, confirming billing, or recording a manual identity/e-card check.
 - Sensitive actions use Clerk reverification. The backend validates that the signed session reflects sufficiently recent verification before committing the action; a frontend-only modal is not sufficient authorization.
 - Invalid credentials show an inline error without clearing the email. Repeated failure preserves the uncommitted action and offers Cancel; session expiry returns to sign-in and restores the intended route after success.
 
@@ -217,13 +217,14 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Review: Meridian_chit.pdf        Reason: AMBIGUOUS PACKAGE           │
+│ Review: Meridian_chit.pdf        Reason: VALIDITY NOT STATED         │
 ├──────────────────────────────┬───────────────────────────────────────┤
-│ Source document              │ Extracted fields                      │
-│ [highlighted source region]  │ Issuer      Meridian (MRDEB)  PASS   │
+│ Source document · Page 1     │ Extracted fields                      │
+│ [selected page/excerpt]      │ Issuer      Meridian (MRDEB)  PASS   │
 │                              │ Policy no.  MRD707314         PASS   │
-│                              │ Valid until 10 Aug 2026       REVIEW │
-│                              │ Package     Cardiac Add-on    REVIEW │
+│                              │ Patient ID  S***946C          PASS   │
+│                              │ Requests    3 medical tests   PASS   │
+│ Evidence: “Chest X-Ray...”   │ Valid until Not stated       REVIEW │
 │                              │                                       │
 │                              │ [Edit selected field] [View rule]     │
 ├──────────────────────────────┴───────────────────────────────────────┤
@@ -231,16 +232,17 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-- Selecting a field highlights its source. Edit mode shows the original value, corrected value, required correction reason, and Cancel/Save; Save requires re-authentication and creates an immutable audit entry.
-- Expired documents, unknown issuers, ambiguous matches, OCR failure, and no-match states each explain the cause and next action. Staff may correct extracted facts or choose a rules-table result, but cannot make an LLM-generated coverage decision final.
-- Confirmation is unavailable until every required field is resolved. Failed save preserves edits and offers Retry.
+- Selecting a field opens its source page and supporting excerpt. A bounding-box highlight appears only when reliable coordinates exist; the no-Azure baseline does not invent one. Edit mode shows the original value, corrected value, required correction reason, and Cancel/Save; Save requires re-authentication and creates an immutable audit entry.
+- Checked forms show selected and unselected options separately. Only selected options feed `requested_items` or package matching.
+- Expired documents, unknown issuers, missing patient identifiers, identifier conflicts, ambiguous selections, extraction failure, and no-match states each explain the cause and next action. Staff may correct extracted facts or choose a rules-table result, but cannot make an LLM-generated coverage decision final.
+- PASS is a deterministic readiness state, not an LLM probability threshold. Confirmation is unavailable until the schema is valid, every required field for the detected document type has evidence, patient matching is resolved, validity is resolved, and exactly one rules result remains. Failed save preserves edits and offers Retry.
 
 ### 2.7 Records Search
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
 │ Patient Records                                                  │
-│ Search [ Name, patient ID, masked NRIC, email ________________ ] │
+│ Search [ Name, patient ID, masked NRIC/FIN/passport, email ____ ] │
 │ Filters [Last visit] [Coverage] [Queue]                          │
 ├─────────────┬────────────────┬───────────────┬───────────────────┤
 │ PS-REG-0417 │ Loh Wei Ming   │ 12 Aug 2026   │ Meridian  [Open] │
@@ -248,7 +250,7 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 └─────────────┴────────────────┴───────────────┴───────────────────┘
 ```
 
-- Search is debounced, keyboard operable, and never displays full NRIC in results. Empty, loading, permission-denied, and error states are explicit.
+- Search is debounced, keyboard operable, and never displays a full NRIC/FIN/passport identifier in results. Empty, loading, permission-denied, and error states are explicit.
 
 ### 2.8 Patient Record
 
@@ -257,7 +259,7 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 │ Back to records                                                  │
 │ PS-REG-0417 · Loh Wei Ming · NRIC S***946C             │
 │ Current visit: 12 Aug 2026 · Queue FAST · F-014 · Counter 2     │
-│ Coverage: Meridian (MRDEB) · Cardiac Add-on · Confirmed         │
+│ Coverage: Meridian (MRDEB) · 3 requested tests · Confirmed      │
 │                                                                  │
 │ Record reuse                                                     │
 │ TPA form PASS · Eligibility PASS · General questionnaire PASS   │
@@ -329,8 +331,8 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
 │ Billing review · Loh Wei Ming · 12 Aug 2026                     │
-│ Coverage source: Meridian document · confirmed 08 Aug 2026      │
-│ Package: Executive Health Screening — Cardiac Add-on            │
+│ Coverage source: Bluepeak BLPHS voucher · staff-confirmed        │
+│ Selected package: WELL2 — Comprehensive Screen                   │
 │ Covered amount: $XXX.XX        Patient payable: $XX.XX           │
 │ TPA status: Ready for conceptual export                          │
 │                                                                  │
@@ -476,8 +478,8 @@ Patient screens are mobile-first and expose only the signed-in/token-scoped pati
 ```text
 ┌─────────────────────────────────────────┐
 │ Payment summary                         │
-│ Cardiac Add-on                          │
-│ Covered by Meridian: $XXX.XX            │
+│ WELL2 — Comprehensive Screen            │
+│ Covered by Bluepeak: $XXX.XX            │
 │ You pay: $XX.XX                         │
 │                                         │
 │ [Pay now — demo]                        │
@@ -499,14 +501,14 @@ Patient screens are mobile-first and expose only the signed-in/token-scoped pati
 ```text
 ┌─────────────────────────────────────────┐
 │ Your visit history                      │
-│ 12 Aug 2026 · Executive Health [Open]   │
+│ 12 Aug 2026 · Health Screening [Open]   │
 │ 03 Feb 2026 · GP Consultation   [Open]  │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
 │ Visit: 12 Aug 2026                      │
-│ Package: Cardiac Add-on                 │
-│ Coverage: Meridian                      │
+│ Package: WELL2 — Comprehensive Screen   │
+│ Coverage: Bluepeak BLPHS                 │
 │ Questionnaire responses [Expand]        │
 │ General health · Submitted 08 Aug       │
 │ Occupational health · Not required      │
@@ -524,13 +526,38 @@ Patient screens are mobile-first and expose only the signed-in/token-scoped pati
 
 ## 4. Backend Data Model (Supabase / Postgres)
 
+### 4.1 Demo Data Contract
+
+The supplied archive is treated as the complete demo-data input, not as a production schema:
+
+| Fixture | Audited shape | Design consequence |
+| --- | --- | --- |
+| Registration CSV | 300 rows; 12 columns; 300 unique nonblank identifiers | Canonical patient seed and contact record |
+| General-health CSV | 30 rows; 41 columns | Reduced response projection; conditional blanks remain `null` |
+| Occupational-health CSV | 30 rows; 27 columns | Reduced response projection; disclosure consent remains a distinct field |
+| Questionnaire field reference | Full general/occupational live-field catalogue | Schema/UI reference only; fields or signatures absent from CSV data are not invented |
+| Medical chit DOCX | Nine synthetic one-page documents across seven issuer/code families | Preprocess into nine individual PDF/image fixtures with fixture IDs and expected outputs |
+
+Reconciliation results and rules:
+
+- Across both questionnaire CSVs there are 57 unique people. Fifty-one join to registration by normalized NRIC/FIN/passport; six stay in `data_import_exceptions` and do not create patients silently.
+- Three matched people have both questionnaire types; each response remains a separate record.
+- For matched rows, names agree but questionnaire emails frequently differ. Registration remains canonical; source questionnaire contact values remain in the response payload with provenance and never overwrite `patients.email` automatically.
+- Registration DOB is `DD/MM/YY`; questionnaire DOB is `DD/MM/YYYY`. Matching four-digit DOB resolves the century where available. For remaining demo rows, `00`–`26` maps to 2000–2026 and `27`–`99` maps to 1927–1999; resulting ages below 16 or above 100 become import warnings. Production migration must not rely on this demo pivot.
+- Six medical fixtures contain an explicit patient identifier and match a registration row. Three have no explicit identifier and must demonstrate `patient_match_status = needs_review`; name-only matching is prohibited.
+- The combined DOCX is a source bundle, not an accepted upload type. Fixture preparation splits/renders its nine pages; patient/staff uploads remain PDF, JPG, or PNG.
+
 ```text
 patients
 ├── id (uuid, PK)
 ├── patient_id_display        -- e.g. "PS-REG-0417"
+├── source_dataset
+├── source_row_number
 ├── full_name
-├── nric_masked
-├── nric_full (encrypted)       -- reveal is a logged action
+├── identity_type                -- NRIC_FIN / passport / other
+├── identity_masked
+├── identity_encrypted           -- reveal is a re-authenticated, logged action
+├── identity_hash                -- normalized exact-match lookup
 ├── sex
 ├── nationality
 ├── date_of_birth
@@ -544,6 +571,21 @@ patients
 └── created_at
     -- fields mirror patient_registration_synthetic.csv exactly, so the
     -- synthetic dataset can be loaded directly with no field-mapping guesswork
+
+data_import_exceptions
+├── id (uuid, PK)
+├── source_file / source_row_number
+├── source_record_type          -- registration / general_health / occupational_health
+├── normalized_identifier_hash (nullable)
+├── reason_code                 -- unmatched_patient / duplicate_identifier /
+│                                  invalid_date / conflicting_identity
+├── details (jsonb)             -- masked/non-sensitive diagnostic fields only
+├── resolution_status           -- unresolved / linked / intentionally_ignored
+├── resolved_patient_id (FK → patients, nullable)
+├── created_at
+└── resolved_at (nullable)
+    -- the six unmatched questionnaire people are visible import exceptions;
+    -- questionnaire rows never create patient records implicitly
 
 staff_accounts
 ├── id (uuid, PK)
@@ -599,17 +641,40 @@ payments
 coverage_documents
 ├── id (uuid, PK)
 ├── patient_id (FK → patients, nullable until matched/created)
-├── file_reference             -- stored upload (image/PDF)
-├── raw_extracted_text (text)    -- full OCR/LLM-read output, for audit
-├── issuer_name                    -- e.g. "Meridian Life Assurance"
-├── issuer_code                       -- e.g. "MRDEB"
-├── policy_or_voucher_no
-├── requested_items (jsonb)             -- e.g. ["Chest X-Ray", "HIV Antibody Test", "Treadmill ECG"]
-├── validity_start / validity_end
-├── extraction_confidence (jsonb)          -- per-field confidence scores
-├── processing_status                     -- uploading / processing / ready / failed
-├── processing_error_code (nullable)       -- unsupported / too_large / unreadable / timeout / extraction_failed
-├── status                                    -- pending_review / confirmed / rejected
+├── source_fixture_id (nullable)        -- e.g. fixture page from the supplied DOCX bundle
+├── file_reference                      -- private stored upload (image/PDF)
+├── document_type                       -- referral_letter / voucher / underwriting_request /
+│                                          authorisation_form / appointment_notice / other
+├── issued_on (nullable)
+├── issuer_name / issuer_code
+├── employer_policyholder_or_agency (nullable)
+├── extracted_patient_name (nullable)
+├── extracted_id_type (nullable)        -- NRIC_FIN / passport / other
+├── extracted_id_encrypted (nullable)
+├── extracted_id_hash (nullable)
+├── extracted_id_masked (nullable)
+├── patient_match_status                -- exact_identifier / needs_review / conflict
+├── reference_numbers (jsonb)           -- policy, voucher, proposal, contract, certificate, etc.
+├── package_or_checkup_code (nullable)  -- e.g. WELL2 / PEE226
+├── selected_options (jsonb)            -- checked and unchecked options kept distinctly
+├── requested_items (jsonb)             -- selected medical tests/services only
+├── administrative_requirements (jsonb) -- non-medical requirements retained separately
+├── appointment_at (nullable)
+├── fulfil_by (nullable)
+├── venue (nullable)
+├── validity_start / validity_end (nullable)
+├── validity_basis (nullable)            -- explicit / relative_to_issue / fulfil_by / not_stated
+├── special_instructions (jsonb)
+├── billing_instructions (jsonb)
+├── field_evidence (jsonb)               -- field → page + source excerpt + optional bbox
+├── extraction_confidence (jsonb)        -- advisory per-field signal; never routes alone
+├── readiness_status                     -- pass / needs_review
+├── readiness_reasons (jsonb)            -- missing_identifier / missing_required_field /
+│                                          ambiguous_selection / invalid_or_unknown_validity / etc.
+├── extraction_model / prompt_version / schema_version
+├── processing_status                    -- uploading / processing / ready / failed
+├── processing_error_code (nullable)     -- unsupported / too_large / unreadable / timeout / extraction_failed
+├── status                               -- pending_review / confirmed / rejected
 ├── confirmed_by_staff_id (FK, nullable)
 └── confirmed_at
 
@@ -619,7 +684,7 @@ coverage_reuse_decisions
 ├── appointment_reference
 ├── prior_coverage_document_id (FK → coverage_documents)
 ├── entry_source                    -- "tokenized_link" / "demo_account"
-├── match_method                    -- "nric" / "email"; stores method, not raw value
+├── match_method                    -- "identifier" / "email"; stores method, not raw value
 ├── decision                        -- "reuse" / "replace"
 ├── replacement_document_id (FK → coverage_documents, nullable)
 └── created_at
@@ -628,22 +693,32 @@ coverage_reuse_decisions
 
 eligibility_rules
 ├── id (uuid, PK)
-├── issuer_code                -- e.g. "MRDEB", "EVWPA"
+├── issuer_code                -- one of seven supplied demo code families
 ├── issuer_name
-├── package_name                  -- e.g. "Executive Health Screening — Cardiac Add-on"
+├── document_type
+├── package_or_checkup_code (nullable)
+├── required_selected_items (jsonb)
+├── disallowed_or_conflicting_items (jsonb)
+├── package_name                  -- clinic-approved label; e.g. fixture-selected WELL2
 ├── included_items (jsonb)
 ├── billing_arrangement
+├── rule_version
+├── effective_from
+├── effective_to (nullable)
+├── priority
 └── active (boolean)
     -- this table is the rules-based matching engine referenced in PRD §6.2 —
-    -- deliberately separate from LLM extraction, so coverage/billing decisions
-    -- are never an LLM inference, only a structured lookup
+    -- issuer_code alone is not unique enough; document type and selected
+    -- package/check-up/items participate in a deterministic lookup
 
 eligibility_matches
 ├── id (uuid, PK)
 ├── coverage_document_id (FK → coverage_documents)
 ├── appointment_reference                -- eligibility is re-evaluated per visit
 ├── matched_rule_id (FK → eligibility_rules, nullable)   -- null if no clean match
-├── match_confidence                -- high / needs_review / no_match
+├── match_status                    -- clean / ambiguous / no_match
+├── match_basis (jsonb)             -- rule version + exact inputs used
+├── review_reasons (jsonb)
 ├── status                             -- pending_review / confirmed / overridden
 ├── confirmed_by_staff_id (FK, nullable)
 └── confirmed_at
@@ -657,12 +732,12 @@ queue_entries
 ├── prereg_completed_at (nullable)
 ├── all_required_documents_present (boolean)
 ├── all_documents_valid (boolean)
-├── extraction_status                    -- "high_confidence" / "needs_review"
+├── extraction_status                    -- "pass" / "needs_review"
 ├── match_status                         -- "clean" / "ambiguous" / "no_match"
 ├── queue                                -- "fast" / "review"
 ├── queue_reason                         -- "all_prerequisites_passed" / "walk_in" /
 │                                            "prereg_incomplete" / "missing_document" /
-│                                            "expired_document" / "low_confidence" /
+│                                            "expired_document" / "extraction_needs_review" /
 │                                            "ambiguous_match"
 ├── visit_status                         -- "incoming" / "ongoing" / "finished"
 ├── visit_outcome (nullable)              -- "completed" / "cancelled" / "no_show"
@@ -676,7 +751,7 @@ queue_entries
 ├── checked_in_at (nullable)             -- transition: Incoming → Ongoing
 └── completed_at (nullable)              -- transition: Ongoing → Finished
     -- database/service constraint: queue="fast" only when intake_type="booked",
-    -- prereg_completed_at is set, every document gate is true/high-confidence,
+    -- prereg_completed_at is set, every document readiness gate is PASS,
     -- and match_status="clean"; every walk-in is queue="review" and starts Ongoing
 
 manual_check_confirmations
@@ -705,12 +780,18 @@ questionnaire_responses
 ├── patient_id (FK → patients)
 ├── appointment_reference
 ├── questionnaire_type          -- "general_health" / "occupational_health"
-├── responses (jsonb)              -- fields specific to each questionnaire type,
-│                                       per general_health_questionnaire_mock_patients.csv
-│                                       and occupational_health_questionnaire_mock_patients.csv
+├── source_file / source_row_number (nullable)
+├── source_schema_version
+├── source_identity_snapshot (jsonb) -- source name, ID type, identifier hash/mask,
+│                                        DOB, and email for provenance; no plaintext ID
+├── responses (jsonb)              -- non-identity fields actually supplied by the CSV/UI;
+│                                      conditional blanks are null, not false
 ├── shared_fields_reused (boolean)   -- true if patient/contact fields were pulled
 │                                         from `patients` rather than re-entered
-├── consent_status                    -- pending / recorded
+├── declaration_acknowledged (boolean)
+├── disclosure_consent (nullable)     -- occupational employer/insurer consent kept separate
+├── source_date_signed (nullable)
+├── consent_status                    -- pending / recorded; never inferred from missing fields
 ├── consent_recorded_by_staff_id (FK, nullable)
 ├── draft_saved_at (nullable)
 └── submitted_at
@@ -749,7 +830,7 @@ audit_log
 ├── staff_id (FK, nullable)
 ├── patient_id (FK, nullable)
 ├── action_type            -- "extract_document" / "confirm_match" / "correct_field" /
-│                                "reveal_nric" / "override_match" / "assign_queue" /
+│                                "reveal_identifier" / "override_match" / "assign_queue" /
 │                                "confirm_allergy_check" / "check_prior_coverage" /
 │                                "reuse_coverage" / "request_coverage_replacement" /
 │                                "assign_expected_counter" / "record_manual_checks" /
@@ -764,8 +845,11 @@ audit_log
 
 ### Design notes
 
-- `patients` fields are deliberately a direct mirror of `patient_registration_synthetic.csv`'s columns, so the provided dataset loads with no schema-translation guesswork — this matters for a hackathon timeline.
-- `coverage_documents` and `eligibility_rules`/`eligibility_matches` are kept as separate concerns on purpose: the first is "what did the LLM read off this document," the second is "what does that map to under our rules." This split is what makes the hallucination-mitigation claim in PRD §6.2/§8 concretely true rather than just asserted — the LLM's output never directly becomes a billing decision; it always passes through a deterministic lookup table first.
+- `patients` mirrors the 12 registration CSV fields plus source provenance. DOB is normalized to a database date; the original source row remains traceable so two-digit-year decisions can be audited.
+- `data_import_exceptions` makes the six unmatched questionnaire people and any future conflicts visible without treating a questionnaire as authority to create or overwrite a patient.
+- `coverage_documents` and `eligibility_rules`/`eligibility_matches` are kept as separate concerns on purpose: the first is "what did the model read off this document," the second is "what does that map to under our rules." This split makes the hallucination-mitigation claim in PRD §6.2/§8 concrete. Model output never directly becomes a billing decision, and advisory confidence never grants FAST status.
+- `field_evidence` uses page plus excerpt as the required no-Azure evidence contract. A bounding box is nullable and shown only if an added OCR adapter produces reliable coordinates.
+- `selected_options` prevents checkbox forms from collapsing selected and unselected services together. Administrative requirements remain separate from medical `requested_items`.
 - `queue_entries` makes the strict queue rule (PRD §4.2) queryable at the visit level. Queue status does not live on a coverage document because booking type and pre-registration completion are also required inputs. The same row drives the Queue Overview (§2.2), Appointment Detail (§2.9), and patient Queue Status (§3.4).
 - `queue_entries.scheduled_at` preserves the appointment date across all three lifecycle views. `expected_queue_number` and `expected_counter_number` are generated for Incoming booked patients after routing; `queue_number` and `counter_number` hold the actual assignments after check-in. `checked_in_at` and `completed_at` drive the Incoming → Ongoing → Finished transitions without moving data between tables.
 - `manual_check_confirmations` is deliberately an attestation record, not a verification engine. It proves which staff member recorded completion of the clinic's manual identity/e-card process and cannot store or infer an automated verification result.
@@ -774,6 +858,7 @@ audit_log
 - `touchpoint_reuse_log` is the mechanism that makes "we eliminated duplicate entry across all five touchpoints" a provable, queryable fact in the demo — not just the questionnaire-only claim an earlier draft of this system could support.
 - `upload_links` and `patient_accounts` are two intentionally different mechanisms for two intentionally different needs: a one-time, unauthenticated, appointment-scoped token for the common case (submit a document ahead of a visit), versus a real but small, fixed-pool account for anything requiring returning access (queue status, payment, records history). Collapsing these into one "patient login" table would overstate what's actually been designed — keeping them separate keeps that honest.
 - `billing_reviews` separates staff-confirmed billing from patient payment. `payments.status` uses explicit `mock_*` values so success/failure/receipt states remain visibly demo-only in data, not only in prose that a reader might skip.
+- `questionnaire_responses.source_identity_snapshot` preserves what each source file said without overwriting the canonical registration record. Consent/declaration fields remain explicit because the reduced CSVs do not contain every field or signature from the full questionnaire reference.
 
 ---
 
@@ -785,7 +870,7 @@ Staff logs in through Clerk (individual account)
 Read-only actions (view queue, view records, view audit log) → no re-auth required
    ↓
 Any confirmation or correction action (record a manually completed identity/e-card
-check, confirm extracted data/billing, override a match, reveal NRIC, edit a field)
+check, confirm extracted data/billing, override a match, reveal a full identifier, edit a field)
 → Clerk reverification before the change commits
    ↓ (on success)
 Action commits → audit_log entry created automatically → record status updates
@@ -797,12 +882,52 @@ This mirrors the accountability pattern established earlier in this project's de
 
 ---
 
-## 6. Open Items for Next Pass
+## 6. Resolved Decisions and Remaining Open Items
 
-- Exact visual/interactive wireframe (colors, type, layout polish) — not yet built; this document covers structure and flow only.
-- Build out the full `eligibility_rules` table content from all insurer/TPA samples in the provided Medical Chit Letters document, not just the two illustrated here (Meridian, Everwell).
-- Define staffing targets and service-time expectations for the review queue now that its membership is fixed: all walk-ins plus every incomplete, invalid, low-confidence, or ambiguous pre-registration.
-- Decide how a corporate batch pre-registration scenario (multiple employees processed ahead of one screening day) would extend Queue Overview (§2.2) and Appointment Detail (§2.9), if built, to support the scalability judging criterion.
-- Confirm exact confidence-threshold logic for what triggers REVIEW vs. PASS on an extracted field.
-- Decide whether the demo shows a live mixed-queue simulation: a booked, fully pre-cleared patient enters the fast queue while a walk-in and a booked patient with a failed prerequisite both enter the review queue.
-- Decide how many seeded demo patient accounts (PRD §4.6/`patient_accounts`) to prepare for judges, and what visit history each should have pre-populated so Medical Records (§3.6) has something meaningful to show.
+### 6.1 Resolved from the supplied data
+
+#### Eligibility fixture coverage
+
+All nine document pages become individual extraction fixtures. The initial rules fixture set covers all seven code families, using a compound match rather than `issuer_code` alone:
+
+| Code | Supplied document variants | Deterministic demo behavior |
+| --- | --- | --- |
+| `MRDEB` | Medical referral letter; employer appointment email | Referral requested tests feed matching. Appointment email contributes appointment/instruction facts but does not independently prove a package; missing paired coverage facts require review. |
+| `EVWPA` | Health check-up voucher | Match the explicit selected test list and stated expiry. |
+| `EVWME` | Group-insurance medical invitation | Match Adult Medical Examination plus the letter's completion window; retain certificate/coverage metadata. |
+| `BLPDE` | Underwriting follow-up | Separate Full Medical Examination and HIV test from non-medical administrative requirements; non-medical items never become clinic tests. |
+| `BLPHS` | Wellness voucher with `WELL1`/`WELL2`/`WELL3` options | Use only the checked package (`WELL2` in the fixture), its included tests, and explicit validity date. Transfer fields do not change the patient unless completed and staff-reviewed. |
+| `NSTNBU` | Further-requirements letter | Preserve the requirement for two urine examinations on different days and the fulfil-by date; route unsupported multi-visit scheduling details to review. |
+| `MOL0199VME` | Two government authorisation-form variants | Use checked purpose/check-up/add-on/test options. The fixture with `PEE226`, MMR Dose 1, and ECG can match those selections; the variant without a selected examination code remains review-required. |
+
+The rules table stores fixture expectations, but final package names, billing arrangements, and production eligibility meaning still require clinic approval. Synthetic issuer wording is not treated as authoritative real-payer policy.
+
+#### PASS versus REVIEW
+
+There is no arbitrary numeric confidence threshold in P0. `readiness_status = pass` only when all of these gates pass:
+
+1. detected document type has a valid schema;
+2. every required field for that type is present;
+3. every required fact has page/source-excerpt evidence;
+4. selected versus unselected options are unambiguous;
+5. an explicit patient identifier matches exactly within the authorized scope;
+6. validity is current and can be established from an explicit or rule-supported date basis;
+7. exactly one active deterministic eligibility rule matches.
+
+Any failed gate sets `needs_review` with reason codes. Model confidence may prioritize the review UI but can never independently produce PASS or FAST.
+
+#### Demo scenarios and accounts
+
+- The judged demo includes a mixed queue: one booked fully pre-cleared FAST patient, one booked REVIEW patient with a failed prerequisite, and one walk-in REVIEW patient.
+- Seed four Clerk patient accounts chosen from the 51 questionnaire people that match registration: an Incoming FAST case, an Incoming REVIEW case, an Ongoing/counter-change case, and a Finished case with questionnaire, coverage, mocked payment, and visit history. The three dual-questionnaire people are preferred for at least one history-rich account.
+- Do not seed judge accounts from the six unmatched questionnaire people. Keep those rows as visible import exceptions for an admin/test fixture.
+- A dedicated corporate-batch screen is not P0. Demonstrate scale by seeding multiple booked patients with the same employer/screening date and using the existing date-filtered Incoming board.
+
+### 6.2 Still open
+
+- Exact visual system and interactive polish: colors, typography, production icons, and final responsive compositions.
+- Clinic-approved package names, billing arrangements, and interpretation of each synthetic rule fixture.
+- Staffing targets and service-time expectations for the review queue.
+- The operational cost estimate for OpenAI document processing, Railway, Supabase, Clerk, and Vercel at the expected demo/production volume.
+- Whether precise source bounding boxes justify adding a local/specialized OCR adapter after the page/excerpt baseline works.
+- Final policy for resolving the six unmatched questionnaire people and any future conflicting source identities in a production import.
