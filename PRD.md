@@ -392,6 +392,21 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 - Patient views expose only patient-scoped outcomes; extraction confidence, review reasons, internal eligibility rules, staff audit data, and other patients are never shown.
 - Loading, empty, error, retry, disabled, and success states are explicit. Status never relies on color alone, and critical controls are keyboard/touch accessible.
 
+### 7.1 EHR Failure-Pattern Controls
+
+The [Epic and large-scale EHR implementation audit](./epic_lessons.md) adds the following release controls:
+
+- **Shadow before authority:** new extraction models, prompts, schemas, readiness gates, and eligibility-rule versions run without affecting patient state until segmented fixture/local validation passes with zero false-ready cases.
+- **Phased rollout:** introduce one bounded workflow, role group, counter/shift, and approved fixture/rule set before expanding. Name superusers, stabilization support, pause criteria, rollback ownership, and the retained manual fallback.
+- **Alert governance:** interruptive alerts require immediate action, a named owner, severity, expiry, deduplication key, and resolution state. Lower-severity events stay in worklists/digests; volume, repeats, acknowledgement, action, dismissal, and expiry are reviewed by alert type.
+- **Workflow-burden validation:** test complete role-based tasks and measure completion time, staff touches, navigation, corrections, errors, cleanup, and perceived workload. Technical correctness alone is not acceptance.
+- **Downtime continuity:** degraded mode preserves manual identity/e-card checks and one patient journey. A temporary downtime ticket maps to the canonical visit after recovery; reconciliation never silently merges a conflict or makes the patient requeue.
+- **Interface reconciliation:** every external adapter distinguishes requested, accepted, rejected, unknown, and reconciled states, with idempotency, correlation references, contract tests, bounded retries, and an exception worklist.
+- **Configuration safety:** safety-, billing-, and routing-relevant configuration uses maker/checker approval, effective dates, fixture/regression tests, atomic activation, version attribution, and rollback.
+- **Channel parity:** token links and accounts remain optional. Staff-assisted and walk-in paths can reach the same readiness outcome, and aggregate wait/access differences are reviewed without exposing small cohorts.
+
+For the hackathon, these controls are demonstrated through the nine-fixture validation report, three fail-safe exception cases, one deduplicated allocation card, short role-task testing, and synthetic simulator injections. Production offline storage, live external reconciliation, enterprise rollout administration, and full alert-governance tooling remain explicitly deferred; their contracts are documented without being presented as implemented.
+
 ## 8. Regulatory & Compliance Posture (Singapore Context)
 
 - **PDPA:** Patient identity and health data are involved throughout. The demo uses only the supplied synthetic data. Any real deployment must minimise retained fields, encrypt direct identifiers, disclose only the minimum necessary content to approved processors, configure retention/deletion, and complete the required provider and cross-border/data-residency review before OpenAI or any external service processes a patient document. A conceptual TPA/insurer submission remains a separate disclosure event. The occupational questionnaire's employer/insurer disclosure consent is stored independently and never inferred from the general declaration or a missing field.
@@ -413,6 +428,11 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 | Explainable load balancing | A seeded demand spike produces a recommendation that names the pressured workstream, eligible resource, constraints checked, expected effect, and expiry; accepting/rejecting it is audited |
 | Allocation stability | No recommendation violates role permissions, minimum coverage, planned breaks, or maximum reassignment frequency; short-lived spikes inside the stability window produce no move |
 | Readiness safety | Zero false-ready admissions: only cases passing every deterministic gate and required staff confirmation reach `ready` |
+| Shadow-release safety | A new model/prompt/schema/rule version cannot affect readiness until segmented validation passes; activation and rollback are demonstrated with the governing version retained on every result |
+| Workflow burden | Representative users for registration, review, pharmacy, billing, and operations complete defined tasks without unresolved critical usability errors; task time, touches, corrections, and perceived workload are reported rather than assumed |
+| Alert burden | Interruptive alerts have owner/action/severity/expiry/deduplication metadata; repeated and low-action alerts are visible for governance review |
+| Downtime recovery | A simulated dependency outage continues minimum-safe intake, preserves one patient journey, and reconciles every downtime record with zero lost, duplicated, silently merged, or requeued patients |
+| Interface reconciliation | Every simulated external submission reaches an explicit accepted, rejected, or reviewed-unknown outcome; HTTP success alone never counts as business completion |
 | Duplicate entry eliminated | Patient details entered once, demonstrably reused across all five touchpoints identified in §1.3(b) — not only registration-to-questionnaire — in the demo |
 | Human-in-the-loop integrity | 100% of extracted/matched records shown for staff confirmation before being treated as final in the demo |
 | Manual-check boundary | 100% of identity/e-card records are staff attestations of a manually completed process; the demo contains no automated verification result or simulated scan |
@@ -437,6 +457,12 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 | Historical workload data reproduces an inefficient or biased staffing pattern | Historical handling time informs demand estimates but never becomes an unquestioned staffing rule; recommendations show their evidence, fairness metrics remain visible, and operators can reject them with a recorded reason |
 | Staff analytics becomes individual productivity surveillance | The extension measures workstream demand and allocation outcomes, not individual rankings; access is role-restricted and small cohorts are suppressed |
 | A patient is incorrectly marked ready before all prerequisites pass | Ready status requires every required document to be valid with `readiness_status = pass`, every match clean, and required staff confirmation complete |
+| A technically correct feature increases staff workload or cognitive burden | Role-specific task testing measures time, touches, corrections, errors, and perceived workload before rollout; unresolved critical usability findings block promotion |
+| Repeated operational alerts are ignored | Interruptive alerts are reserved for immediate actionable conditions, deduplicated per ticket/reason, measured by acknowledgement/action/expiry, and removed or redesigned when action rates remain low |
+| A broad launch amplifies workflow, training, or configuration defects | Roll out through shadow mode and bounded pilots with role-specific training, superusers, stabilization support, named pause criteria, and tested rollback |
+| An outage loses queue position or forces duplicate registration | Degraded mode issues one reconcilable downtime ticket, stores the minimum safe dataset, preserves manual checks, and requires explicit conflict-safe recovery before normal operation resumes |
+| An external integration returns success but does not commit the intended record | Track transport and business acknowledgement separately; store correlation IDs, idempotency keys, explicit unknown state, bounded retry, and reconciliation outcome |
+| Configuration drift changes routing or billing unexpectedly | Maker/checker approval, effective dating, regression fixtures, atomic activation, decision-version attribution, and rollback apply to rules, prompts, mappings, alerts, and allocation constraints |
 | Overclaiming feasibility of real Clinic Assist/NEHR integration | Judging criteria explicitly ask for conceptual integration only — PRD and pitch should describe the integration pattern honestly, not claim a working live connection |
 | Identity verification scope creep | Treated as an explicit, permanent hard constraint (§2, §7) reinforced throughout, not just stated once |
 | A confirmation screen is mistaken for automated identity/e-card checking | Copy explicitly says staff completed the checks manually; the stored record is an attestation only, contains no automated result/evidence, and fails safely if it cannot be saved |

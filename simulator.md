@@ -145,7 +145,9 @@ Each scenario is a versioned JSON fixture validated before a run. A fixture cont
 
 All service-time distributions, routing probabilities, staffing assumptions, and thresholds must be visible in an **Assumptions** drawer. Values derived from the official brief should be labelled separately from illustrative demo assumptions.
 
-## 5. Required Demo Scenarios
+## 5. Demo Scenarios and Stress Injections
+
+P0 needs three primary replayable scenarios (§5.1–§5.3). The downstream and downtime cases (§5.4–§5.5) are predefined injections using the same engine and UI, not separate simulator products.
 
 ### 5.1 Serial Baseline
 
@@ -168,11 +170,20 @@ All service-time distributions, routing probabilities, staffing assumptions, and
 - The presenter can inspect evidence and accept, modify, or reject it.
 - The result is compared with the recorded no-change estimate.
 
-### 5.4 Downstream Bottleneck Stress Test
+### 5.4 Downstream Bottleneck Injection
 
 - Registration capacity is improved while doctor or pharmacy capacity remains constrained.
 - The visualisation demonstrates that local optimisation can move, rather than eliminate, a bottleneck.
 - The dashboard identifies the constrained downstream stage without recommending clinically inappropriate staff substitution.
+
+### 5.5 Downtime and Recovery Injection
+
+- API/database or another configured dependency becomes unavailable during an arrival peak.
+- Existing displayed data becomes visibly stale and automated readiness/eligibility transitions stop.
+- Minimum-safe intake issues a stable `D-*` recovery reference without creating a second patient journey.
+- Recovery replays records idempotently into canonical `Q-*` visits while preserving original waiting age.
+- The scenario includes one exact reconciliation, one duplicate replay, and one identity conflict that requires staff review.
+- Completion requires all generated downtime records to reconcile, conflict, or fail explicitly; no record disappears into an unknown state.
 
 ## 6. Dynamic Allocation Policy
 
@@ -252,6 +263,7 @@ Changing structural assumptions during a run creates a labelled intervention eve
 | Reassignment churn | Approved staff/counter moves per simulated hour |
 | Recommendation effect | Observed metric change versus recorded no-change baseline |
 | False-ready count | Tickets reaching ready without every configured readiness gate; target zero |
+| Recovery integrity | Lost, duplicated, silently merged, requeued, and unresolved-unknown downtime records; target zero for the first four and explicit ownership for every unresolved record |
 
 Counts and averages must not conceal tail waits. The primary comparison should show throughput plus P50/P90 time, oldest waiting age, and utilisation.
 
@@ -300,6 +312,7 @@ Use a seeded pseudo-random-number generator and a priority queue ordered by `(si
 - The single-ticket scenario shows a walk-in transition through review without a new ticket.
 - The allocation scenario generates a reproducible recommendation and supports approve, modify, reject, expiry, and reversal.
 - The downstream stress test correctly identifies a doctor or pharmacy bottleneck after administrative improvement.
+- The downtime drill preserves a single patient journey, blocks false readiness, replays idempotently, and balances created/reconciled/conflicted/failed record counts.
 - Summary metrics exactly reconcile with the exported event log.
 - The interface remains understandable at 375 px and keyboard-operable at desktop sizes.
 
@@ -307,7 +320,7 @@ Use a seeded pseudo-random-number generator and a priority queue ordered by `(si
 
 ### P0 — Judged demo
 
-- deterministic engine and four required scenarios;
+- deterministic engine with three primary scenarios plus downstream-bottleneck and downtime injections;
 - animated clinic-flow view with configurable resource counts;
 - run/pause/step/reset/speed controls;
 - live queue, wait, throughput, and utilisation metrics;
@@ -332,4 +345,5 @@ Use a seeded pseudo-random-number generator and a priority queue ordered by `(si
 4. Open the evidence, show the skill/break/minimum-coverage checks, and approve the temporary move.
 5. Show the effect on P90 wait, oldest-ticket age, utilisation, and reassignment churn.
 6. Run the downstream stress test to show that Epicenter identifies the next bottleneck rather than claiming that registration optimisation solves the entire clinic.
-7. End on the assumptions drawer: official figures are distinguished from illustrative values, and real deployment requires calibration with clinic-approved aggregate data.
+7. Trigger the downtime drill and show one recovery reference reconciling without a second queue, a duplicate replay being ignored, and a conflict staying visible for staff review.
+8. End on the assumptions drawer: official figures are distinguished from illustrative values, and real deployment requires calibration with clinic-approved aggregate data.

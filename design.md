@@ -391,6 +391,8 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 - Staff tables provide search, filters, sorting, pagination/virtualisation for large lists, skeleton loading, actionable errors, and meaningful empty states.
 - Desktop is primary; tablet collapses the sidebar; narrow layouts turn tables into labelled cards without horizontal scrolling. A skip-to-main link bypasses the persistent navigation, visible focus follows visual order, and returning from detail restores list state.
 - Production icons use one SVG icon set. Status always includes text plus icon/shape; wireframe words such as PASS, REVIEW, ALERT, and FAIL are the accessible labels, not color-dependent decoration.
+- Interruptive alerts are reserved for conditions requiring immediate action. Every alert has an owner, severity, action, deduplication key, expiry, and resolution state; a repeated event updates the existing alert rather than stacking another modal/banner.
+- Nonurgent conditions appear in their owning worklist or digest. Alert-governance views report volume, repeats, acknowledgement, action, dismissal, and expiry by alert type without ranking individual staff.
 
 ### 2.16 Operational Intelligence and Allocation Advisor (Product Extension)
 
@@ -423,6 +425,32 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 - Recommendations include their evidence, expected impact, expiry, and a no-change baseline. Approval, modification, rejection, reversal, and observed outcome are append-only events.
 - The dashboard supports operational decisions but never ranks clinical urgency, scores individual productivity, automatically changes rules, or reallocates resources without authorised approval.
 - P0 may use seeded events and deterministic recommendation rules. Loading, no-data, suppressed-data, stale, expired-recommendation, conflict, approval-failure, and recoverable error states are explicit.
+
+### 2.17 Downtime and Recovery
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ DEGRADED MODE · Last confirmed connection 09:12 · [Retry]       │
+│ Automated eligibility and readiness updates are unavailable.    │
+├──────────────────────────────────────────────────────────────────┤
+│ Minimum-safe intake                                              │
+│ Downtime ticket D-0042 · Created 09:16 · Counter 2              │
+│ Manual identity check: [Record local attestation]                │
+│ E-card check: [Confirmed manually] [Not applicable + reason]     │
+│ Coverage document: [Hold securely for recovery workflow]         │
+│ [Print/show ticket] [Save local encrypted downtime record]       │
+├──────────────────────────────────────────────────────────────────┤
+│ Pending recovery: 4 · Conflicts: 1 · [Open reconciliation]      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Degraded mode is entered only for a verified dependency/service failure, not a single slow request. The banner identifies unavailable capabilities, last confirmed connection, local record count, and recovery owner.
+- The fallback follows the clinic-approved manual process. It never claims extraction, eligibility, coverage, billing, or readiness passed while those services are unavailable.
+- A downtime record contains the minimum safe data, local device/counter ID, staff actor, manual-check attestation, timestamps, and a locally unique `D-*` reference. Raw coverage files are not copied into unapproved browser storage.
+- `D-*` is a recovery reference, not a second patient queue number. The patient retains it throughout the outage; recovery maps it to one canonical `Q-*` visit without restarting waiting age or requiring the patient to requeue.
+- When service returns, staff review exact match, possible match, conflict, and failed-upload groups. Nothing auto-merges on name alone. Each record reaches `reconciled`, `conflict_review`, or `failed_retryable` with actor/time/audit evidence.
+- Replayed writes use idempotency keys. Recovery reports prove counts across locally created, accepted, conflicted, failed, and reconciled records before degraded mode is closed.
+- The simulator exercises full outage, partial dependency failure, stale reads, recovery, duplicate replay, and conflict resolution.
 
 ---
 
@@ -873,6 +901,55 @@ operational_events
     -- append-only event stream for PRD §4.7 metrics. It contains no raw document
     -- content or direct identifier and never drives clinical priority.
 
+operational_alerts
+├── id (uuid, PK)
+├── alert_type / severity
+├── owner_role
+├── related_queue_entry_id (FK, nullable)
+├── deduplication_key
+├── required_action
+├── status                         -- active / acknowledged / resolved /
+│                                    dismissed / expired
+├── occurrence_count
+├── first_seen_at / last_seen_at / expires_at
+├── acknowledged_by / acknowledged_at (nullable)
+└── resolved_by / resolved_at (nullable)
+    -- repeated conditions update occurrence_count/last_seen_at rather than
+    -- creating duplicate interruptions; aggregate action metrics support review
+
+downtime_intake_records
+├── id (uuid, PK)                  -- generated locally with collision-safe UUID
+├── downtime_reference            -- D-* recovery/display reference
+├── encrypted_minimum_safe_payload
+├── identifier_hash / identifier_masked (nullable)
+├── local_device_id / counter_reference
+├── created_by_staff_reference
+├── manual_check_snapshot (jsonb)
+├── original_waiting_since
+├── idempotency_key
+├── recovery_status               -- pending / reconciled / conflict_review /
+│                                    failed_retryable
+├── canonical_queue_entry_id (FK, nullable)
+├── created_at / recovery_attempted_at (nullable)
+└── reconciled_at (nullable)
+    -- temporary recovery record, never a second patient journey. Plaintext/raw
+    -- source documents are excluded from unapproved browser/local storage.
+
+configuration_releases
+├── id (uuid, PK)
+├── configuration_type            -- eligibility_rule / readiness_gate / prompt /
+│                                    schema / alert_policy / allocation_constraint /
+│                                    integration_mapping
+├── version / payload_hash
+├── status                        -- draft / shadow / approved / active / rolled_back
+├── effective_from / effective_to (nullable)
+├── validation_summary (jsonb)
+├── created_by_staff_id / approved_by_staff_id (nullable)
+├── activated_at / rolled_back_at (nullable)
+└── supersedes_release_id (FK, nullable)
+    -- maker/checker constraint: creator cannot approve safety- or billing-relevant
+    -- configuration; each decision stores the governing release/version
+
 questionnaire_responses
 ├── id (uuid, PK)
 ├── patient_id (FK → patients)
@@ -954,6 +1031,9 @@ audit_log
 - `visit_outcome`, `rescheduled_from_queue_entry_id`, and `counter_allocations` support the cancelled, no-show, rescheduled, and counter-rebalancing states shown in staff views without weakening readiness gates or replacing a patient's ticket.
 - `operational_events` provides the privacy-safe stage transitions and reason codes needed for the Operational Intelligence dashboard. It is append-only analytics evidence, not a second workflow state store.
 - `staff_availability` and `allocation_recommendations` keep resource advice explicit and auditable. Eligibility and availability are constraints, while the recommendation status proves that a human—not the advisor—made the allocation decision.
+- `operational_alerts` makes alert deduplication, ownership, expiry, and action-rate review queryable instead of relying on transient UI banners.
+- `downtime_intake_records` is a bounded recovery store, not a parallel queue database. Its original waiting time survives reconciliation into one canonical `queue_entries` row.
+- `configuration_releases` applies shadow validation, maker/checker approval, effective dates, governing-version attribution, and rollback consistently across rules, prompts, mappings, alerts, and allocation constraints.
 - `coverage_reuse_decisions` records the check-first branch independently of the source document. Reuse points to the prior document but creates a fresh appointment-scoped `eligibility_matches` row, so an old coverage decision is never silently carried forward.
 - `touchpoint_reuse_log` is the mechanism that makes "we eliminated duplicate entry across all five touchpoints" a provable, queryable fact in the demo — not just the questionnaire-only claim an earlier draft of this system could support.
 - `upload_links` and `patient_accounts` are two intentionally different mechanisms for two intentionally different needs: a one-time, unauthenticated, appointment-scoped token for the common case (submit a document ahead of a visit), versus a real but small, fixed-pool account for anything requiring returning access (queue status, payment, records history). Collapsing these into one "patient login" table would overstate what's actually been designed — keeping them separate keeps that honest.

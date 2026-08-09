@@ -3,7 +3,7 @@
 ## Epicenter Pre-Registration, Clinic Operations, and Simulation
 
 - **Status:** Recommended integration guide
-- **Project sources:** [PRD.md](./PRD.md), [design.md](./design.md), [techStack.md](./techStack.md), and [simulator.md](./simulator.md)
+- **Project sources:** [PRD.md](./PRD.md), [design.md](./design.md), [techStack.md](./techStack.md), [simulator.md](./simulator.md), and [epic_lessons.md](./epic_lessons.md)
 - **Primary host:** Microsoft Copilot Studio
 - **Last reviewed:** 9 August 2026
 

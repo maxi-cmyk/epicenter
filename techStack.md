@@ -16,6 +16,10 @@
 6. **Provider integrations sit behind adapters.** Document extraction, messaging, mocked payment, and future TPA submission can be replaced without changing core rules.
 7. **Clerk is the preferred identity provider.** Staff and seeded demo-patient sign-in, sessions, and sensitive-action reverification use Clerk. Appointment-scoped upload links remain opaque single-use tokens because they are not user accounts.
 8. **One visit means one ticket.** Processing, readiness, review, and counter changes update one persistent queue row; no transition issues a second number or resets the patient's original check-in time.
+9. **Shadow before authority.** New model, prompt, schema, rule, alert, and allocation-policy versions must prove themselves without changing live readiness before controlled activation.
+10. **Downtime is a workflow.** Degraded mode, minimum-safe intake, recovery ownership, idempotent replay, and conflict reconciliation are designed and tested—not reduced to a generic error page.
+11. **Alerts consume attention.** Interruptive alerts require immediate actionable conditions; ownership, deduplication, expiry, resolution, and action-rate review are part of the data contract.
+12. **Integrations require acknowledgement and reconciliation.** HTTP success is transport evidence, not proof that another system accepted the intended business record.
 
 ## 2. Recommended Stack
 
@@ -227,6 +231,9 @@ Recommended database additions needed by this stack:
 - `operational_events` as an append-only, privacy-safe source for readiness and flow metrics;
 - `staff_availability` for role/skill eligibility, shifts, breaks, and current administrative assignment;
 - `allocation_recommendations` for expiring advice, constraints, decisions, and measured outcomes;
+- `operational_alerts` for severity, ownership, deduplication, expiry, acknowledgement, action, and alert-burden review;
+- `downtime_intake_records` for encrypted minimum-safe local capture and conflict-safe recovery into one canonical visit;
+- `configuration_releases` for shadow validation, maker/checker approval, effective dates, decision-version attribution, and rollback;
 - append-only protections for `audit_log`;
 - aggregate views for P50/P90 waits, first-pass readiness, review clearance, reason frequency, estimated staff-minute demand, staff touches, and booked/walk-in comparisons;
 - indexes on readiness/visit status/date, patient match fields, document status, operational-event time, and audit timestamp.
@@ -269,6 +276,22 @@ It stores no scan, image, biometric, automated score, or generated verification 
 - REST endpoints remain the source for a full refresh and recovery after a dropped subscription.
 - Queue updates include `updated_at` so stale data is never presented as current silently.
 - SMS/email delivery is mocked for the demo behind a `NotificationProvider` interface. A real provider can later implement upload links, reminders, counter changes, and called notifications.
+
+### 8.1 Degraded Mode and Recovery
+
+- Detect dependency health separately for API, database, storage, authentication, extraction, realtime, and external adapters; partial failure must not be presented as total success or total outage.
+- A verified outage activates the minimum-safe intake defined in `design.md`. Store only an encrypted bounded payload with a collision-safe local ID/idempotency key; do not cache raw documents in ordinary browser storage.
+- Use an approved device-keystore/encrypted local-store adapter for any production offline implementation. P0 may simulate the contract without claiming production offline security.
+- On recovery, upload through an idempotent reconciliation endpoint. Exact match, possible match, conflict, rejected, and retryable failure remain distinct.
+- Close degraded mode only when created, reconciled, conflicted, and failed counts balance and an authorized recovery owner signs off.
+
+### 8.2 Alert Governance
+
+- Centralize operational alert policy instead of allowing each screen/service to invent interrupts.
+- Deduplicate by alert type + owning record/workstream; a recurrence increments count and updates `last_seen_at`.
+- Interrupt only for immediate actionable conditions. Route lower-severity information to an owning worklist/digest.
+- Track acknowledgement, action, dismissal, expiry, repeats, and time-to-resolution by alert type. Do not publish individual staff rankings.
+- Alert-policy changes follow the same shadow, maker/checker, effective-date, regression, and rollback controls as eligibility/readiness rules.
 
 ## 9. MCP and Copilot Studio Portability
 
@@ -332,6 +355,8 @@ The initial demo must use synthetic data. Before processing real patient documen
 | Clinic Assist/NEHR | Architecture diagram and API contract | Approved institutional integration |
 | Patient identity system | Seeded Clerk users mapped to local patient records | Production patient IAM/MFA/recovery program |
 
+Every adapter uses a versioned request/response contract plus `requested`, `accepted`, `rejected`, `unknown`, and `reconciled` business states. Store idempotency and external correlation references, cap retries, route unresolved/unknown results to an exception worklist, and test end-to-end acknowledgement. A 2xx response alone never advances the business record to accepted.
+
 The UI and stored status must make mocked behavior visible; it must not imply that money, messages, or insurer submissions were sent externally.
 
 ## 12. Suggested Repository Layout
@@ -367,6 +392,8 @@ Keep MCP and FastAPI transports thin; business logic belongs in `backend/core` s
 - Component tests for skeleton, empty, error, retry, stale, and success states.
 - Keyboard and accessibility checks for every staff/patient route.
 - Playwright journeys for scheduled-ready, booked-review, walk-in processing-to-ready, walk-in processing-to-review-to-ready on the same ticket, explainable allocation recommendation/approval/rejection, document replacement/reuse, manual-check attestation, counter change/refresh, mocked payment, and read-only history.
+- Role-based usability journeys capture task time, staff touches, navigation steps, corrections, errors, recovery, and a short perceived-workload measure for registration, review, pharmacy, billing, operations, and downtime roles.
+- Downtime journeys cover verified outage entry, minimum-safe intake, one visible recovery reference, reconnection, exact/conflict reconciliation, duplicate replay, and proof that waiting age is not reset.
 
 ### Backend
 
@@ -377,6 +404,9 @@ Keep MCP and FastAPI transports thin; business logic belongs in `backend/core` s
 - Clerk session/JWT and reverification tests covering invalid, expired, wrong-audience, wrong-role, and stale-verification cases.
 - Tests proving no identity/e-card artifact enters document-extraction jobs.
 - Allocation-advisor tests for demand estimation, role/skill eligibility, minimum coverage, breaks, stability/hysteresis, reassignment limits, expiry, conflict, audit, and a no-change result for short-lived spikes.
+- Shadow-release tests prove draft model/prompt/schema/rule versions cannot change readiness, billing, alerts, or allocations; activation requires maker/checker approval and rollback restores the prior version atomically.
+- Alert-governance tests cover deduplication, severity, ownership, expiry, recurrence count, acknowledgement/action metrics, and noninterruptive worklist routing.
+- Adapter contract/reconciliation tests separate transport success from accepted/rejected/unknown/reconciled business outcomes and prove bounded idempotent replay.
 
 ### Release Gate
 
@@ -387,6 +417,16 @@ ruff check + mypy + pytest
 Supabase migration/RLS tests
 Production builds for web and Python containers
 ```
+
+Automated checks are necessary but not sufficient. A clinic pilot also requires the human and operational release gates in [epic_lessons.md](./epic_lessons.md): representative role-task validation, zero-false-ready shadow results, alert ownership, channel parity, interface reconciliation, downtime drill, trained superusers, stabilization support, pause criteria, and named rollback ownership.
+
+Roll out in controlled stages:
+
+1. **Offline fixture validation:** no operational users or live state.
+2. **Shadow observation:** process approved inputs but do not change readiness, billing, allocation, or alerts.
+3. **Assisted bounded pilot:** one workflow/shift/counter and approved rule set, with staff confirming every action and the manual fallback retained.
+4. **Stabilization:** daily error/burden/alert/reconciliation review with trained superusers and pause authority.
+5. **Measured expansion:** add roles, issuers, shifts, or sites one at a time only after the preceding gate passes.
 
 ## 14. Environment Configuration
 
