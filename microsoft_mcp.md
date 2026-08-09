@@ -1,435 +1,507 @@
-# Microsoft Copilot Studio MCP Integration
+# Microsoft MCP Integration Plan
 
-## Epicenter AI-Assisted Pre-Registration and Eligibility Verification
+## Epicenter Pre-Registration, Clinic Operations, and Simulation
 
 - **Status:** Recommended integration guide
-- **Project sources:** [PRD.md](./PRD.md), [design.md](./design.md), and [techStack.md](./techStack.md)
-- **Platform:** Microsoft Copilot Studio
-- **Last reviewed:** 8 August 2026
+- **Project sources:** [PRD.md](./PRD.md), [design.md](./design.md), [techStack.md](./techStack.md), and [simulator.md](./simulator.md)
+- **Primary host:** Microsoft Copilot Studio
+- **Last reviewed:** 9 August 2026
 
-## 1. What “Copilot as an MCP” Means
+## 1. Integration Principle
 
-Microsoft Copilot Studio is the **MCP client** in this architecture. Epicenter hosts the **MCP server** that exposes a small set of approved project capabilities as tools.
+Use a first-party Microsoft MCP server when it already owns the required Microsoft capability. Use the custom Epicenter MCP server only for Epicenter-specific business operations that Microsoft services cannot safely infer or implement.
 
 ```text
 Copilot Studio agent
-        │
-        │ authenticated MCP tool calls over HTTPS
-        ▼
-Epicenter MCP server: /mcp
-        │
-        ▼
-Shared Python service layer
-  ├── document extraction jobs
-  ├── deterministic eligibility rules
-  ├── queue and appointment lookups
-  ├── Supabase Postgres + RLS
-  └── append-only audit events
+   ├── Epicenter MCP
+   │     Queue/readiness, document jobs, deterministic eligibility,
+   │     operational summaries, allocation advice, and simulation
+   │
+   ├── Microsoft Learn MCP
+   │     Current public Microsoft product documentation
+   │
+   ├── Power BI / Fabric MCP (optional P1, preview)
+   │     Aggregate operational analytics and semantic-model queries
+   │
+   └── Dataverse MCP (optional deployment profile, preview)
+         Dataverse records only if Dataverse becomes authoritative
 ```
 
-The MCP server is an additional transport into the same backend. It must not contain a second implementation of extraction, eligibility, queueing, authorization, or audit logic.
+MCP is not a reason to duplicate data or bypass the product's service layer. Epicenter's custom MCP endpoint is another transport into the same core services used by FastAPI and the web interface.
 
-Copilot Studio currently supports **Streamable HTTP** for MCP. Do not build this integration using the older SSE transport, which Copilot Studio no longer supports. The deployed MCP URL should therefore be an HTTPS endpoint such as:
+```text
+Copilot Studio → HTTPS /mcp → Epicenter authorization
+                              → shared core services
+                                 ├── document jobs
+                                 ├── readiness state machine
+                                 ├── deterministic eligibility rules
+                                 ├── operational-event aggregates
+                                 ├── allocation advisor
+                                 └── synthetic simulator
+```
+
+Copilot Studio supports MCP tools and resources through Streamable HTTP. It no longer supports the deprecated SSE transport. Generative orchestration must be enabled for the agent to select MCP tools dynamically.
+
+## 2. Microsoft MCP Selection Matrix
+
+| MCP server | Epicenter use | Phase | Decision |
+| --- | --- | --- | --- |
+| **Epicenter custom MCP** | Safe access to project-specific queue, readiness, eligibility, operational, allocation, and simulation services | P0 | Required; no first-party MCP implements this domain logic |
+| **Microsoft Learn MCP** | Retrieve current Microsoft documentation while developing/configuring Copilot Studio, Power Platform, Fabric, Power BI, or Azure | P0 development | Use in the maker/developer agent, not the staff operations agent |
+| **Microsoft Dataverse MCP Server** | Natural-language access to Dataverse tables if a Microsoft-native deployment selects Dataverse as an authoritative store | P1 option; preview | Do not add merely to mirror Supabase data |
+| **Power BI remote MCP Server** | Query a de-identified aggregate Epicenter semantic model for operational insights | P1 option; preview | Strong fit for the Intelligence Loop after tenant/licensing/security validation |
+| **Fabric Core MCP Server** | Manage or inspect Fabric workspaces/items that host the aggregate analytics pipeline | P1 development/admin; preview | Keep out of the patient/staff operations agent |
+| **Azure MCP Server** | Developer/operations access to Azure resources, logs, storage, or App Service if an Azure deployment is adopted | Deployment-dependent | Internal development/operations only; current Railway/Supabase baseline gains little from it |
+
+### 2.1 Why not connect everything to one agent?
+
+Each connected MCP server expands the agent's tool surface and data boundary. Copilot Studio enables all tools from a newly added MCP server by default. For every server:
+
+1. turn off **Allow all**;
+2. enable only the required tools;
+3. keep newly discovered tools disabled by default;
+4. separate staff operations, analytics, and developer/admin agents; and
+5. apply Power Platform data policies before testing with anything beyond synthetic data.
+
+The staff operations agent should normally connect only to the Epicenter MCP. Microsoft Learn, Fabric Core, Azure, and model-authoring tools belong in maker/developer or administrator contexts.
+
+## 3. Epicenter MCP Responsibilities
+
+The custom server owns only Epicenter workflows. It must never expose generic database, filesystem, or cloud-administration access.
+
+### 3.1 Allowed operational workflows
+
+The staff agent may:
+
+- retrieve a masked appointment and readiness summary;
+- retrieve the one persistent `Q-*` ticket and current lifecycle state;
+- list unresolved assisted-review cases with bounded filters;
+- start an idempotent extraction job for an already-authorized document record;
+- retrieve extraction-job status;
+- preview the deterministic appointment-scoped eligibility result;
+- retrieve aggregate operational measures for an authorized clinic/date range;
+- retrieve a stored allocation recommendation, its evidence, constraints, status, and expiry; and
+- explain stored states and reason codes without inventing coverage or clinical conclusions.
+
+### 3.2 Allowed synthetic simulator workflows
+
+The demo agent may:
+
+- list versioned simulator scenarios;
+- run a deterministic synthetic scenario with a permitted seed/configuration;
+- retrieve a run's event-derived summary;
+- compare baseline and Epicenter runs that share arrivals and sampled service times; and
+- explain a simulated allocation recommendation and its simulated outcome.
+
+Simulation responses must always contain `synthetic=true` and the scenario, seed, assumptions version, and policy version. They must never read or write production operational tables.
+
+### 3.3 Actions outside MCP for P0
+
+Copilot must not:
+
+- perform, infer, or record identity/e-card verification;
+- confirm or correct extracted coverage facts;
+- approve an eligibility or billing result;
+- mark a patient `ready` or override a readiness gate;
+- issue, replace, or reset a patient ticket;
+- approve, modify, apply, or reverse a real staff/counter allocation;
+- rank clinical urgency, recommend care, or allocate unqualified staff;
+- reveal a full NRIC/FIN/passport identifier;
+- submit a real payment or TPA claim;
+- perform an arbitrary NRIC/email patient search; or
+- return source-document binaries, signed URLs, raw document text, credentials, or connection strings.
+
+Human approval remains in the dedicated UI because it requires explicit review, role checks, re-authentication where applicable, transactional writes, and an immutable audit event. Copilot may direct an authorized staff member to that screen.
+
+## 4. Epicenter MCP Tool Catalogue
+
+Use project-prefixed, action-oriented names. Group tools so Copilot Studio can enable only the subset needed by each agent.
+
+### 4.1 Core P0 tools
+
+| Tool | Purpose | Mutation | App permission |
+| --- | --- | --- | --- |
+| `epicenter_get_extraction_status` | Return the state of one authorized extraction job | No | `epicenter:read` |
+| `epicenter_start_document_extraction` | Create or return the active idempotent extraction job | Yes, idempotent | `epicenter:extract` |
+| `epicenter_preview_eligibility` | Run/read the deterministic appointment-scoped match without confirming it | No final state change | `epicenter:read` |
+| `epicenter_get_visit_ticket` | Return the one ticket, lifecycle, readiness, counter, waiting age, and update time | No | `epicenter:read` |
+| `epicenter_get_appointment_summary` | Return prerequisite states and stored readiness reason | No | `epicenter:read` |
+| `epicenter_list_review_cases` | Return a bounded assisted-review worklist | No | `epicenter:read` |
+
+### 4.2 Intelligence and allocation tools
+
+| Tool | Purpose | Mutation | App permission |
+| --- | --- | --- | --- |
+| `epicenter_get_operational_summary` | Return aggregate P50/P90 waits, readiness, stage pressure, utilisation, and fairness measures | No | `epicenter:operations_read` |
+| `epicenter_list_allocation_recommendations` | List bounded, current recommendations for an authorized clinic/date | No | `epicenter:operations_read` |
+| `epicenter_get_allocation_recommendation` | Return evidence, constraints checked, no-change baseline, expected effect, decision state, and expiry | No | `epicenter:operations_read` |
+
+These tools never approve or apply an allocation. The response may identify a configured staff/resource ID only when the caller is authorized; patient-facing agents must not receive staff-allocation details.
+
+### 4.3 Synthetic simulator tools
+
+| Tool | Purpose | Mutation | App permission |
+| --- | --- | --- | --- |
+| `epicenter_list_simulation_scenarios` | List approved versioned synthetic scenarios and configurable fields | No | `epicenter:simulate` |
+| `epicenter_run_simulation` | Run or return an idempotent deterministic simulation for a scenario/seed/config hash | Synthetic only | `epicenter:simulate` |
+| `epicenter_get_simulation_run` | Return run state, assumptions, metrics, and safe event-summary references | No | `epicenter:simulate` |
+| `epicenter_compare_simulation_runs` | Compare compatible baseline/Epicenter runs and flag invalid comparisons | No | `epicenter:simulate` |
+
+Do not pass arbitrary executable policies or code through a simulation tool. Accept only a validated scenario ID plus bounded overrides defined by [simulator.md](./simulator.md).
+
+## 5. Tool Contracts
+
+### 5.1 Visit ticket response
+
+```json
+{
+  "ticket_id": "qe_01J...",
+  "appointment_reference": "APT-DEMO-0417",
+  "ticket_number": "Q-015",
+  "visit_status": "ongoing",
+  "readiness_state": "needs_review",
+  "readiness_reason": "missing_document",
+  "counter_number": 4,
+  "waiting_since": "2026-08-09T09:15:00+08:00",
+  "waiting_age_seconds": 780,
+  "updated_at": "2026-08-09T09:28:00+08:00",
+  "requires_staff_action": true
+}
+```
+
+`processing`, `ready`, and `needs_review` are states on one ticket. Tool text and agent instructions must never describe them as separate patient queues or tell a patient to take another number.
+
+### 5.2 Allocation recommendation response
+
+```json
+{
+  "recommendation_id": "ar_01J...",
+  "status": "pending",
+  "pressured_stage": "assisted_review",
+  "observed_pressure": {
+    "oldest_wait_seconds": 1080,
+    "estimated_staff_minutes": 42
+  },
+  "recommended_change": {
+    "resource_type": "flexible_counter",
+    "resource_reference": "counter_2",
+    "target_workstream": "review",
+    "duration_minutes": 30
+  },
+  "constraints": {
+    "role_and_skill": "pass",
+    "minimum_coverage": "pass",
+    "planned_break": "pass",
+    "stability_window": "pass",
+    "reassignment_frequency": "pass"
+  },
+  "expected_effect": {
+    "review_p90_delta_seconds": -360
+  },
+  "expires_at": "2026-08-09T09:35:00+08:00",
+  "approval_url": "/staff/counters/recommendations/ar_01J..."
+}
+```
+
+The URL is an application route, not a signed credential. The tool never returns an action token and never treats the recommendation as approved.
+
+### 5.3 Simulation comparison response
+
+```json
+{
+  "synthetic": true,
+  "comparison_valid": true,
+  "shared_seed": 20260809,
+  "assumptions_version": "demo-v1",
+  "baseline_run_id": "sim_base_01J...",
+  "epicenter_run_id": "sim_epic_01J...",
+  "differences": {
+    "throughput_per_hour": 4.5,
+    "admin_wait_p90_seconds": -510,
+    "walk_in_fairness_gap_seconds": -180,
+    "reassignments_per_hour": 0.5
+  },
+  "disclaimer": "Synthetic scenario output; not an observed clinic result."
+}
+```
+
+### 5.4 Rules for every response
+
+- return opaque IDs and masked display references;
+- use enumerated states/reasons, not model-generated judgments;
+- cap lists and provide cursors;
+- distinguish `not_authorized_or_not_found` without leaking record existence;
+- include `updated_at`, source/rule version, and `requires_staff_confirmation` where relevant;
+- label simulated and estimated values explicitly;
+- never return raw patient documents or direct identifiers; and
+- return a stable error code plus a safe recovery action.
+
+### 5.5 MCP annotations
+
+- lookup/list/compare tools: `readOnlyHint=true`, `destructiveHint=false`;
+- extraction start: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=true`;
+- simulation run: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=true`;
+- every Epicenter tool: `openWorldHint=false`.
+
+Annotations guide orchestration but are not authorization controls.
+
+## 6. Server Implementation
+
+### 6.1 Repository boundary
+
+```text
+backend/
+├── api/                       # FastAPI web routes
+├── mcp/
+│   ├── server.py              # Streamable HTTP MCP endpoint
+│   ├── auth.py                # token and app-permission mapping
+│   └── tools/
+│       ├── documents.py
+│       ├── appointments.py
+│       ├── operations.py
+│       └── simulator.py
+├── worker/                    # asynchronous document worker
+└── core/
+    ├── extraction/
+    ├── eligibility/
+    ├── queue/
+    ├── operations/
+    ├── allocation/
+    └── simulation/            # or adapter to packages/simulation-core
+```
+
+FastAPI, MCP, and the simulator UI call the same core contracts. MCP declarations validate input, establish an authorized actor, call one service, and serialize a minimal typed result. No tool contains its own eligibility, readiness, allocation, or simulation algorithm.
+
+### 6.2 Transport
+
+Use the official MCP SDK and pin the tested version when implementation begins. Serve Streamable HTTP over HTTPS at:
 
 ```text
 https://api.epicenter.example/mcp
 ```
 
-## 2. How This Project Uses MCP
+The endpoint may be mounted in the existing ASGI service. Keep `/healthz` separate and free of patient data. `localhost` is suitable for MCP Inspector only.
 
-MCP gives a Copilot Studio agent controlled access to Epicenter workflows. It demonstrates that the hackathon solution can be integrated into Microsoft's agent platform without rebuilding the core application in Copilot Studio.
+### 6.3 Input, idempotency, and errors
 
-### 2.1 Appropriate Copilot workflows
+- Define bounded Pydantic schemas with descriptions and enums.
+- Reject unknown fields, excessive list limits, unsupported filters, and unapproved simulator overrides.
+- Key extraction jobs by authorized document ID and idempotency key.
+- Key simulation runs by scenario version, seed, policy version, and normalized configuration hash.
+- Apply timeouts around storage, database, and model-provider calls.
+- Return non-leaking errors such as `not_authorized_or_not_found`, `document_not_ready`, `recommendation_expired`, `incompatible_simulation_runs`, and `rate_limited`.
 
-The agent may:
+## 7. Authentication and Authorization
 
-- look up the status of a document-extraction job;
-- start extraction for an already-authorized document record;
-- preview the deterministic eligibility result for a document and appointment;
-- retrieve a masked patient or appointment summary for staff;
-- retrieve queue, counter, and processing-stage information;
-- list review cases using narrow filters and pagination;
-- explain why a case is in FAST or REVIEW using stored rule results.
+### 7.1 Epicenter custom MCP
 
-### 2.2 Actions that remain outside MCP for P0
+The current stack uses Clerk for web identity. For the custom MCP connection:
 
-Copilot must not:
+- **Preferred application profile:** OAuth 2.0 with an explicitly registered client and per-user mapping to an Epicenter actor.
+- **Synthetic hackathon fallback:** a rotated API key in the Copilot connection, mapped to a read/extract/simulate-only service actor.
+- **Microsoft-native enterprise profile:** Microsoft Entra ID may replace the MCP connection identity when the clinic tenant is available, but the backend must still map the Entra subject and tenant to Epicenter roles and record scope.
 
-- perform or infer identity or e-card verification;
-- record the staff attestation for a manually completed identity/e-card check;
-- confirm or correct extracted coverage facts;
-- approve an eligibility or billing result;
-- reveal a full NRIC;
-- move a patient into FAST by overriding the prerequisite rule;
-- submit a real payment or live TPA claim;
-- fetch an arbitrary patient by an unscoped NRIC or email search;
-- return source document binaries, signed storage URLs, or raw extracted document text.
+Do not silently combine Clerk and Entra identities. If both exist, maintain an explicit reviewed identity mapping. Validate issuer, audience, tenant, signature, expiry, and allowed client application before checking Epicenter permissions.
 
-These actions require the dedicated staff or patient UI, the applicable re-authentication step, and an auditable human confirmation. MCP never changes the P0 rule that actual identity/e-card checking is manual and the product stores confirmation only.
+Application permissions such as `epicenter:read`, `epicenter:operations_read`, and `epicenter:simulate` are enforced by Epicenter even when the OAuth provider does not issue matching custom scopes.
 
-## 3. Recommended Initial Tools
+### 7.2 First-party Microsoft MCPs
 
-Use project-prefixed, action-oriented tool names so the agent can distinguish them from tools supplied by other systems.
+- Microsoft Learn MCP serves public documentation and currently requires no authentication. That is why it must not receive patient or clinic-operational context.
+- Dataverse, Fabric, and Power BI access follow Microsoft Entra identity plus their respective environment/workspace/semantic-model permissions.
+- Azure MCP uses Azure credentials or managed identity and Azure RBAC. Its local server is intended for internal development/operations, not an external patient application.
 
-| Tool | Purpose | Mutation | Required app permission |
-| --- | --- | --- | --- |
-| `epicenter_get_extraction_status` | Return `queued`, `processing`, `ready`, or `failed` for one job | No | `epicenter:read` |
-| `epicenter_start_document_extraction` | Create or return the active idempotent extraction job for an authorized document | Yes, idempotent | `epicenter:extract` |
-| `epicenter_preview_eligibility` | Run/read the current deterministic appointment-scoped match without confirming it | No final state change | `epicenter:read` |
-| `epicenter_get_queue_entry` | Return masked queue, counter, lifecycle, and last-updated information | No | `epicenter:read` |
-| `epicenter_get_appointment_summary` | Return the prerequisite states and stored routing reason for one appointment | No | `epicenter:read` |
-| `epicenter_list_review_cases` | Return a bounded, paginated list of staff review cases | No | `epicenter:read` |
+### 7.3 Server-side authorization sequence
 
-Do not add a generic SQL tool, arbitrary patient search tool, file download tool, or catch-all `update_record` tool. Each MCP tool should represent one safe business workflow.
-
-### 3.1 Tool response rules
-
-Every tool should return a small typed result containing only what the agent needs. For example:
-
-```json
-{
-  "queue_entry_id": "qe_01J...",
-  "appointment_reference": "PS-REG-0417",
-  "lifecycle": "incoming",
-  "queue": "review",
-  "queue_number": "R-006",
-  "counter_number": 4,
-  "reason_code": "missing_document",
-  "updated_at": "2026-08-08T09:02:11+08:00"
-}
-```
-
-Rules for all responses:
-
-- return opaque IDs and masked identifiers, never a full NRIC;
-- use enumerated status/reason codes rather than free-form model judgments;
-- distinguish `not_found` from `not_authorized` without leaking whether another patient's record exists;
-- cap list results and include a cursor when more rows are available;
-- return the stored rule outcome and source version, not a Copilot-generated coverage decision;
-- return an explicit `requires_staff_confirmation` flag where relevant;
-- do not return raw document text unless a future, separately approved tool has a justified need.
-
-### 3.2 MCP tool annotations
-
-Declare tool behavior accurately:
-
-- lookup/list tools: `readOnlyHint=true`, `destructiveHint=false`;
-- start extraction: `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=true`;
-- all initial tools: `openWorldHint=false`, because they operate only on Epicenter's backend.
-
-Annotations help an agent plan, but they are not security controls. The server must enforce authorization for every call.
-
-## 4. Server Implementation
-
-### 4.1 Repository boundary
-
-Use the backend layout proposed in `techStack.md`:
-
-```text
-backend/
-├── api/                  # FastAPI routes for the web application
-├── mcp/
-│   ├── server.py         # MCP server and transport configuration
-│   ├── tools/
-│   │   ├── documents.py
-│   │   ├── appointments.py
-│   │   └── queue.py
-│   └── auth.py           # Clerk token validation and app-permission mapping
-├── worker/               # asynchronous document worker
-└── core/                 # shared extraction, rules, queue, and audit services
-```
-
-Both FastAPI routes and MCP tools call `backend/core`. A tool declaration should validate input, establish the authorized actor, call one core service, and serialize the result.
-
-### 4.2 Python MCP server skeleton
-
-Use the official Python MCP SDK and pin the tested SDK version in the lockfile when implementation begins.
-
-```python
-from pydantic import BaseModel, Field
-from mcp.server.fastmcp import FastMCP
-
-from backend.core.queue import get_queue_entry_for_actor
-from backend.mcp.auth import require_permission
-
-mcp = FastMCP(
-    "Epicenter",
-    json_response=True,
-)
-
-
-class QueueEntryInput(BaseModel):
-    queue_entry_id: str = Field(min_length=1, max_length=128)
-
-
-@mcp.tool(
-    name="epicenter_get_queue_entry",
-    description=(
-        "Get the masked queue and counter status for one authorized Epicenter "
-        "queue entry. Use this for operational status, not clinical advice."
-    ),
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": False,
-    },
-)
-async def get_queue_entry(input: QueueEntryInput, context) -> dict:
-    actor = await require_permission(context, "epicenter:read")
-    result = await get_queue_entry_for_actor(
-        actor=actor,
-        queue_entry_id=input.queue_entry_id,
-    )
-    return result.model_dump(mode="json")
-
-
-if __name__ == "__main__":
-    mcp.run(
-        transport="streamable-http",
-        host="0.0.0.0",
-        port=8000,
-        streamable_http_path="/mcp",
-    )
-```
-
-Treat this as an implementation shape, not a copy-paste dependency contract: confirm decorator/context signatures against the pinned SDK version. The official SDK defaults the Streamable HTTP path to `/mcp` and is designed to be mounted into an existing ASGI application if Epicenter later runs REST and MCP in one process.
-
-### 4.3 Input and error handling
-
-- Define Pydantic models with descriptions, bounds, enums, and formats.
-- Reject unknown identifiers, oversized payloads, and unsupported filters before calling services.
-- Require idempotency for job-starting tools so retries do not create duplicate extraction jobs.
-- Use actionable but non-leaking errors such as `not_authorized_or_not_found`, `job_already_complete`, and `document_not_ready`.
-- Apply timeouts around database and provider calls.
-- Keep MCP payloads small; document files continue to move through private upload/storage flows, not through the agent context.
-
-## 5. Authentication and Authorization
-
-### 5.1 Recommended production setup with Clerk
-
-Use Clerk as Epicenter's identity and OAuth authorization service. Copilot Studio's onboarding wizard supports OAuth 2.0 through dynamic discovery, dynamic registration, or manual configuration, and Clerk publishes OAuth authorization-server metadata and supports dynamic client registration.
-
-For this project, prefer a **manually registered Clerk OAuth application** for Copilot Studio. Enter the callback URL supplied by Copilot Studio in the Clerk OAuth application and configure Copilot Studio with Clerk's client ID, client secret, authorization URL, token URL, refresh URL, and scopes.
-
-Recommended Clerk OAuth scopes:
-
-```text
-openid profile email
-```
-
-Clerk does not currently offer general custom OAuth scopes. Therefore, `epicenter:read` and `epicenter:extract` in §3 are **Epicenter application permissions**, not OAuth scope strings. After validating Clerk's token, the MCP server maps its subject to a local staff/service actor and checks these permissions in Epicenter before every tool call.
-
-The MCP server must validate the Clerk access token's issuer, audience, expiry, and signature. The web application also uses Clerk sessions. Supabase is configured to accept Clerk as a native third-party authentication provider, and RLS reads the Clerk subject from `auth.jwt()->>'sub'`; Supabase does not own Epicenter user credentials.
-
-Clerk dynamic client registration can work with MCP clients and Copilot Studio's dynamic-discovery option, but enabling it creates a public client-registration endpoint. Keep it disabled unless the team has reviewed that risk, enabled consent, restricted default scopes, and established client-registration monitoring and cleanup.
-
-### 5.2 Hackathon option
-
-For synthetic demo data only, Copilot Studio also supports an API key sent in a named header. If used:
-
-- keep the key in the Copilot connection, never in prompts, source control, or browser code;
-- use a dedicated read/extract-only service identity;
-- rotate the key after the demonstration;
-- rate-limit it and audit every call;
-- never expose the endpoint with `None` authentication.
-
-Use OAuth rather than a shared API key for any real patient or healthcare data.
-
-### 5.3 Authorization remains server-side
-
-Copilot instructions and MCP annotations are guidance, not access control. Each tool call must enforce:
+Every Epicenter tool call enforces:
 
 1. valid MCP connection identity;
-2. required Epicenter application permission;
-3. staff role or service-role permission;
-4. appointment/patient/queue-record access;
-5. RLS-compatible database access;
-6. audit recording for tool calls and mutations.
+2. allowed client/tenant;
+3. required Epicenter application permission;
+4. staff/service role;
+5. clinic, appointment, patient, ticket, or simulator scope;
+6. RLS-compatible database access; and
+7. correlation/audit recording for calls and mutations.
 
-The MCP server should use core services with an explicit actor context. It should not use a global Supabase service-role client that bypasses authorization checks.
+Never use a global service-role database client without an explicit actor and authorization decision.
 
-## 6. Deployment
+## 8. Microsoft MCP Deployment Profiles
 
-Deploy the MCP server with the FastAPI service on Railway as proposed in `techStack.md`. The REST API, `/mcp`, and `/healthz` may share one Railway web service because they use the same authorization and core service layer; the document worker is a second private Railway service.
+### 8.1 P0 — Minimal and credible
 
-Minimum deployment requirements:
+Connect the Copilot Studio demo agent only to the Epicenter MCP. Connect the maker/developer environment to Microsoft Learn MCP for current Microsoft implementation guidance.
 
-- public HTTPS URL reachable by Copilot Studio;
-- Streamable HTTP endpoint at `/mcp`;
-- separate unauthenticated liveness endpoint such as `/healthz` that returns no patient data;
-- authentication on every MCP request;
-- secrets stored as Railway service variables, not in the image or repository;
-- structured logs with correlation IDs and no raw NRIC, access tokens, document contents, or signed URLs;
-- bounded request size, concurrency, timeout, and rate limits;
-- a Railway health check against `/healthz`;
-- an always-running service during the judged demo if sleep/cold-start behavior would be disruptive.
+This profile preserves the existing Vercel + Railway + Supabase + Clerk baseline and avoids adding preview data platforms merely for branding.
 
-`localhost` is suitable for MCP Inspector testing but cannot be the final Copilot Studio server URL. Do not expose a temporary tunnel to real patient data.
+### 8.2 P1 — Microsoft analytics profile
 
-## 7. Connect the Server to Copilot Studio
+1. Export only de-identified aggregate `operational_events` measures to a governed Fabric/Power BI model.
+2. Keep patient records, raw documents, exact identifiers, and staff-level productivity data out of that model.
+3. Connect an analytics-specific Copilot agent to the Power BI remote MCP after the tenant admin enables the preview endpoint and approves the Entra app/permissions.
+4. Use Fabric Core MCP only in a developer/admin agent to inspect or manage the workspace—not in the staff operations agent.
 
-Microsoft's recommended route is the MCP onboarding wizard:
+This profile answers questions such as “Which stage had the highest P90 wait this week?” without giving the analytics agent access to source documents or individual patient journeys.
 
-1. Deploy the API/MCP service to Railway, generate a public domain, and verify `https://<railway-domain>/mcp`.
-2. Open the Copilot Studio agent.
-3. Go to **Tools**.
-4. Select **Add a tool**.
-5. Select **New tool**.
-6. Select **Model Context Protocol**.
-7. Enter:
-   - **Server name:** `Epicenter Pre-Registration`
-   - **Server description:** `Retrieves authorized Epicenter appointment, document-processing, eligibility-preview, and queue information; can start idempotent document extraction jobs.`
-   - **Server URL:** `https://<railway-domain>/mcp`
-8. Choose the configured authentication type:
-   - **OAuth 2.0** backed by Clerk for the intended implementation; or
-   - **API key** for a synthetic-data hackathon demo only.
-9. Create or select the connection.
-10. Select **Add to agent**.
-11. Confirm that Copilot Studio discovers only the approved tools in §3.
-12. Add the agent instructions in §8 and run the acceptance tests in §10.
+### 8.3 Optional Dataverse profile
 
-Copilot Studio also supports importing a Power Apps custom connector. Use that path only if the onboarding wizard cannot represent a required connection setting.
+Use Dataverse MCP only if the project deliberately adopts Dataverse as the authoritative store for a defined bounded context. Do not dual-write the same live queue or eligibility state to Supabase and Dataverse.
 
-### 7.1 Custom connector fallback
+A viable bounded context could be non-patient operational configuration or approved allocation decisions, but splitting transactions across stores adds failure modes and is not recommended for P0. The Dataverse MCP Server is preview; tool names and parameters may change.
 
-The minimum connector shape documented by Microsoft is:
+### 8.4 Optional Azure operations profile
 
-```yaml
-swagger: '2.0'
-info:
-  title: Epicenter MCP
-  description: Streamable MCP connection for Epicenter
-  version: 1.0.0
-host: api.epicenter.example
-basePath: /
-schemes:
-  - https
-paths:
-  /mcp:
-    post:
-      summary: Epicenter Pre-Registration MCP Server
-      x-ms-agentic-protocol: mcp-streamable-1.0
-      operationId: InvokeMCP
-      responses:
-        '200':
-          description: Success
-```
+If Epicenter later moves services to Azure, use Azure MCP in the internal engineering agent for read-only inspection of App Service/Container Apps, Storage, Azure Monitor, and related resources. Start in read-only or learn mode and expose only required namespaces/tools.
 
-Configure authentication in the connector rather than committing secrets to this schema. Access to the MCP server is also subject to the environment's Power Platform connector data policies.
+Do not connect Key Vault secret-returning tools, resource-deletion tools, or broad subscription-management tools to the staff operations agent.
 
-## 8. Suggested Copilot Agent Instructions
+## 9. Copilot Studio Configuration
 
-Add instructions similar to the following to the Copilot Studio agent:
+1. Enable generative orchestration for the agent.
+2. Deploy and verify the Epicenter Streamable HTTP endpoint.
+3. In Copilot Studio, open **Tools → Add a tool → New tool → Model Context Protocol**.
+4. Configure:
+   - **Server name:** `Epicenter Operations`
+   - **Description:** `Retrieves authorized Epicenter document, one-ticket readiness, operational, allocation-advice, and synthetic simulation information. It never approves identity, eligibility, billing, clinical priority, or real staffing changes.`
+   - **Server URL:** `https://<deployment-domain>/mcp`
+5. Configure OAuth, or the restricted synthetic-demo API key.
+6. Add the MCP server to the agent.
+7. Turn off **Allow all** and enable only the tools required for the demo.
+8. Leave future/newly discovered tools disabled until reviewed.
+9. Apply the environment's Power Platform data policy.
+10. Add the instructions in §10 and run the acceptance tests in §12.
+
+The onboarding wizard is preferred. A Power Apps custom connector remains a fallback when required connection settings cannot be represented by the wizard.
+
+## 10. Suggested Agent Instructions
 
 ```text
-Use Epicenter tools only for authorized operational pre-registration questions.
-Never claim that identity, e-card, coverage, eligibility, or billing has been
-approved unless the tool result explicitly reports a stored staff confirmation.
+Use Epicenter tools only for authorized operational or explicitly synthetic
+simulation questions. Never infer identity, e-card, eligibility, billing,
+clinical priority, or staffing approval.
 
-Treat eligibility previews as deterministic system results awaiting staff review.
-Do not infer missing coverage details or convert low confidence into a pass.
-Do not ask for or display a full NRIC, raw document text, or another patient's data.
+Every visit has one Q-* ticket. PROCESSING, READY, and NEEDS_REVIEW are states
+on that same ticket. Never tell a patient to take a second number or imply that
+resolving review resets their waiting time.
 
-FAST applies only when the appointment is booked, pre-registration was completed
-before arrival, all required documents are present, valid, and high-confidence,
-and every eligibility/package match is clean. Every other case, including every
-walk-in, is REVIEW. Explain the stored reason code without criticizing the patient.
+Report stored deterministic readiness and eligibility results only. A result is
+not final unless the tool explicitly reports the required staff confirmation.
+Do not infer missing coverage facts or turn model confidence into READY.
 
-If a tool returns not_authorized_or_not_found, do not speculate whether the record
-exists. Direct the staff member to the Epicenter staff interface.
+Allocation recommendations are advisory. Explain their evidence, constraints,
+expected effect, and expiry, then direct authorized staff to the approval UI.
+Never claim a recommendation was applied unless a later read reports an audited
+human decision. Never substitute staff across unqualified roles.
+
+Treat every simulation result as synthetic. State the scenario, seed, and
+assumptions version. Never present simulated improvement as an observed clinic
+outcome. Compare runs only when the tool reports comparison_valid=true.
+
+Do not ask for or display direct identifiers, raw source documents, credentials,
+signed URLs, or another patient's data. If a tool returns
+not_authorized_or_not_found, do not speculate whether the record exists.
 ```
 
-These instructions improve orchestration and wording. Backend rules remain the source of truth.
+Backend rules remain the source of truth; these instructions only improve orchestration and wording.
 
-## 9. Example Agent Flows
+## 11. Demo Agent Flows
 
-### 9.1 “Why is this patient in the review queue?”
+### 11.1 “Why does this patient need review?”
 
-1. Copilot calls `epicenter_get_appointment_summary` with the appointment reference.
-2. The tool returns prerequisite booleans, `queue=review`, and `reason_code=missing_document`.
-3. Copilot explains the stored reason and links/directs staff to the document-upload screen.
-4. Copilot does not move the patient into FAST.
+1. Call `epicenter_get_appointment_summary` or `epicenter_get_visit_ticket`.
+2. Report the stored `readiness_state` and `readiness_reason`.
+3. Explain that the patient keeps the same `Q-*` ticket and original waiting age.
+4. Direct staff to the applicable review UI; do not mark the ticket ready.
 
-### 9.2 “Process the document that was just uploaded”
+### 11.2 “Where is pressure building?”
 
-1. Copilot calls `epicenter_start_document_extraction` with the authorized document ID.
-2. The service returns the existing or new job ID.
-3. Copilot calls `epicenter_get_extraction_status` later rather than holding one long request open.
-4. When ready, Copilot reports that the extraction is available for staff review; it does not call it approved.
+1. Call `epicenter_get_operational_summary` for an authorized date/clinic.
+2. Report ticket counts, estimated staff-minutes, oldest age, and P50/P90 by stage.
+3. Distinguish observed aggregate metrics from estimates.
+4. Do not expose patient or staff-level details.
 
-### 9.3 “Where should the incoming patient go?”
+### 11.3 “Should we move a counter?”
 
-1. Copilot calls `epicenter_get_queue_entry`.
-2. The tool returns the expected queue/counter for Incoming or actual queue/counter for Ongoing.
-3. Copilot states that an expected counter is a planning assignment and may change at check-in or during rebalancing.
+1. Call `epicenter_list_allocation_recommendations`.
+2. If present, call `epicenter_get_allocation_recommendation`.
+3. Explain the sustained pressure, constraints, expected effect, and expiry.
+4. Direct an authorized operations lead to the approval URL.
+5. Do not apply the change through MCP.
 
-### 9.4 “Is the reused Meridian document still valid?”
+### 11.4 “Show why Epicenter helps.”
 
-1. The patient has already selected **Yes, same coverage** in the scoped patient flow.
-2. Copilot calls `epicenter_preview_eligibility` for the prior document and current appointment.
-3. The core service re-runs current validity and eligibility rules.
-4. Copilot reports the preview and `requires_staff_confirmation=true`; it never carries forward the old visit's approval.
+1. List the approved scenarios.
+2. Run the serial baseline and Epicenter single-ticket scenario with the same seed.
+3. Call `epicenter_compare_simulation_runs`.
+4. Report throughput, P50/P90, fairness gap, utilisation, and allocation churn.
+5. State prominently that the result is synthetic and assumptions-driven.
 
-## 10. Testing and Acceptance Checklist
+### 11.5 “Is reused coverage still valid?”
 
-### 10.1 Local server testing
+1. The patient chooses reuse through the scoped application flow.
+2. Call `epicenter_preview_eligibility` for the current appointment.
+3. The service re-runs validity and current deterministic rules.
+4. Report the preview plus `requires_staff_confirmation`; never carry forward the prior visit's approval.
 
-```bash
-uv add "mcp[cli]"
-uv run mcp dev backend/mcp/server.py
-```
+## 12. Testing and Acceptance
 
-Use MCP Inspector to verify tool discovery, schemas, responses, and errors. For a separately running Streamable HTTP server, connect the Inspector to:
+### 12.1 Epicenter MCP
 
-```text
-http://127.0.0.1:8000/mcp
-```
+- [ ] `tools/list` exposes only reviewed Epicenter tools.
+- [ ] Streamable HTTP is served at `/mcp`; SSE is not exposed.
+- [ ] Missing, expired, wrong-audience/tenant/client, and invalid credentials fail safely.
+- [ ] Role, app-permission, record-scope, and simulation-scope checks run server-side.
+- [ ] Responses omit direct identifiers, raw document content, signed URLs, and secrets.
+- [ ] Extraction retries return the same active/completed job.
+- [ ] Ticket responses use one `Q-*` number and current readiness state; review never resets waiting time.
+- [ ] Eligibility preview calls the versioned rules service and exposes confirmation status.
+- [ ] Operational summaries are aggregate and suppress small cohorts.
+- [ ] Allocation tools are read-only and cannot approve/apply/reverse a real change.
+- [ ] Simulation tools accept only approved bounded scenarios/overrides and always return `synthetic=true`.
+- [ ] Invalid baseline comparisons are rejected when arrivals, samples, seed, or assumptions are incompatible.
+- [ ] Every call has a correlation ID; mutations create an audit/event record.
 
-### 10.2 Required acceptance tests
+### 12.2 Copilot Studio and Microsoft MCP governance
 
-- [ ] `tools/list` exposes only the approved Epicenter tools.
-- [ ] The deployed endpoint uses Streamable HTTP at `/mcp`, not SSE.
-- [ ] Missing, expired, wrong-audience, and invalid Clerk credentials are rejected.
-- [ ] A valid Clerk identity without the required Epicenter app permission is rejected.
-- [ ] A staff/service actor cannot retrieve a record outside its authorized scope.
-- [ ] Tool responses mask NRIC and omit raw extracted document text, document URLs, and tokens.
-- [ ] Starting extraction twice returns the same active/completed job rather than duplicating work.
-- [ ] Eligibility preview uses the versioned rules service and always indicates whether staff confirmation is pending.
-- [ ] Queue responses preserve the strict FAST/REVIEW rule and place all walk-ins in REVIEW.
-- [ ] Copilot cannot call manual-check confirmation, correction, billing approval, or NRIC-reveal actions.
-- [ ] Every tool call has a correlation ID; mutations produce an audit event.
-- [ ] Bounded list tools paginate and reject excessive limits.
-- [ ] Copilot Studio discovers the server and calls each tool through the configured connection.
-- [ ] Power Platform data policies permit the intended connector in the chosen environment.
+- [ ] Generative orchestration is enabled.
+- [ ] **Allow all** is off for every connected MCP server.
+- [ ] Only the required tools are enabled; newly discovered tools remain disabled.
+- [ ] Power Platform data policies allow the intended MCP connectors and block inappropriate combinations.
+- [ ] Microsoft Learn MCP is used only with public Microsoft-development context.
+- [ ] Preview status, tenant setting, licensing, Entra consent, and permissions are revalidated before enabling Dataverse, Fabric, or Power BI MCP.
+- [ ] Developer/admin Microsoft MCP servers are absent from the staff operations agent.
+- [ ] The agent follows single-ticket, human-approval, privacy, and synthetic-result instructions in adversarial tests.
 
-## 11. Recommended Rollout
+## 13. Delivery Sequence
 
-### Phase 1 — Hackathon integration
+### P0 — Hackathon
 
-- Implement the six narrow tools in §3 against synthetic demo data.
-- Prefer read-only tools; allow only idempotent extraction-job creation.
-- Deploy the Streamable HTTP server with the FastAPI service on Railway.
-- Connect it with OAuth if ready, otherwise a restricted demo API key.
-- Demonstrate one appointment review, one extraction job, and one queue lookup from Copilot Studio.
+1. Implement the six core tools in §4.1.
+2. Add one operational summary and one allocation-recommendation read tool for the dynamic-allocation story.
+3. Add list/run/compare simulator tools only after the deterministic engine contract exists.
+4. Connect the Epicenter MCP to a dedicated Copilot Studio demo agent.
+5. Use Microsoft Learn MCP in the maker/developer environment to verify current Microsoft configuration guidance.
+6. Demonstrate one-ticket review, an operational-pressure question, an allocation explanation, and a synthetic baseline comparison.
 
-### Phase 2 — Production hardening
+### P1 — Microsoft analytics profile
 
-- Complete Clerk OAuth identity mapping, consent, token validation, and least-privilege Epicenter permissions.
-- Validate Power Platform data-loss-prevention policies with the clinic tenant.
-- Add formal threat modelling, penetration testing, retention controls, and operational alerting.
-- Evaluate narrowly scoped write tools only when they can provide the same re-authentication, confirmation, and audit guarantees as the staff UI.
+1. Produce a de-identified aggregate operational model.
+2. Evaluate Power BI remote MCP with the clinic tenant, Entra application, data policy, licensing, and preview risk.
+3. Optionally use Fabric Core MCP in a separate developer/admin agent.
+4. Evaluate Dataverse only as an explicit authoritative bounded context, never as an unowned mirror.
+5. Complete privacy/security review before any real operational data reaches a Microsoft analytics service.
 
-## 12. Official References
+## 14. Official References
 
-- [Connect an existing MCP server to a Copilot Studio agent](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent)
+- [MCP in Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/agent-extend-action-mcp)
+- [Connect an existing MCP server to Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent)
+- [Add and selectively enable MCP tools/resources](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-components-to-agent)
+- [Microsoft Dataverse MCP Server reference (preview)](https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-dataverse)
+- [Microsoft Learn MCP Server](https://learn.microsoft.com/en-us/training/support/mcp)
+- [Power BI MCP servers overview (preview)](https://learn.microsoft.com/en-us/power-bi/developer/mcp/mcp-servers-overview)
+- [Power BI remote MCP external-client registration](https://learn.microsoft.com/en-us/power-bi/developer/mcp/remote-mcp-server-external-clients)
+- [Fabric Core MCP Server (preview)](https://learn.microsoft.com/en-us/rest/api/fabric/articles/mcp-servers/core-remote/get-started-core)
+- [Azure MCP Server tools and security](https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/tools/)
+- [Power Platform data policies for MCP connectors](https://learn.microsoft.com/en-us/power-platform/admin/wp-data-loss-prevention)
 - [Official Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
-- [Running a Python MCP server](https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/run/index.md)
-- [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization)
-- [Clerk OAuth implementation and dynamic client registration](https://clerk.com/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth)
-- [Clerk MCP client connection guidance](https://clerk.com/docs/guides/ai/mcp/connect-mcp-client)
-- [Clerk and Supabase integration](https://clerk.com/docs/guides/development/integrations/databases/supabase)
-- [Clerk sensitive-action reverification](https://clerk.com/docs/guides/secure/reverification)
-- [Deploy FastAPI on Railway](https://docs.railway.com/guides/fastapi)
 
-Copilot Studio and MCP support evolve quickly. Recheck the Microsoft transport, authentication, connector, licensing, and tenant-policy documentation before deployment rather than treating this guide as a permanent platform contract.
+Microsoft MCP capabilities and preview terms change quickly. Revalidate transport, tool availability, authentication, licensing, tenant settings, and Power Platform policies immediately before implementation and deployment.

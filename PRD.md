@@ -7,10 +7,15 @@
 - **Constraint alignment:** Microsoft Copilot Studio portability (per official constraints)
 
 ## 1. Problem Statement
+How might we automate pre-registration and eligibility verification for both scheduled appointments and walk-in patients, so the necessary information is retrieved and processed before they reach the front desk, eliminating the need for staff to manually determine coverage, benefits, and screening packages while ensuring identity verification is still completed securely in person?
 
 ### 1.1 Current Workflow
 
-Every patient — whether a GP consultation or a corporate health screening — currently requires front-desk staff to manually determine identity, employer/insurer, applicable benefits, screening package, and billing arrangement after the patient has already reached the counter. This is complicated by a lack of standardisation: the supplied synthetic bundle contains nine distinct medical-document examples across seven issuer/code families, including referral letters, vouchers, underwriting requests, government authorisation forms, and an employer appointment email. The same issuer code can also appear on different document types. Staff must interpret the selected tests, packages, dates, and instructions in context, cross-reference the right coverage rules, and manually key the result into one or more systems — sometimes twice, once into the clinic's own system and again into a separate TPA portal after the visit.
+Every patient — whether a GP consultation or a corporate health screening — currently requires front-desk staff to manually determine identity, employer/insurer, applicable benefits, screening package, and billing arrangement after the patient has already reached the counter.
+
+This is complicated by a lack of standardisation: the supplied synthetic bundle contains nine distinct medical-document examples across seven issuer/code families, including referral letters, vouchers, underwriting requests, government authorisation forms, and an employer appointment email.
+
+The same issuer code can also appear on different document types. Staff must interpret the selected tests, packages, dates, and instructions in context, cross-reference the right coverage rules, and manually key the result into one or more systems — sometimes twice, once into the clinic's own system and again into a separate TPA portal after the visit.
 
 ### 1.2 Quantified Pain Point (from the Official Problem Statement)
 
@@ -51,6 +56,21 @@ Most solutions to this brief will only notice two of these five touchpoints — 
 
 This bottleneck affects every patient passing through registration, not a narrow subgroup — it is a high-frequency, high-cumulative-cost workflow problem. Because most of this happens sequentially at a single registration counter, a single patient whose document needs extra handling (illegible chit, unfamiliar TPA format, missing information) doesn't just cost that patient time — it compounds directly onto the wait of every patient behind them, including those who may need more urgent attention. This is a structural property of a single-queue, single-counter design, not something that can be fixed by making any one patient's processing faster on average.
 
+### 1.5 Broader Value Beyond Time Saved
+
+Epicenter is not only a queue-speed intervention. It shifts administrative work before the arrival peak, turns routine cases into a predictable flow, and gives staff a controlled way to resolve exceptions without making patients restart their journey. The broader value to emphasise is:
+
+| Value | How Epicenter creates it |
+| --- | --- |
+| Fewer administrative errors | Schema validation, source evidence, deterministic eligibility rules, and staff confirmation reduce misread documents, missed validity dates, incorrect package selection, and billing corrections. |
+| Higher first-pass completion | Readiness checks and pre-arrival reminders increase the share of patients who have the correct information and documents when service begins. |
+| Better capacity utilisation | Work is shifted out of the morning arrival peak, while a live view of ready and review work lets staff rebalance counters around actual demand. |
+| Reduced revenue leakage | A confirmed coverage and billing record reduces the risk of underbilling, rejected claims, and post-visit reconciliation caused by inconsistent re-entry. |
+| Safer information continuity | Confirmed identity, coverage, questionnaire, and allergy information is reused across the visit while mandatory clinical and identity checks remain human-performed. |
+| More predictable patient experience | One persistent queue ticket, visible status, and clear next actions reduce uncertainty and repeated counter enquiries. |
+| Stronger governance | Evidence, rule versions, corrections, attestations, and counter changes remain reviewable through an immutable audit history. |
+| Continuous operational learning | Reason-coded exceptions and stage timestamps show which document types, payers, rules, and workflow stages repeatedly create friction. |
+
 ## 2. Constraints (from Official Brief — Non-Negotiable)
 
 - **Copilot Studio portability required.** The solution does not need to be built entirely in Copilot Studio during the hackathon, but must demonstrably be portable/integrable into it.
@@ -65,7 +85,7 @@ This bottleneck affects every patient passing through registration, not a narrow
 | Retrieve and process patient/coverage information before the patient reaches the front desk | Pre-registration data (identity, coverage, package) is resolved ahead of arrival for scheduled appointments, and rapidly on arrival for walk-ins |
 | Eliminate manual document interpretation | Chit/voucher/referral-letter content is extracted and structured automatically, not read and re-typed by staff |
 | Capture the patient's core data once and reuse it across every touchpoint that needs it | All five re-entry/re-check points identified in §1.3(b) — not just registration-to-questionnaire — draw from a single record |
-| Prevent one patient's processing time from delaying every patient behind them | Patients needing manual review are routed off the main line rather than serialising against straightforward cases |
+| Prevent one patient's processing time from delaying every patient behind them | Ready work continues while exceptions are handled in parallel on the same persistent patient ticket |
 | Reduce TPA double-entry | Structured eligibility/package data is available for both clinic system and (conceptually) TPA portal submission from a single source |
 | Preserve mandatory in-person steps | Identity verification and e-card validation remain explicitly untouched, staff-performed steps |
 | Keep staff and patients in control | Every automated determination is reviewable and correctable by staff before being finalised |
@@ -96,39 +116,47 @@ This bottleneck affects every patient passing through registration, not a narrow
 - **Recoverable capture and processing.** Staff/patient upload flows show file preview, supported type/size, upload and processing progress, success, and actionable camera/file/network/timeout/extraction errors without duplicate submission.
 - **Controlled correction.** Editing an extracted fact displays the original and corrected values, requires a reason and staff re-authentication, preserves failed edits for retry, and writes an immutable audit entry.
 
-### 4.2 Core Add-On Feature — Pre-Cleared Fast Queue and Review Queue
+### 4.2 Core Add-On Feature — Single-Ticket Readiness Routing
 
-**What it does:** Rather than a single serial line, the system uses a strict two-queue rule. The **fast queue** is reserved for booked patients who completed pre-registration before arrival and whose required documents pass every extraction/validity gate and match cleanly. Everyone else enters the **review queue (slow path)**: all walk-ins, booked patients who did not complete pre-registration, and any case with a missing, expired, incomplete, unfamiliar, unsupported, or ambiguous document or eligibility match.
+**What it does:** Every arriving patient receives one persistent visit ticket. The patient never takes a second number, restarts their wait, or joins a separate walk-in line. Behind that single patient-facing queue, staff manage two operational workstreams: **ready service** for administratively cleared cases and **assisted review** for unresolved exceptions. A booked patient can become ready before arrival; a walk-in is assessed immediately after check-in and can become ready as soon as the same readiness gates pass.
 
 **Routing rule:**
 
 ```text
-IF appointment is booked
-   AND pre-registration is complete before arrival
-   AND every required document is present, valid, and readiness_status = pass
+CREATE one visit ticket at booking/check-in
+PRESERVE its original appointment/check-in timestamp throughout
+
+WHILE required checks are running → PROCESSING (same ticket)
+
+IF every required document is present, valid, and readiness_status = pass
    AND every eligibility/package match is clean
-THEN → FAST QUEUE
-ELSE → REVIEW QUEUE (SLOW PATH)
+   AND required staff confirmation is complete
+THEN → READY SERVICE (same ticket)
+IF any gate fails → ASSISTED REVIEW (same ticket, waiting age retained)
 ```
 
-**Why this is a core feature, not an optimization:** The brief's own numbers describe a structural failure, not an average-speed problem: because most administrative tasks occur sequentially at a single registration counter, one patient's extra time directly compounds onto the wait of everyone behind them — including patients needing more urgent attention. Making the average patient faster (§4.1) reduces this but does not eliminate it, because the slowest cases still serialise against everyone else. Only decoupling fast and slow cases into separate queues actually removes the compounding effect at its source. This is a genuinely different kind of fix from "process each document faster" — it is a systems/queueing-design decision, not a per-patient feature, and it directly targets the compounding-delay mechanism named explicitly in the brief's Administrative Impact section.
+**Why this is a core feature, not merely an optimisation:** The brief's numbers describe a structural failure, not only an average-speed problem. Making each document faster still allows the slowest case to block everyone behind it. Decoupling ready work from exception work removes that operational dependency, while the persistent ticket avoids replacing one bottleneck with multiple patient queues. The distinction is between internal work routing and the patient's place in line: staff may resolve different kinds of work in parallel, but the patient checks in only once.
 
 **Design requirements:**
 
-- A booked patient's routing decision is made during pre-registration, before arrival. Fast-queue status is granted only after every prerequisite passes; it is never inferred from booking status alone.
-- Walk-ins always enter the review queue, even if their document later extracts cleanly. Walk-ins are less common and are intentionally grouped with cases needing more staff handling rather than given a separate queue.
-- The review queue is not a penalty state. Patients routed there still receive full staff attention; the point is to protect the predictable pre-cleared path, not deprioritise anyone's care.
-- Queue assignment is visible to staff with a machine-readable reason such as `walk_in`, `prereg_incomplete`, `missing_document`, `extraction_needs_review`, `expired_document`, or `ambiguous_match`.
-- Staff can see queue composition to manage counter allocation in real time, but manually moving a patient into the fast queue requires all fast-queue prerequisites to be satisfied.
+- Every visit has exactly one patient-facing queue ticket and one original ordering timestamp. State changes and counter reassignments update that record rather than issuing a new number.
+- A booked patient's readiness decision may be made during pre-registration. Ready status is granted only after every prerequisite passes; it is never inferred from booking status alone.
+- A walk-in begins in `processing` while the document and registration checks run. If all gates pass and staff confirms the result, the same ticket becomes `ready`; only a failed gate changes it to `needs_review` with an actionable reason.
+- Resolving an exception changes the same ticket from `needs_review` to `ready`. Its waiting age continues from the original check-in time and the patient never returns to the end of the line.
+- When a reviewed ticket becomes `ready`, service ordering continues to use the clinic-approved ordering key based on its original appointment/check-in time; the state transition does not assign a fresh timestamp. Already-called patients are not displaced.
+- Review work has configurable age thresholds and visible escalation alerts. Flexible counters can be reassigned when the oldest unresolved ticket approaches the clinic's service target, preventing exception cases from being starved while ready work continues.
+- `ready` and `needs_review` are internal operational states, not separate patient journeys or measures of clinical priority. Staff-led clinical escalation always takes precedence and remains outside the administrative routing algorithm.
+- Readiness is visible to staff with a machine-readable reason such as `processing`, `prereg_incomplete`, `missing_document`, `extraction_needs_review`, `expired_document`, or `ambiguous_match`.
+- Staff can see workstream composition and waiting age to manage counter allocation in real time, but cannot mark a patient `ready` unless all readiness prerequisites are satisfied.
 - The staff queue board tracks appointment date/time and separates patients into **Incoming**, **Ongoing**, and **Finished** views:
-  - **Incoming:** booked patients who have not checked in. Shows scheduled date/time, expected queue number, fast/review assignment, and expected counter number.
+  - **Incoming:** booked patients who have not checked in. Shows scheduled date/time, expected queue number, readiness state, and expected counter number.
   - **Ongoing:** checked-in patients who have not completed the visit. Shows current queue number, assigned counter, and current processing stage.
   - **Finished:** completed visits. Shows appointment date, completion time, final queue/counter, and completion status for operational review.
 - Expected queue and counter numbers are generated once a booked patient's pre-registration route is known. They are planning assignments, not guarantees; the actual counter may change at check-in or when staff rebalance capacity, and the change is logged.
 - Check-in records staff confirmation that identity verification and, where applicable, e-card validation were completed manually using the approved in-person process. The system does not perform, assist with, scan for, or decide either check; it stores only the staff attestation, timestamp, and allowed not-applicable reason.
-- The Review workspace lists every slow-path case with its appointment/walk-in time, review reason, document state, time waiting, counter, and next action. It has explicit empty, loading, permission, and recoverable error states.
+- The Review workspace is a staff worklist, not another patient queue. It lists every unresolved case with its original appointment/check-in time, review reason, document state, total waiting age, counter, and next action. It has explicit empty, loading, permission, and recoverable error states.
 - Appointment lifecycle also records rescheduled, cancelled, and no-show outcomes. A rescheduled booking keeps an audit link to its prior slot; cancelled/no-show visits appear under Finished with their outcome.
-- Counter-allocation controls may rebalance expected or actual counters but cannot promote a patient to the fast queue unless every fast-queue prerequisite passes.
+- Counter-allocation controls may rebalance expected or actual counters but cannot mark a patient `ready` unless every readiness prerequisite passes.
 
 ### 4.3 Core Add-On Feature — Unified Patient Record Across All Touchpoints
 
@@ -150,7 +178,7 @@ The questionnaire/consent surface visibly separates read-only prefilled identity
 
 ### 4.4 Secondary Feature — Pre-Arrival Processing for Scheduled Appointments
 
-**What it does:** For scheduled (non-walk-in) appointments, the system processes the patient's coverage document and pre-fills registration and questionnaire data before the patient arrives. On arrival, front-desk staff only need to perform identity verification and confirm the pre-processed information, rather than starting document interpretation from zero. This pre-registration stage is the only route into the fast queue: a booked patient enters it only when every required document and match passes before arrival; otherwise they enter the review queue.
+**What it does:** For scheduled (non-walk-in) appointments, the system processes the patient's coverage document and pre-fills registration and questionnaire data before the patient arrives. On arrival, front-desk staff only need to perform identity verification and confirm the pre-processed information, rather than starting document interpretation from zero. Pre-registration lets a booked patient reach `ready` before arrival; walk-ins can reach the same state after one-time check-in processing without joining another queue.
 
 **Submission mechanism — patient upload link, not a full patient account.** Rather than building a full patient-facing account system (separate login, credential management, its own auth surface), a scheduled patient receives a tokenized, single-use upload link tied to their specific appointment — e.g., sent by SMS/email at booking. The link opens a minimal, unauthenticated-but-scoped page: upload the coverage document, done. No password, no account, no persistent session. For corporate batch screening, the same mechanism extends naturally — each employee gets their own tokenized link ahead of the scheduled screening day, rather than staff manually collecting documents from a group.
 
@@ -161,7 +189,7 @@ The questionnaire/consent surface visibly separates read-only prefilled identity
 
 The check is server-side and scoped to the patient already associated with the single-use appointment link; it is not a public NRIC/email search endpoint. The reuse decision and the matching method are logged for audit.
 
-The patient flow includes checking/loading, no-prior-match, ambiguous-match-without-disclosure, invalid/used/expired-token, upload progress, validation failure, retry, and receipt-confirmation states. A successful upload/reuse message confirms only that the item was received for staff review; it never promises fast-queue or eligibility approval.
+The patient flow includes checking/loading, no-prior-match, ambiguous-match-without-disclosure, invalid/used/expired-token, upload progress, validation failure, retry, and receipt-confirmation states. A successful upload/reuse message confirms only that the item was received for staff review; it never promises readiness or eligibility approval.
 
 ### 4.5 Staff and Patient View Boundaries
 
@@ -183,13 +211,62 @@ Both surfaces require explicit loading, empty, validation, failure, retry, and s
 - Upload reuses the same extraction pipeline as §4.1/§4.4 — no separate logic, just an authenticated entry point instead of a tokenized one.
 - The authenticated upload screen uses the same check-first coverage-reuse step as the tokenized link. The account's patient record is used for the lookup; the patient can reuse the prior document or upload a replacement.
 - Queue number/station is a read view onto the same queue assignment staff already see (§4.2) — the patient sees their own queue position, not a parallel system.
-- The demo account has a small Home/Queue/Payment/Records shell. Queue states cover skeletal initial loading, manual refresh, before check-in, fast/review waiting, called, counter changed, delayed, finished, stale/load failure, and retry without exposing internal review reasons. The Queue screen has a labelled Refresh control at the top right.
+- The demo account has a small Home/Queue/Payment/Records shell. Queue states cover skeletal initial loading, manual refresh, before check-in, processing, ready, additional review needed, called, counter changed, delayed, finished, stale/load failure, and retry without exposing internal review reasons. The Queue screen has a labelled Refresh control at the top right.
 - Payment is mocked, not a live gateway integration — consistent with the mocked-delivery approach used elsewhere in this project's design (SMS/email). Shows a realistic confirmation flow with no real transaction, and is built so a real gateway (e.g. PayNow, Stripe) could be substituted behind the same interface later, without being a live dependency risk during judging.
 - Mocked payment covers not-ready, processing, success/receipt, failure/retry, and already-paid states; duplicate submission cannot create a second receipt.
 - Medical records view is read-only — the patient sees their own coverage/package history and past questionnaire responses, including visit detail and empty/loading/error states; nothing here allows editing clinical or coverage data, which remains a staff-confirmed action per §7.
 - Explicitly not production-scoped. This is not a claim that a full self-service patient identity/authentication system has been designed or secured to production standard — it is a demo-scale illustration of the pattern, clearly distinguished from that larger undertaking in the pitch.
 
-### 4.7 Explicitly Deferred / Future Work
+### 4.7 Product Extension — Operational Intelligence and Dynamic Resource Allocation
+
+**What it does:** Uses privacy-safe operational events already produced by the workflow—readiness transitions, reason codes, stage timestamps, corrections, counter assignments, and outcomes—to show where administrative friction repeatedly occurs. It also converts current demand and historical service patterns into explainable staffing/counter recommendations, helping clinic operators improve rules, reminders, staffing, and payer processes rather than treating each delayed patient as an isolated incident.
+
+```text
+Pre-registration / check-in
+   → readiness checks
+   → ready service or assisted review
+   → reason-coded resolution
+   → aggregate operational insight
+   → estimate near-term workload by workstream
+   → recommend qualified staff/counter allocation
+   → staff approves, modifies, or rejects
+   → measure outcome and improve future recommendations
+```
+
+**Initial dashboard measures:**
+
+- percentage of patients administratively ready before arrival and after first-pass walk-in processing;
+- median and 90th-percentile administrative waiting time, split by booked/walk-in intake type;
+- first-pass readiness rate and assisted-review clearance time;
+- number of staff touches and corrections per visit;
+- most frequent exception reasons by document type, issuer, and workflow stage;
+- share of administrative work completed before versus after arrival;
+- counter workload and ready/review workstream age for capacity rebalancing;
+- billing corrections or rejected-claim proxies where outcome data is available;
+- false-ready admissions, with a target of zero; and
+- waiting-time differences between booked and walk-in patients to detect an unfair digital-access advantage.
+
+**Dynamic allocation inputs:**
+
+- scheduled arrivals plus the recent walk-in arrival rate;
+- current ticket count, total waiting age, and oldest-ticket age at each operational stage;
+- historical median and 90th-percentile handling time by stage and exception reason;
+- active counters, staff availability, role/skill permissions, planned breaks, and minimum coverage requirements; and
+- recent allocation changes, so the system does not repeatedly move staff in response to short-lived fluctuations.
+
+**Recommendation examples:**
+
+- “Review demand is forecast to exceed its service target in 20 minutes; move one qualified flexible registration staff member to assisted review for 30 minutes.”
+- “Ready work is clearing while billing age is rising; open Billing Counter 3 when the current review case finishes.”
+- “Tomorrow's 09:00 corporate-screening arrivals are likely to create a document-review peak; process the outstanding documents during today's lower-load period.”
+
+Recommendations show the observed pressure, constraints checked, expected effect, and expiry time. An authorised operations lead can accept, modify, reject, or later reverse the change. The system records the decision and subsequent waiting-time effect so recommendation quality can be evaluated.
+
+**Guardrails:** Analytics use aggregate or appropriately masked operational data, not raw document content or direct identifiers. Staff are not assumed to be interchangeable: recommendations may use only people whose role, training, availability, and current responsibilities permit the task. For clinical service stages, the advisor may recommend activating or rescheduling aggregate capacity only within the same qualified role—for example, opening another doctor room or bringing an available pharmacist onto dispensing—and may never assign clinical work to administrative staff. Minimum coverage, planned breaks, maximum reassignment frequency, and a configurable stability window prevent unsafe or disruptive reshuffling. The feature never ranks clinical urgency, recommends care, scores individual staff performance, or makes a staffing change without human approval. Small cohorts are suppressed where necessary. P0 may demonstrate the extension with seeded events, a small dashboard, and explainable rule-based recommendations rather than a predictive model.
+
+The judged operational impact is demonstrated through the deterministic, synthetic [Clinic Operations Simulator](./simulator.md), which compares identical patient arrivals under the serial baseline, Epicenter routing, and human-approved dynamic allocation. Simulation assumptions are always visible and are not presented as observed clinic outcomes.
+
+### 4.8 Explicitly Deferred / Future Work
 
 - Full production-scale patient identity and authentication system (self-registration, password recovery, MFA, etc.) — §4.6 is a small, fixed demo pool, not this
 - Real payment gateway integration (PayNow, Stripe, or similar) — mocked for the hackathon (§4.6)
@@ -207,8 +284,10 @@ Both surfaces require explicit loading, empty, validation, failure, retry, and s
 - As registration staff handling a TPA patient, I want the structured coverage data to be reusable for the TPA portal entry, so that I'm not manually typing the same information twice.
 - As registration staff, I want appointments grouped by incoming, ongoing, and finished status with their dates and expected or actual counters, so that I can plan arrivals and track the day's flow.
 - As registration staff, I want to record that I completed the required identity and e-card checks manually, without the system attempting to perform or decide those checks.
-- As registration staff, I want one review worklist with the reason and next action for every slow-path patient, so that exceptions do not disappear between screens.
+- As registration staff, I want one review worklist with the reason and next action for every unresolved case, while the patient keeps the same ticket and original waiting age, so that exceptions do not disappear between screens or make patients queue twice.
 - As registration staff, I want missing-document reminders, reschedule/cancel/no-show actions, and counter rebalancing to be auditable from the appointment view.
+- As a clinic operations lead, I want aggregate readiness, waiting-time, exception, and correction trends, so that I can improve rules, reminders, and staffing without inspecting individual patient documents.
+- As a clinic operations lead, I want explainable suggestions for temporarily reallocating qualified staff or counters, with operational constraints checked before I approve them, so that demand spikes can be handled without constant manual monitoring or disruptive reshuffling.
 - As billing staff, I want to confirm or correct the reused coverage/billing record and preview the demo TPA payload from one screen.
 
 ### GP / Clinical Staff
@@ -238,8 +317,10 @@ Patient's coverage document (chit/voucher/referral letter)
    → Typed facts + selected options + page/source-excerpt evidence
    → Readiness gates: required fields, identifier, validity, and evidence
    → Eligibility & Package Matching Engine (rules-based lookup, not LLM judgment)
-   → Queue Assignment: booked + pre-registration complete + all readiness gates/matches clean
-     → fast queue; every other case (including all walk-ins) → review queue
+   → One persistent visit ticket created or activated
+   → Readiness Routing: all readiness gates/matches clean + staff confirmation
+     → ready service; otherwise → assisted review on the same ticket
+   → Walk-ins remain on that one ticket while processing/review occurs
    → Staff review/confirmation screen
    → Confirmed record feeds: registration system, questionnaire pre-fill,
      billing determination, (conceptually) TPA portal submission
@@ -259,11 +340,12 @@ Patient's coverage document (chit/voucher/referral letter)
 | Staff Review Interface | Presents extracted + matched data for confirmation before finalising | Human-in-the-loop; each field shows page/excerpt evidence, with region highlighting only when coordinates exist |
 | Pre-Arrival Intake Channel | Where scheduled patients submit documents ahead of arrival, via a tokenized single-use upload link (no patient account/login) tied to their appointment | Directly addresses the "before they reach the front desk" requirement in the brief, without the added auth/security surface of a full patient account (see §4.4) |
 | Coverage Reuse Check | Resolves the appointment-bound/authenticated patient by normalized identifier, with unambiguous scoped email fallback, then records reuse or replacement | Avoids duplicate uploads without exposing a public patient lookup or bypassing validity, eligibility, and staff review |
-| Queue Operations Board | Tracks scheduled date/time, Incoming/Ongoing/Finished status, fast/review routing, and expected vs. actual queue/counter numbers | Gives staff one date-aware operational view from pre-arrival planning through visit completion |
+| Queue Operations Board | Tracks scheduled/check-in time, Incoming/Ongoing/Finished status, readiness state, waiting age, and expected vs. actual queue/counter numbers | Gives staff one date-aware operational view while preserving one ticket per visit |
 | Manual Check Attestation | Records which staff member confirmed completion of the approved manual identity/e-card process and when | Stores no automated verification decision; check-in fails safely if the attestation cannot be saved |
-| Review and Exception Workspace | Lists slow-path cases and supports reasoned, re-authenticated corrections with source evidence | Keeps original/corrected values and immutable audit history |
+| Review and Exception Workspace | Lists unresolved cases as an internal worklist and supports reasoned, re-authenticated corrections with source evidence | Keeps the patient's original ticket/time plus original/corrected values and immutable audit history |
 | Questionnaire, Pharmacy, and Billing Surfaces | Reuse confirmed patient/coverage data while recording approved consent, manual allergy-check attestation, and staff billing confirmation | Demonstrates the remaining repeated-data touchpoints without automating clinical checks or live TPA submission |
-| Counter Allocation and Audit | Assigns fast/review counter pools, records rebalancing, and exposes a read-only event log | Counter changes cannot bypass fast-queue prerequisites |
+| Counter Allocation and Audit | Assigns counters to ready/review workstreams, records rebalancing, and exposes a read-only event log | Counter changes cannot bypass readiness prerequisites or create a second patient ticket |
+| Operational Intelligence and Allocation Advisor | Aggregates flow events, estimates near-term stage demand, and proposes qualified staff/station changes with constraints, rationale, expiry, and expected effect | Supports continuous improvement and human-approved load balancing without crossing role boundaries, using raw documents, ranking staff, or changing clinical priority |
 
 ### 6.3 Data Sources (Demo)
 
@@ -291,8 +373,12 @@ Dataset reconciliation rules:
 Per the official constraint (Copilot Studio use not required during the hackathon, but portability must be demonstrated):
 
 - Document extraction and eligibility-matching logic exposed as clean API endpoints with defined input/output schemas.
-- Wrapped as MCP tool(s) — e.g., `extract_coverage_document(file)`, `match_eligibility(extracted_fields)`, `get_patient_record(patient_id)` — so a Copilot Studio agent could consume the same capabilities via "Add an action → MCP server."
+- Epicenter-specific document, eligibility, single-ticket readiness, operational-summary, allocation-advice, and synthetic-simulator capabilities are exposed through narrow custom MCP tools backed by the same authorized service layer as the web application.
+- First-party Microsoft MCPs are used where they already own the capability: Microsoft Learn MCP for current maker/developer guidance, with Power BI/Fabric MCP as a governed P1 option for de-identified aggregate intelligence analytics. Dataverse or Azure MCP is introduced only when the corresponding Microsoft platform becomes an authoritative part of the deployment, not as a duplicate data path.
+- Real identity/e-card attestations, corrections, readiness approvals, billing confirmations, and resource-allocation decisions remain in the re-authenticated staff UI. MCP may retrieve or explain their stored state but cannot perform them in P0.
+- Simulation MCP tools accept only approved versioned synthetic scenarios and bounded overrides, and label every result with its seed, assumptions version, and synthetic status.
 - Submission includes a diagram mapping this architecture to Copilot Studio's action/knowledge-source model, and conceptually to Clinic Assist/NEHR integration points, per judging criteria §5.
+- Detailed tool boundaries, Microsoft MCP selection, authentication, Power Platform data-policy controls, and acceptance tests are defined in [microsoft_mcp.md](./microsoft_mcp.md).
 
 ## 7. Guardrails & Human-in-the-Loop Requirements
 
@@ -320,14 +406,19 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 | Patient matching safety | All six identifier-bearing document fixtures match the intended registration record; all three identifier-free fixtures require staff review rather than name-only auto-linking |
 | Dataset import integrity | 300 registration rows load once; 51 uniquely matched questionnaire people link by normalized identifier; six unmatched people are reported without silent patient creation; three dual-questionnaire patients retain both records |
 | Time saved (demo comparison) | Visibly faster path from "document received" to "package/eligibility confirmed" vs. the ~14-minute manual baseline (interpretation + eligibility + package verification) stated in the brief |
-| Queue-splitting impact (demo comparison) | Simulated queue visibly shows a booked, fully pre-cleared patient entering the fast queue while walk-ins and any incomplete or uncertain cases enter the review queue, vs. a single-line baseline |
+| Single-ticket routing | Every demo visit has exactly one queue ticket; a walk-in visibly transitions from processing to ready or needs-review without receiving a new number or resetting the original check-in timestamp |
+| Flow impact (demo comparison) | Simulated operations visibly show ready cases continuing while one unresolved case is handled in the staff review worklist, vs. a serial baseline where that exception blocks everyone behind it |
 | Queue lifecycle traceability | Every demo visit retains its appointment date and visibly transitions from Incoming to Ongoing to Finished, with expected counter shown before arrival and actual counter recorded after check-in |
+| Operational quality | Dashboard reports first-pass readiness, P50/P90 administrative waiting time, review clearance time, top exception reasons, and booked/walk-in waiting-time differences from seeded demo events |
+| Explainable load balancing | A seeded demand spike produces a recommendation that names the pressured workstream, eligible resource, constraints checked, expected effect, and expiry; accepting/rejecting it is audited |
+| Allocation stability | No recommendation violates role permissions, minimum coverage, planned breaks, or maximum reassignment frequency; short-lived spikes inside the stability window produce no move |
+| Readiness safety | Zero false-ready admissions: only cases passing every deterministic gate and required staff confirmation reach `ready` |
 | Duplicate entry eliminated | Patient details entered once, demonstrably reused across all five touchpoints identified in §1.3(b) — not only registration-to-questionnaire — in the demo |
 | Human-in-the-loop integrity | 100% of extracted/matched records shown for staff confirmation before being treated as final in the demo |
 | Manual-check boundary | 100% of identity/e-card records are staff attestations of a manually completed process; the demo contains no automated verification result or simulated scan |
 | Screen-state completeness | Demo covers loading, empty, validation/error, retry, and success for upload/reuse, review, queue, payment, and records flows |
 | Patient/staff separation | Patient demo routes expose only the signed-in/token-scoped patient's outcomes and never expose confidence, review reasons, rules, or audit records |
-| Copilot Studio portability | A working (or clearly diagrammed) MCP tool wrapping at least one core function |
+| Copilot Studio portability | Copilot Studio discovers and safely calls at least one custom Epicenter tool; the demo documents which first-party Microsoft MCPs are used, deferred, or rejected and why |
 
 ## 10. Key Risks & Mitigations
 
@@ -340,8 +431,12 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 | A document without an identifier attaches to the wrong same-name patient | Auto-linking requires an exact identifier within the authorized scope; identifier-free/conflicting documents always require staff review |
 | Questionnaire email overwrites the canonical patient email | Registration remains canonical; questionnaire contact values retain source provenance and mismatches are reviewable rather than auto-merged |
 | Two-digit and four-digit DOB formats are interpreted inconsistently | Import normalizes both formats, uses four-digit questionnaire DOB where available, documents the remaining century pivot, and flags implausible ages |
-| Queue-splitting creates a two-tier experience that feels unfair to review-queue patients | Explicit design requirement (§4.2) that the review queue is an operational routing decision, not a deprioritisation — patient-facing UX should call it the "review queue," not the "slow queue," and explain when more processing is needed |
-| A booked patient is incorrectly placed in the fast queue before all prerequisites pass | Fast-queue eligibility is a strict all-gates rule: booked appointment, pre-registration completed before arrival, every required document valid with `readiness_status = pass`, and every match clean |
+| Internal work routing becomes multiple patient queues or makes someone lose their place | Every visit retains one ticket and its original ordering timestamp; review is a staff worklist state, and resolution updates the same record rather than issuing a new number |
+| Pre-registration creates an unfair advantage over walk-ins | Walk-ins can reach `ready` after first-pass processing, booked/walk-in P50 and P90 waits are monitored separately, and staff can rebalance counter capacity without weakening readiness gates |
+| Load balancing repeatedly moves staff or disrupts breaks | Recommendations require sustained pressure, enforce minimum coverage/break/reassignment constraints, expire automatically, and require an authorised person to approve or modify them |
+| Historical workload data reproduces an inefficient or biased staffing pattern | Historical handling time informs demand estimates but never becomes an unquestioned staffing rule; recommendations show their evidence, fairness metrics remain visible, and operators can reject them with a recorded reason |
+| Staff analytics becomes individual productivity surveillance | The extension measures workstream demand and allocation outcomes, not individual rankings; access is role-restricted and small cohorts are suppressed |
+| A patient is incorrectly marked ready before all prerequisites pass | Ready status requires every required document to be valid with `readiness_status = pass`, every match clean, and required staff confirmation complete |
 | Overclaiming feasibility of real Clinic Assist/NEHR integration | Judging criteria explicitly ask for conceptual integration only — PRD and pitch should describe the integration pattern honestly, not claim a working live connection |
 | Identity verification scope creep | Treated as an explicit, permanent hard constraint (§2, §7) reinforced throughout, not just stated once |
 | A confirmation screen is mistaken for automated identity/e-card checking | Copy explicitly says staff completed the checks manually; the stored record is an attestation only, contains no automated result/evidence, and fails safely if it cannot be saved |

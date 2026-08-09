@@ -3,7 +3,7 @@
 ## AI-Assisted Pre-Registration & Eligibility Verification for Parkway Shenton
 
 - **Status:** Recommended implementation baseline
-- **Sources:** [PRD.md](./PRD.md) and [design.md](./design.md)
+- **Sources:** [PRD.md](./PRD.md), [design.md](./design.md), and [simulator.md](./simulator.md)
 - **Priority:** Hackathon speed, low operational cost, clear security boundaries, and Microsoft Copilot Studio portability
 
 ## 1. Architecture Principles
@@ -15,6 +15,7 @@
 5. **Realtime is an enhancement, not the only path.** Queue screens subscribe to updates and also expose a manual Refresh action. Initial queue loading uses a fixed-layout skeletal screen.
 6. **Provider integrations sit behind adapters.** Document extraction, messaging, mocked payment, and future TPA submission can be replaced without changing core rules.
 7. **Clerk is the preferred identity provider.** Staff and seeded demo-patient sign-in, sessions, and sensitive-action reverification use Clerk. Appointment-scoped upload links remain opaque single-use tokens because they are not user accounts.
+8. **One visit means one ticket.** Processing, readiness, review, and counter changes update one persistent queue row; no transition issues a second number or resets the patient's original check-in time.
 
 ## 2. Recommended Stack
 
@@ -25,7 +26,7 @@
 | Client data | TanStack Query | Loading/error/retry state, cache invalidation, polling fallback, and manual queue refresh |
 | Forms and validation | React Hook Form + Zod | Staff corrections, attestations, questionnaires, and upload validation |
 | API | FastAPI + Pydantic | Typed REST endpoints, OpenAPI contract, authorization boundary, and orchestration |
-| Core business logic | Plain Python service modules | Eligibility matching, strict queue rules, counter assignment, billing calculations, and audit creation |
+| Core business logic | Plain Python service modules | Eligibility matching, single-ticket readiness transitions, counter assignment, billing calculations, and audit creation |
 | Database | Supabase Postgres | Source of truth for the data model in `design.md` |
 | Authentication | Clerk | Staff accounts, seeded demo-patient accounts, sessions, and sensitive-action reverification |
 | Authorization | Clerk identity + backend permissions + Postgres RLS | Separates staff roles, patient-owned data, MCP access, and upload-token scope |
@@ -35,7 +36,8 @@
 | Document extraction | OpenAI Responses API with PDF/image inputs and Structured Outputs | Converts the coverage document directly into the validated coverage schema |
 | Evidence mapping | Page number + supporting source excerpt | Staff-reviewable evidence without requiring a separate cloud OCR platform |
 | Rules engine | Python + versioned Postgres `eligibility_rules` | Deterministic package, eligibility, billing, and queue decisions |
-| MCP portability | Python MCP server sharing the core service layer | Exposes extraction, matching, and record lookup to Copilot Studio |
+| Operational analytics and allocation advisor | Postgres views + plain Python rules | P50/P90 waits, near-term staff-minute demand, constraint-aware resource recommendations, and outcome measurement without a separate ML platform |
+| MCP portability | Custom Python MCP server plus selected first-party Microsoft MCPs | Exposes Epicenter domain services to Copilot Studio while reusing Microsoft Learn and optional governed Power BI/Fabric capabilities where they already fit |
 | Deployment | Vercel for Next.js; Railway for API/MCP/worker; managed Supabase | Familiar Git-based deployment without Azure infrastructure |
 | Observability | Structured JSON logs + Railway deployment/runtime logs | Request/job tracing without logging raw NRIC or document contents |
 | Testing | Vitest, React Testing Library, Playwright, Pytest | Unit, component, API, policy, and end-to-end verification |
@@ -107,7 +109,7 @@ app/
 
 - Staff tables become labelled cards on narrow screens rather than horizontally scrolling.
 - Patient routes are mobile-first from 375 px upward.
-- Use text plus semantic icons for PASS, REVIEW, ALERT, FAST, and queue states; color is supplementary.
+- Use text plus semantic icons for PASS, PROCESSING, READY, REVIEW, ALERT, and visit states; color is supplementary.
 - Provide visible focus, a skip-to-main link, keyboard-operable tables/forms, screen-reader live regions, and minimum 44×44 px controls.
 - Respect browser zoom, dynamic text, dark/light contrast, safe areas, and reduced motion. Skeleton shimmer becomes static when reduced motion is enabled.
 
@@ -142,7 +144,7 @@ The worker claims jobs transactionally, downloads from private storage, invokes 
 
 This avoids operating Redis during the hackathon. If production throughput requires it, the job adapter can later move to a dedicated managed queue without changing extraction or rules services.
 
-### 5.3 Rules Engine
+### 5.3 Rules Engine and Readiness State Machine
 
 Rules run after schema validation and never call the LLM. Inputs include:
 
@@ -150,21 +152,41 @@ Rules run after schema validation and never call the LLM. Inputs include:
 - validity dates;
 - active `eligibility_rules` version;
 - appointment and pre-registration state;
-- required-document completeness and confidence thresholds.
+- required-document completeness and deterministic readiness gates.
 
-The strict queue function is:
+Every visit owns one persistent `queue_entries` row and one `Q-*` ticket. The readiness transition is:
 
 ```text
-booked
-AND preregistration completed before arrival
-AND every required document present, valid, and high-confidence
+while required checks are running
+    → PROCESSING on the existing ticket
+
+every required document present and valid
+AND every required extraction fact has source evidence
 AND every eligibility/package match clean
-    → FAST
-otherwise
-    → REVIEW
+AND required staff confirmation complete
+    → READY on the existing ticket
+
+any readiness gate fails
+    → NEEDS_REVIEW on the existing ticket
 ```
 
-Every walk-in is REVIEW. Counter rebalancing may change counters but cannot override this rule.
+Booked patients may satisfy the gates before arrival. Walk-ins start `processing` and can reach `ready` after first-pass processing. Review resolution updates the same row and never changes its queue number or original `checked_in_at`. Counter rebalancing may change counters but cannot override readiness gates.
+
+Service ordering uses a clinic-configured ordering key derived from the original scheduled/check-in time. Readiness transitions never replace that key. A scheduled job or query flags review tickets approaching the configured service target so staff can reassign flexible counter capacity; it does not make clinical-priority decisions.
+
+### 5.4 Load Balancing and Allocation Advisor
+
+The advisor runs on a short interval and remains deterministic for P0:
+
+1. Read current tickets, waiting ages, scheduled arrivals, and recent walk-in rate.
+2. Convert demand into estimated staff-minutes using aggregate median/P90 handling times by stage and reason.
+3. Read active counters and `staff_availability`, including eligible workstreams, breaks, and current assignment.
+4. Evaluate candidate changes against minimum coverage, stability-window, maximum-reassignment, role/skill, and safe-handoff constraints.
+5. Persist an expiring recommendation with its input snapshot, no-change baseline, rationale, constraints, and expected effect.
+6. Apply a change only after an authorised operations lead accepts or modifies it; write the allocation and audit event transactionally.
+7. Compare the resulting workstream waits with the recorded baseline after the recommendation window closes.
+
+Use hysteresis: pressure must persist across a configured stability window before recommending a move, and the reverse move must meet a separate threshold. This prevents oscillation. The advisor operates on workstream aggregates and must not expose or rank individual productivity.
 
 ## 6. Document Extraction Pipeline
 
@@ -202,8 +224,12 @@ Recommended database additions needed by this stack:
 - `document_jobs` for asynchronous processing;
 - `idempotency_keys` for write deduplication;
 - `prompt_versions` for extraction reproducibility;
+- `operational_events` as an append-only, privacy-safe source for readiness and flow metrics;
+- `staff_availability` for role/skill eligibility, shifts, breaks, and current administrative assignment;
+- `allocation_recommendations` for expiring advice, constraints, decisions, and measured outcomes;
 - append-only protections for `audit_log`;
-- indexes on queue status/date, patient match fields, document status, and audit timestamp.
+- aggregate views for P50/P90 waits, first-pass readiness, review clearance, reason frequency, estimated staff-minute demand, staff touches, and booked/walk-in comparisons;
+- indexes on readiness/visit status/date, patient match fields, document status, operational-event time, and audit timestamp.
 
 ### 7.2 Authorization
 
@@ -214,7 +240,8 @@ Clerk authenticates the person; Epicenter authorizes the action. Map each Clerk 
 | Registration staff | Queue, appointment, document review, patient registration, manual-check attestation |
 | Pharmacist | Patient identity summary, recorded allergy, manual allergy attestation |
 | Billing staff | Confirmed coverage, billing review, demo TPA payload |
-| Admin/auditor | Counter allocation, read-only audit, configuration |
+| Operations admin | Allocation recommendations, counter/staff assignments, configuration, and read-only audit |
+| Auditor | Read-only operational metrics, recommendation decisions, and audit history |
 | Demo patient | Own queue, payment, records, and coverage upload only |
 | Token-link visitor | One upload/reuse decision for one appointment only |
 
@@ -245,17 +272,24 @@ It stores no scan, image, biometric, automated score, or generated verification 
 
 ## 9. MCP and Copilot Studio Portability
 
-Expose narrow tools that call the same authenticated service layer:
+The custom Epicenter MCP exposes only narrow domain tools that call the same authenticated service layer:
 
 ```text
-extract_coverage_document(document_id)
-get_extraction_status(job_id)
-match_eligibility(document_id, appointment_reference)
-get_patient_record(patient_id)
-get_queue_entry(queue_entry_id)
+epicenter_start_document_extraction(document_id)
+epicenter_get_extraction_status(job_id)
+epicenter_preview_eligibility(document_id, appointment_reference)
+epicenter_get_visit_ticket(ticket_id)
+epicenter_get_operational_summary(clinic_id, date_range)
+epicenter_get_allocation_recommendation(recommendation_id)
+epicenter_run_simulation(scenario_id, seed, bounded_overrides)
+epicenter_compare_simulation_runs(baseline_run_id, epicenter_run_id)
 ```
 
-MCP tools return typed, minimal payloads and never bypass RLS/role checks or staff confirmation. Destructive/corrective actions should remain in the staff UI unless a future approved Copilot workflow provides equivalent re-authentication and audit guarantees.
+MCP tools return typed, minimal payloads and never bypass RLS/role checks or staff confirmation. Real readiness, correction, billing, identity/e-card, and allocation-approval writes remain in the staff UI. Simulation tools operate only on synthetic isolated state and label every result with scenario, seed, assumptions version, and `synthetic=true`.
+
+Use first-party Microsoft MCP servers only for capabilities they own: Microsoft Learn MCP in the maker/developer environment; optional Power BI/Fabric MCP for a de-identified aggregate analytics model after tenant review; Dataverse MCP only if Dataverse becomes authoritative for a bounded context; and Azure MCP only for internal Azure development/operations if an Azure deployment is adopted. Do not connect developer/admin MCP servers to the staff operations agent or mirror the Supabase source of truth merely to add another MCP.
+
+The complete tool, authentication, governance, and rollout contract is in [microsoft_mcp.md](./microsoft_mcp.md).
 
 ## 10. No-Azure Deployment
 
@@ -332,7 +366,7 @@ Keep MCP and FastAPI transports thin; business logic belongs in `backend/core` s
 
 - Component tests for skeleton, empty, error, retry, stale, and success states.
 - Keyboard and accessibility checks for every staff/patient route.
-- Playwright journeys for scheduled-fast, booked-review, walk-in-review, document replacement/reuse, manual-check attestation, counter change/refresh, mocked payment, and read-only history.
+- Playwright journeys for scheduled-ready, booked-review, walk-in processing-to-ready, walk-in processing-to-review-to-ready on the same ticket, explainable allocation recommendation/approval/rejection, document replacement/reuse, manual-check attestation, counter change/refresh, mocked payment, and read-only history.
 
 ### Backend
 
@@ -342,6 +376,7 @@ Keep MCP and FastAPI transports thin; business logic belongs in `backend/core` s
 - Authorization/RLS tests proving patients cannot read review reasons, confidence, rules, audit records, or other patients.
 - Clerk session/JWT and reverification tests covering invalid, expired, wrong-audience, wrong-role, and stale-verification cases.
 - Tests proving no identity/e-card artifact enters document-extraction jobs.
+- Allocation-advisor tests for demand estimation, role/skill eligibility, minimum coverage, breaks, stability/hysteresis, reassignment limits, expiry, conflict, audit, and a no-change result for short-lived spikes.
 
 ### Release Gate
 

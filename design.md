@@ -28,12 +28,12 @@
 [Eligibility & Package Matching Engine]
   Rules-based lookup: structured fields → confirmed package + billing arrangement
      ↓
-[All pre-registration gates passed before arrival?]
+[All readiness gates passed before arrival?]
   Required documents present + valid + readiness PASS + every match clean
-     ├── YES → FAST QUEUE
-     └── NO  → REVIEW QUEUE (SLOW PATH)
+     ├── YES → READY BEFORE ARRIVAL
+     └── NO  → NEEDS ASSISTED REVIEW
      ↓
-[Pre-Arrival Record Ready, queue pre-assigned]
+[One visit ticket prepared; readiness state recorded]
   Registration + questionnaire data pre-filled, package/billing pre-matched
   Any failed readiness gate flagged for staff review
      ↓
@@ -43,11 +43,10 @@
      ↓
 [System records staff confirmation only (§2.3)]
      ↓
-[FAST QUEUE]                             [REVIEW QUEUE]
-Staff confirms pre-processed record        Staff resolves flagged fields,
-in seconds, patient proceeds                then confirms — patient's extra
-                                             time does not block fast-queue
-                                             patients behind them
+[READY SERVICE]                         [ASSISTED REVIEW WORKLIST]
+Staff confirms pre-processed record       Staff resolves flagged fields on
+and calls the existing ticket             the same ticket; original waiting
+                                            age continues throughout
      ↓                                          ↓
 [Queue / Consultation or Screening]  ←──────────┘
 ```
@@ -61,25 +60,30 @@ in seconds, patient proceeds                then confirms — patient's extra
      ↓
 [System records staff confirmation only (§2.3)]
      ↓
-[Assign REVIEW QUEUE]  ← all walk-ins use the slow path
-  reason: walk_in
+[Create one visit ticket; state = PROCESSING]
      ↓
-[Staff uploads/scans coverage document at review counter]
+[Staff uploads/scans coverage document once]
      ↓
 [Document Extraction Layer] → [Eligibility & Package Matching Engine]
      ↓
-[Staff resolves any flags and confirms]
+[All readiness gates pass and staff confirms?]
+     ├── YES → same ticket becomes READY
+     └── NO  → same ticket becomes NEEDS REVIEW
+                    ↓
+              [Staff resolves flags; same ticket becomes READY]
      ↓
 [Queue / Consultation or Screening]
 ```
 
 ### Flow notes
 
-- Fast-queue admission uses an all-gates rule: the patient must have a booked appointment, complete pre-registration before arrival, provide every required valid document, receive `readiness_status = pass` for each document, and produce clean eligibility/package matches. If any gate fails, the patient enters the review queue.
-- Walk-ins always enter the review queue, regardless of eventual document readiness. Because walk-ins are less common, they share the staffed slow path with incomplete and uncertain cases rather than creating a third queue.
-- **Queue assignment solves the compounding-delay problem named in the brief** by structurally protecting booked, fully pre-cleared patients from variable-time cases.
+- Every visit has exactly one patient-facing ticket. `processing`, `ready`, and `needs_review` are states on that ticket, not separate queues the patient must join.
+- Readiness uses an all-gates rule: every required document must be present and valid, each document must receive `readiness_status = pass`, eligibility/package matches must be clean, and required staff confirmation must be complete.
+- Walk-ins begin in `processing` and can become `ready` after first-pass processing. A failed gate moves the same ticket to `needs_review`; resolving it never issues a new number or resets `checked_in_at`.
+- **Internal workstream routing solves the compounding-delay problem named in the brief** by letting ready cases proceed while staff resolve variable-time exceptions in parallel.
+- A ticket cleared after review retains its original appointment/check-in ordering key. It does not displace someone already called, but it is not treated as a new arrival. Review-age alerts and flexible counter reallocation prevent unresolved cases from being starved.
 - Identity/e-card checking always happens manually, in person, and outside system decision logic. The product only records the responsible staff member's confirmation after the manual process; it never scans, validates, or suggests a result.
-- Staff confirmation is always required before a record is treated as final in either queue.
+- Staff confirmation is always required before a record is treated as final or `ready`.
 
 ### 1.3 Shared Check-First Upload Entry
 
@@ -144,18 +148,18 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Queue Overview     Date: [12 Aug 2026]    [Search] [Filters]             │
 ├───────────┬──────────────────────────────────────────────────────────────┤
-│ Incoming  │ 09:00 Loh Wei Ming  FAST   F-014  Expected Counter 2 [Open]│
-│ 8         │ 09:15 Tan Kai Xuan  REVIEW R-006  Expected Counter 4 [Open]│
+│ Incoming  │ 09:00 Loh Wei Ming  READY  Q-014  Expected Counter 2 [Open]│
+│ 8         │ 09:15 Tan Kai Xuan  REVIEW Q-015  Expected Counter 4 [Open]│
 ├───────────┼──────────────────────────────────────────────────────────────┤
-│ Ongoing   │ F-012 Mei Chen    Counter 2  Manual check recorded [Open]  │
-│ 3         │ R-004 Priya Nair  Counter 4  Document review       [Open]  │
+│ Ongoing   │ Q-012 Mei Chen    Counter 2  Manual check recorded [Open]  │
+│ 3         │ Q-013 Priya Nair  Counter 4  Document review       [Open]  │
 ├───────────┼──────────────────────────────────────────────────────────────┤
-│ Finished  │ F-010 Siti Rahman Counter 2  Completed 08:52        [Open]  │
-│ 21        │ R-002 John Lim    —          No-show 08:45          [Open]  │
+│ Finished  │ Q-010 Siti Rahman Counter 2  Completed 08:52        [Open]  │
+│ 21        │ Q-011 John Lim    —          No-show 08:45          [Open]  │
 └───────────┴──────────────────────────────────────────────────────────────┘
 ```
 
-- **Incoming** retains scheduled date/time, fast/review label, expected queue number, and expected counter. Opening a row leads to §2.9.
+- **Incoming** retains scheduled date/time, readiness state, one expected queue number, and expected counter. Opening a row leads to §2.9.
 - **Ongoing** begins after staff records the manual check-in confirmation (§2.3) and shows actual queue/counter plus current stage.
 - **Finished** includes completed, cancelled, and no-show outcomes; rescheduled appointments remain Incoming on the new date with an audit link to the old slot.
 - Empty groups say what happened (for example, “No incoming appointments for this date”). Loading uses fixed-height skeleton rows; load failure provides Retry. Color is never the only status cue.
@@ -165,7 +169,7 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │ Check in: Loh Wei Ming — 12 Aug 2026, 09:00                 │
-│ Planned: FAST / F-014 / Expected Counter 2                  │
+│ Planned: READY / Q-014 / Expected Counter 2                 │
 │                                                             │
 │ Record checks completed manually outside this system:       │
 │ [ ] I manually verified the patient's identity in person.   │
@@ -180,19 +184,20 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 - The primary action stays disabled until identity is confirmed and e-card is either manually confirmed or marked not applicable with a reason. Re-authentication (§2.1) occurs before commit.
 - A successful commit assigns the actual counter, transitions Incoming → Ongoing, and writes an audit entry. Failure leaves the patient Incoming and offers Retry; it never assumes the checks passed.
 
-### 2.4 Review Queue Worklist
+### 2.4 Assisted Review Worklist
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
-│ Review Queue  [Today] [Reason: All] [Oldest first] [Search]            │
+│ Assisted Review  [Today] [Reason: All] [Oldest first] [Search]         │
 ├──────┬───────────────┬───────────────┬──────────────────┬─────────────┤
-│ R-006│ Tan Kai Xuan  │ 09:15 booked │ Missing document │ [Open]      │
-│ R-007│ Amir Loh      │ 10:00 booked │ Expired voucher  │ [Open]      │
-│ R-008│ Priya Nair    │ Walk-in 09:22│ Walk-in          │ [Open]      │
+│ Q-015│ Tan Kai Xuan  │ 09:15 booked │ Missing document │ [Open]      │
+│ Q-018│ Amir Loh      │ 10:00 booked │ Expired voucher  │ [Open]      │
+│ Q-019│ Priya Nair    │ Walk-in 09:22│ Ambiguous match  │ [Open]      │
 └──────┴───────────────┴───────────────┴──────────────────┴─────────────┘
 ```
 
-- Each row shows appointment/walk-in time, queue reason, document status, age in queue, assigned counter, and next action. Opening a document issue leads to §2.6; missing documents lead to §2.5.
+- This is an internal staff worklist, not another patient queue. Each row shows the visit's original ticket, appointment/check-in time, review reason, document status, total waiting age, service-target state, assigned counter, and next action. Opening a document issue leads to §2.6; missing documents lead to §2.5.
+- Approaching/over-target rows are labelled and announced without relying on color. Staff may reassign a flexible counter; the system never silently changes clinical priority or auto-marks the ticket ready.
 - An empty worklist says “No patients need review.” Loading, permission failure, and network failure are explicit and recoverable.
 
 ### 2.5 Staff Document Capture
@@ -258,7 +263,7 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 ┌──────────────────────────────────────────────────────────────────┐
 │ Back to records                                                  │
 │ PS-REG-0417 · Loh Wei Ming · NRIC S***946C             │
-│ Current visit: 12 Aug 2026 · Queue FAST · F-014 · Counter 2     │
+│ Current visit: 12 Aug 2026 · READY · Q-014 · Counter 2          │
 │ Coverage: Meridian (MRDEB) · 3 requested tests · Confirmed      │
 │                                                                  │
 │ Record reuse                                                     │
@@ -274,7 +279,7 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
 │ 12 Aug 2026 · 09:15 · Tan Kai Xuan                  INCOMING    │
-│ REVIEW · R-006 · Expected Counter 4 · Missing document          │
+│ NEEDS REVIEW · Q-015 · Expected Counter 4 · Missing document    │
 │                                                                  │
 │ Pre-registration checklist                                      │
 │ PASS  Patient details       PASS  Questionnaire                 │
@@ -362,21 +367,62 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
 │ Counter allocation · 12 Aug 2026                                │
-│ FAST counters:   [1] [2]         REVIEW counters: [3] [4]       │
-│ Expected load:    8 incoming      Expected load:   5 incoming    │
+│ READY work:     [1] [2]         REVIEW work:     [3] [4]         │
+│ Expected load:  8 tickets       Expected load:   5 tickets       │
 │                                                                  │
-│ R-006 Tan Kai Xuan · Expected 4 · Actual —  [Assign counter ▾]  │
+│ Recommendation · Review pressure rising                          │
+│ Move Counter 2 to REVIEW for 30 min after Q-014                  │
+│ Checks: qualified staff · minimum ready coverage · break clear   │
+│ Expected: review P90 −6 min · Expires 09:35                      │
+│ [Reject] [Modify] [Preview and approve]                          │
+│                                                                  │
+│ Q-015 Tan Kai Xuan · Expected 4 · Actual —  [Assign counter ▾]  │
 │ [Preview changes]                         [Apply allocation]      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-- Rebalancing may change expected/actual counters but cannot move a patient into FAST unless all fast-queue prerequisites pass. Changes require confirmation, announce affected patients/staff, and are audited.
+- Rebalancing may change expected/actual counters but cannot mark a ticket `ready` unless every readiness prerequisite passes. It never creates a replacement ticket or resets the original waiting age. Changes require confirmation, announce affected patients/staff, and are audited.
+- Recommendations use current workload, near-term arrivals, historical stage handling times, eligible staff availability, planned breaks, and minimum coverage. Each shows its rationale, constraints, expected effect, and expiry.
+- Only an authorised operations lead may accept or modify a recommendation. Rejection, modification, approval, reversal, and the observed outcome are audited. Recommendations never move staff automatically.
+- A stability window and maximum reassignment frequency suppress short-lived oscillations; an approved move cannot begin until the staff member's current patient interaction safely ends.
 
 ### 2.15 Staff-Wide States and Accessibility
 
 - Staff tables provide search, filters, sorting, pagination/virtualisation for large lists, skeleton loading, actionable errors, and meaningful empty states.
 - Desktop is primary; tablet collapses the sidebar; narrow layouts turn tables into labelled cards without horizontal scrolling. A skip-to-main link bypasses the persistent navigation, visible focus follows visual order, and returning from detail restores list state.
 - Production icons use one SVG icon set. Status always includes text plus icon/shape; wireframe words such as PASS, REVIEW, ALERT, and FAIL are the accessible labels, not color-dependent decoration.
+
+### 2.16 Operational Intelligence and Allocation Advisor (Product Extension)
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ Operations · This week             [Booked/Walk-in] [Date range] │
+├──────────────────┬──────────────────┬────────────────────────────┤
+│ Ready pre-arrival│ First-pass ready │ Admin wait P50 / P90       │
+│ 64%              │ 81%              │ 7 min / 19 min             │
+├──────────────────┴──────────────────┴────────────────────────────┤
+│ Top review reasons         Review clearance       Staff touches │
+│ Missing document     18    Median 6 min            1.4 / visit   │
+│ Expired voucher       9    P90 17 min                            │
+│ Ambiguous match       5                                          │
+├──────────────────────────────────────────────────────────────────┤
+│ Booked P90: 15 min · Walk-in P90: 21 min · Difference: 6 min    │
+├──────────────────────────────────────────────────────────────────┤
+│ Forecast · next 30 min: REVIEW pressure likely                  │
+│ Suggested: +1 qualified counter for 30 min · Expected P90 −6 min│
+│ Constraints: minimum READY coverage PASS · breaks PASS           │
+│ [View evidence] [Reject] [Modify] [Approve]                      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- The dashboard aggregates append-only `operational_events`; it does not query or display raw source documents, direct identifiers, or clinical information.
+- Filters compare intake type, issuer/document category, reason, and time period. Small cohorts are suppressed where necessary to avoid exposing individuals.
+- P50/P90 waiting time, first-pass readiness, review clearance, staff touches, corrections, and false-ready counts use explicit definitions and retain the selected period for reproducibility.
+- Forecast workload is expressed in estimated staff-minutes, not ticket count alone, using scheduled arrivals, recent walk-in rate, and historical stage/reason handling times.
+- The advisor considers only active staff/counters that satisfy role, skill, availability, break, minimum-coverage, stability-window, and reassignment-frequency constraints. It never treats all staff as interchangeable.
+- Recommendations include their evidence, expected impact, expiry, and a no-change baseline. Approval, modification, rejection, reversal, and observed outcome are append-only events.
+- The dashboard supports operational decisions but never ranks clinical urgency, scores individual productivity, automatically changes rules, or reallocates resources without authorised approval.
+- P0 may use seeded events and deterministic recommendation rules. Loading, no-data, suppressed-data, stale, expired-recommendation, conflict, approval-failure, and recoverable error states are explicit.
 
 ---
 
@@ -451,7 +497,7 @@ Patient screens are mobile-first and expose only the signed-in/token-scoped pati
 ```text
 ┌─────────────────────────────────────────┐
 │ Queue status                  [Refresh] │
-│ FAST QUEUE · F-014                      │
+│ Queue Q-014 · Ready                     │
 │ Counter 2 · 2 patients ahead            │
 │ Status: Waiting                         │
 │ Updated: 09:18                          │
@@ -463,7 +509,9 @@ Patient screens are mobile-first and expose only the signed-in/token-scoped pati
 | Initial loading | Show a fixed-layout skeletal loading screen matching the final queue card, including placeholder lines for queue, counter, position, status, and updated time; avoid layout shift |
 | Refreshing | Keep the current queue information visible, change the button label to “Refreshing…”, disable repeat taps, and update the timestamp when complete |
 | Before check-in | “Queue status will appear after staff check-in.” |
-| Review queue | REVIEW QUEUE, `R-*`, counter/position; no internal confidence details |
+| Processing | Keep the same `Q-*` ticket and say “We are checking your registration details.” |
+| Additional review needed | Keep the same `Q-*` ticket and original waiting age; say “A staff member is reviewing your registration.” Do not expose internal confidence details or ask the patient to take another number. |
+| Ready | Keep the same `Q-*` ticket and show counter/position when assigned. |
 | Called | “Please proceed to Counter 2 now.” with text and accessible alert |
 | Counter changed | New counter plus “Your counter changed” announcement |
 | Delayed | Plain-language delay message; do not promise an exact wait time |
@@ -592,7 +640,8 @@ staff_accounts
 ├── clerk_user_id (text, UNIQUE)
 ├── full_name
 ├── email
-├── role                         -- registration / pharmacist / billing / admin
+├── role                         -- registration / pharmacist / billing /
+│                                  operations_admin / auditor
 ├── active (boolean)
 └── created_at
     -- Clerk stores credentials; this table supplies app role/audit identity
@@ -734,25 +783,27 @@ queue_entries
 ├── all_documents_valid (boolean)
 ├── extraction_status                    -- "pass" / "needs_review"
 ├── match_status                         -- "clean" / "ambiguous" / "no_match"
-├── queue                                -- "fast" / "review"
-├── queue_reason                         -- "all_prerequisites_passed" / "walk_in" /
+├── readiness_state                      -- "processing" / "ready" / "needs_review"
+├── readiness_reason                     -- "all_prerequisites_passed" /
 │                                            "prereg_incomplete" / "missing_document" /
 │                                            "expired_document" / "extraction_needs_review" /
 │                                            "ambiguous_match"
 ├── visit_status                         -- "incoming" / "ongoing" / "finished"
 ├── visit_outcome (nullable)              -- "completed" / "cancelled" / "no_show"
 ├── rescheduled_from_queue_entry_id (FK, nullable)
-├── expected_queue_number (nullable)     -- e.g. "F-014" / "R-006" for Incoming
+├── expected_queue_number (nullable)     -- e.g. "Q-014" for Incoming
 ├── expected_counter_number (nullable)   -- planning assignment shown before arrival
 ├── queue_number (nullable)              -- active/final number once checked in
 ├── counter_number (nullable)            -- actual assigned counter
 ├── processing_stage (nullable)          -- e.g. "manual_check_confirmation" / "document_review"
 ├── assigned_at
 ├── checked_in_at (nullable)             -- transition: Incoming → Ongoing
+├── ready_at (nullable)
 └── completed_at (nullable)              -- transition: Ongoing → Finished
-    -- database/service constraint: queue="fast" only when intake_type="booked",
-    -- prereg_completed_at is set, every document readiness gate is PASS,
-    -- and match_status="clean"; every walk-in is queue="review" and starts Ongoing
+    -- database/service constraint: one row/ticket per visit. readiness_state="ready"
+    -- only when every document readiness gate is PASS, match_status="clean", and
+    -- required staff confirmation exists. Walk-ins start "processing" and retain
+    -- this row plus checked_in_at through review and eventual readiness.
 
 manual_check_confirmations
 ├── id (uuid, PK)
@@ -770,10 +821,57 @@ counter_allocations
 ├── id (uuid, PK)
 ├── service_date
 ├── counter_number
-├── queue_type                         -- "fast" / "review"
+├── workstream                         -- "ready" / "review"
+├── assigned_staff_id (FK → staff_accounts, nullable)
+├── effective_from / effective_to (nullable)
 ├── active (boolean)
 ├── updated_by_staff_id (FK → staff_accounts)
 └── updated_at
+
+staff_availability
+├── id (uuid, PK)
+├── staff_id (FK → staff_accounts)
+├── shift_start / shift_end
+├── eligible_workstreams (jsonb)       -- derived from approved role/training
+├── planned_breaks (jsonb)
+├── availability_status               -- available / serving / break / unavailable
+├── current_workstream (nullable)
+└── updated_at
+    -- operational availability only; not an individual productivity score
+
+allocation_recommendations
+├── id (uuid, PK)
+├── generated_at / expires_at
+├── pressured_workstream
+├── demand_snapshot (jsonb)            -- counts, waiting age, estimated staff-minutes
+├── recommended_staff_id (FK, nullable)
+├── recommended_counter_number (nullable)
+├── recommended_from / recommended_to
+├── constraints_checked (jsonb)        -- skills, coverage, breaks, stability, frequency
+├── rationale / expected_effect (jsonb)
+├── status                             -- pending / accepted / modified / rejected /
+│                                        expired / reversed
+├── decided_by_staff_id (FK, nullable)
+├── decision_reason (nullable)
+└── decided_at (nullable)
+    -- advisory only; a recommendation never changes an allocation by itself
+
+operational_events
+├── id (uuid, PK)
+├── queue_entry_id (FK → queue_entries)
+├── event_type                       -- ticket_created / readiness_changed /
+│                                       review_started / review_resolved /
+│                                       counter_assigned / allocation_recommended /
+│                                       allocation_decided / allocation_reversed /
+│                                       visit_completed
+├── from_state (nullable)
+├── to_state (nullable)
+├── reason_code (nullable)
+├── staff_touch (boolean)
+├── occurred_at
+└── metadata (jsonb)                 -- masked operational attributes only
+    -- append-only event stream for PRD §4.7 metrics. It contains no raw document
+    -- content or direct identifier and never drives clinical priority.
 
 questionnaire_responses
 ├── id (uuid, PK)
@@ -847,13 +945,15 @@ audit_log
 
 - `patients` mirrors the 12 registration CSV fields plus source provenance. DOB is normalized to a database date; the original source row remains traceable so two-digit-year decisions can be audited.
 - `data_import_exceptions` makes the six unmatched questionnaire people and any future conflicts visible without treating a questionnaire as authority to create or overwrite a patient.
-- `coverage_documents` and `eligibility_rules`/`eligibility_matches` are kept as separate concerns on purpose: the first is "what did the model read off this document," the second is "what does that map to under our rules." This split makes the hallucination-mitigation claim in PRD §6.2/§8 concrete. Model output never directly becomes a billing decision, and advisory confidence never grants FAST status.
+- `coverage_documents` and `eligibility_rules`/`eligibility_matches` are kept as separate concerns on purpose: the first is "what did the model read off this document," the second is "what does that map to under our rules." This split makes the hallucination-mitigation claim in PRD §6.2/§8 concrete. Model output never directly becomes a billing decision, and advisory confidence never grants `ready` status.
 - `field_evidence` uses page plus excerpt as the required no-Azure evidence contract. A bounding box is nullable and shown only if an added OCR adapter produces reliable coordinates.
 - `selected_options` prevents checkbox forms from collapsing selected and unselected services together. Administrative requirements remain separate from medical `requested_items`.
-- `queue_entries` makes the strict queue rule (PRD §4.2) queryable at the visit level. Queue status does not live on a coverage document because booking type and pre-registration completion are also required inputs. The same row drives the Queue Overview (§2.2), Appointment Detail (§2.9), and patient Queue Status (§3.4).
+- `queue_entries` makes single-ticket readiness routing (PRD §4.2) queryable at the visit level. Readiness does not live on a coverage document because staff confirmation and visit state are also required inputs. The same row persists through processing, review, readiness, and completion and drives the Queue Overview (§2.2), Appointment Detail (§2.9), and patient Queue Status (§3.4).
 - `queue_entries.scheduled_at` preserves the appointment date across all three lifecycle views. `expected_queue_number` and `expected_counter_number` are generated for Incoming booked patients after routing; `queue_number` and `counter_number` hold the actual assignments after check-in. `checked_in_at` and `completed_at` drive the Incoming → Ongoing → Finished transitions without moving data between tables.
 - `manual_check_confirmations` is deliberately an attestation record, not a verification engine. It proves which staff member recorded completion of the clinic's manual identity/e-card process and cannot store or infer an automated verification result.
-- `visit_outcome`, `rescheduled_from_queue_entry_id`, and `counter_allocations` support the cancelled, no-show, rescheduled, and counter-rebalancing states shown in staff views without weakening the strict fast-queue rule.
+- `visit_outcome`, `rescheduled_from_queue_entry_id`, and `counter_allocations` support the cancelled, no-show, rescheduled, and counter-rebalancing states shown in staff views without weakening readiness gates or replacing a patient's ticket.
+- `operational_events` provides the privacy-safe stage transitions and reason codes needed for the Operational Intelligence dashboard. It is append-only analytics evidence, not a second workflow state store.
+- `staff_availability` and `allocation_recommendations` keep resource advice explicit and auditable. Eligibility and availability are constraints, while the recommendation status proves that a human—not the advisor—made the allocation decision.
 - `coverage_reuse_decisions` records the check-first branch independently of the source document. Reuse points to the prior document but creates a fresh appointment-scoped `eligibility_matches` row, so an old coverage decision is never silently carried forward.
 - `touchpoint_reuse_log` is the mechanism that makes "we eliminated duplicate entry across all five touchpoints" a provable, queryable fact in the demo — not just the questionnaire-only claim an earlier draft of this system could support.
 - `upload_links` and `patient_accounts` are two intentionally different mechanisms for two intentionally different needs: a one-time, unauthenticated, appointment-scoped token for the common case (submit a document ahead of a visit), versus a real but small, fixed-pool account for anything requiring returning access (queue status, payment, records history). Collapsing these into one "patient login" table would overstate what's actually been designed — keeping them separate keeps that honest.
@@ -914,12 +1014,12 @@ There is no arbitrary numeric confidence threshold in P0. `readiness_status = pa
 6. validity is current and can be established from an explicit or rule-supported date basis;
 7. exactly one active deterministic eligibility rule matches.
 
-Any failed gate sets `needs_review` with reason codes. Model confidence may prioritize the review UI but can never independently produce PASS or FAST.
+Any failed gate sets `needs_review` with reason codes. Model confidence may prioritize the review UI but can never independently produce PASS or `ready`.
 
 #### Demo scenarios and accounts
 
-- The judged demo includes a mixed queue: one booked fully pre-cleared FAST patient, one booked REVIEW patient with a failed prerequisite, and one walk-in REVIEW patient.
-- Seed four Clerk patient accounts chosen from the 51 questionnaire people that match registration: an Incoming FAST case, an Incoming REVIEW case, an Ongoing/counter-change case, and a Finished case with questionnaire, coverage, mocked payment, and visit history. The three dual-questionnaire people are preferred for at least one history-rich account.
+- The judged demo includes one booked patient ready before arrival, one booked patient needing review, and one walk-in whose single ticket visibly transitions from `processing` to `ready` or `needs_review` without changing number or check-in time.
+- Seed four Clerk patient accounts chosen from the 51 questionnaire people that match registration: an Incoming ready case, an Incoming needs-review case, an Ongoing/counter-change case, and a Finished case with questionnaire, coverage, mocked payment, and visit history. The three dual-questionnaire people are preferred for at least one history-rich account.
 - Do not seed judge accounts from the six unmatched questionnaire people. Keep those rows as visible import exceptions for an admin/test fixture.
 - A dedicated corporate-batch screen is not P0. Demonstrate scale by seeding multiple booked patients with the same employer/screening date and using the existing date-filtered Incoming board.
 
@@ -927,7 +1027,7 @@ Any failed gate sets `needs_review` with reason codes. Model confidence may prio
 
 - Exact visual system and interactive polish: colors, typography, production icons, and final responsive compositions.
 - Clinic-approved package names, billing arrangements, and interpretation of each synthetic rule fixture.
-- Staffing targets and service-time expectations for the review queue.
+- Staffing targets and service-time expectations for ready and review workstreams.
 - The operational cost estimate for OpenAI document processing, Railway, Supabase, Clerk, and Vercel at the expected demo/production volume.
 - Whether precise source bounding boxes justify adding a local/specialized OCR adapter after the page/excerpt baseline works.
 - Final policy for resolving the six unmatched questionnaire people and any future conflicting source identities in a production import.
