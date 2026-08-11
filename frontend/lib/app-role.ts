@@ -1,8 +1,8 @@
 export type AppRole = "patient" | "nurse" | "combined";
 
 /**
- * `APP_ROLE` is set per dev/build process (see package.json `dev:patient` /
- * `dev:nurse` scripts) so the same codebase can run as two separate
+ * `APP_ROLE` is set per dev/build process (see package.json `patient` /
+ * `nurse` scripts) so the same codebase can run as two separate
  * processes on two separate ports. "combined" is the fallback for plain
  * `next dev`/`next build`/tests, where every route stays reachable.
  */

@@ -31,14 +31,14 @@ Terminal 2 — patient screen (port 3000, Patient Pre-check only):
 ```bash
 cd frontend
 npm install
-npm run dev:patient
+npm run patient
 ```
 
 Terminal 3 — nurse screen (port 3001, Readiness Board + Assisted Review + Walk-in kiosk):
 
 ```bash
 cd frontend
-npm run dev:nurse
+npm run nurse
 ```
 
 Open `http://localhost:3000` for the patient screen and `http://localhost:3001` for the nurse screen. Both frontends use the local API when available and fall back to clearly labelled synthetic data when it is not.

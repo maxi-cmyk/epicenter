@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:patient": "cross-env APP_ROLE=patient next dev -p 3000",
-    "dev:nurse": "cross-env APP_ROLE=nurse next dev -p 3001",
+    "patient": "cross-env APP_ROLE=patient next dev -p 3000",
+    "nurse": "cross-env APP_ROLE=nurse next dev -p 3001",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
