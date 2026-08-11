@@ -8,13 +8,24 @@ import type { Metadata } from "next";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import type { AppRole } from "@/lib/app-role";
+import { getAppRole } from "@/lib/app-role";
 
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Epicenter · Clinic readiness",
-  description: "A synthetic outpatient administrative-readiness operations demo.",
+const TITLE_BY_ROLE: Record<AppRole, string> = {
+  patient: "Epicenter · Patient pre-check",
+  nurse: "Epicenter · Clinic readiness",
+  combined: "Epicenter · Clinic readiness",
 };
+
+export function generateMetadata(): Metadata {
+  const role = getAppRole();
+  return {
+    title: TITLE_BY_ROLE[role],
+    description: "A synthetic outpatient administrative-readiness operations demo.",
+  };
+}
 
 const designContract = `
 THESIS: Clinic wayfinding becomes the operating system; refuse the generic card-grid dashboard.
@@ -25,6 +36,7 @@ FORM: Clinical wayfinding board, grounded candidate 3, seed a9c726fc.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const role = getAppRole();
   return (
     <html lang="en">
       <body>
@@ -34,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           dangerouslySetInnerHTML={{ __html: `<!-- ${designContract} -->` }}
         />
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <AppShell role={role}>{children}</AppShell>
         </AuthProvider>
       </body>
     </html>

@@ -8,7 +8,12 @@ class Settings(BaseSettings):
     app_name: str = "Epicenter API"
     environment: str = "development"
     api_prefix: str = "/api/v1"
-    frontend_origin: str = "http://localhost:3000"
+    # Comma-separated. Defaults cover both split-screen dev processes: the
+    # patient screen (port 3000) and the nurse/staff screen (port 3001).
+    frontend_origins: str = Field(
+        default="http://localhost:3000,http://localhost:3001",
+        validation_alias=AliasChoices("EPICENTER_FRONTEND_ORIGINS", "EPICENTER_FRONTEND_ORIGIN"),
+    )
     demo_mode: bool = True
     supabase_url: str | None = Field(
         default=None,
@@ -24,6 +29,10 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = None
     clerk_secret_key: str | None = Field(default=None, validation_alias="CLERK_SECRET_KEY")
     clerk_jwt_key: str | None = Field(default=None, validation_alias="CLERK_JWT_KEY")
+
+    @property
+    def frontend_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.frontend_origins.split(",") if origin.strip()]
 
     @property
     def supabase_configured(self) -> bool:

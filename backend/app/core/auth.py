@@ -32,7 +32,7 @@ def require_staff(
             AuthenticateRequestOptions(
                 secret_key=settings.clerk_secret_key,
                 jwt_key=settings.clerk_jwt_key,
-                authorized_parties=[settings.frontend_origin],
+                authorized_parties=settings.frontend_origin_list,
                 accepts_token=["session_token"],
             ),
         )
