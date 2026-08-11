@@ -32,6 +32,39 @@ def test_dashboard_contract() -> None:
     assert any(ticket["id"] == "Q-018" for ticket in body["tickets"])
 
 
+def test_patient_pre_arrival_submission_stays_under_review() -> None:
+    response = client.post(
+        "/api/v1/patient/pre-arrival/submit",
+        json={"appointment_id": "APT-DEMO-001", "coverage_action": "reuse"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["synthetic"] is True
+    assert body["outcome"] == "under_review"
+    assert body["processing_reference"].startswith("PRE-")
+
+
+def test_patient_replacement_requires_a_document_name() -> None:
+    response = client.post(
+        "/api/v1/patient/pre-arrival/submit",
+        json={"appointment_id": "APT-DEMO-001", "coverage_action": "replace"},
+    )
+    assert response.status_code == 422
+
+
+def test_patient_fixture_endpoint_fails_closed_outside_demo_mode() -> None:
+    app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False, _env_file=None)
+    try:
+        response = client.post(
+            "/api/v1/patient/pre-arrival/submit",
+            json={"appointment_id": "APT-DEMO-001", "coverage_action": "reuse"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+
+
 def test_ready_transition_rejects_missing_confirmation() -> None:
     response = client.post(
         "/api/v1/tickets/Q-017/transition",

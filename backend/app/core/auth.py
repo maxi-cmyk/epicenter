@@ -12,6 +12,17 @@ class StaffPrincipal(BaseModel):
     source: str
 
 
+def require_synthetic_patient_flow(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """Keep the unauthenticated patient fixture endpoint out of production."""
+    if not settings.demo_mode:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The production patient-token adapter is not configured.",
+        )
+
+
 def require_staff(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],

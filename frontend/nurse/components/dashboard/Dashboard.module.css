@@ -1,0 +1,737 @@
+.dashboard {
+  margin: 0 auto;
+  max-width: 1480px;
+}
+
+.contextBar {
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+  border-top: 1px solid var(--rule);
+  display: flex;
+  font-size: 0.84rem;
+  gap: 24px;
+  margin-bottom: 26px;
+  min-height: 44px;
+  padding: 8px 0;
+}
+
+.contextBar span:nth-child(2) {
+  color: var(--ink-soft);
+}
+
+.apiSource,
+.demoSource {
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  margin-left: auto;
+  padding: 5px 10px;
+}
+
+.apiSource {
+  background: var(--green-100);
+  color: var(--green-950);
+}
+
+.demoSource {
+  background: var(--amber-soft);
+  color: #713807;
+}
+
+.metricsRail {
+  background: var(--green-900);
+  color: var(--cream-50);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-bottom: 28px;
+}
+
+.metric,
+.decisionMetric {
+  min-height: 148px;
+  padding: 22px 24px;
+  position: relative;
+}
+
+.metric + .metric::before,
+.decisionMetric::before {
+  background: rgba(255, 253, 245, 0.22);
+  content: "";
+  inset: 20px auto 20px 0;
+  position: absolute;
+  width: 1px;
+}
+
+.metric > span {
+  color: var(--green-100);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.metric strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 4vw, 4.1rem);
+  letter-spacing: -0.025em;
+  line-height: 0.9;
+  margin: 12px 0 8px;
+}
+
+.metric small {
+  color: var(--green-100);
+  display: block;
+  font-size: 0.78rem;
+}
+
+.metric em {
+  color: var(--cream-50);
+  display: block;
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.decisionMetric {
+  background: var(--cream-50);
+  color: var(--green-950);
+  display: block;
+  text-decoration: none;
+  transition: background-color 180ms ease-out;
+}
+
+.decisionMetric:hover {
+  background: var(--green-100);
+}
+
+.decisionMetric > span,
+.decisionMetric small,
+.decisionMetric em {
+  display: block;
+}
+
+.decisionMetric > span {
+  color: var(--green-800);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.decisionMetric strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 4vw, 4.1rem);
+  letter-spacing: -0.025em;
+  line-height: 0.9;
+  margin: 12px 0 8px;
+}
+
+.decisionMetric small {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.decisionMetric em {
+  align-items: center;
+  color: var(--green-800);
+  display: flex;
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 700;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.flowBoard {
+  background: var(--cream-50);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.boardHeader {
+  align-items: flex-end;
+  background: var(--cream-50);
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  padding: 26px 28px 24px;
+}
+
+.boardHeader h2,
+.allocationHeading h2,
+.activityRail h2 {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.boardHeader p,
+.allocationHeading p {
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.boardLegend {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.76rem;
+  gap: 14px;
+}
+
+.boardLegend span {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.boardLegend i {
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+.readyKey { background: var(--green-700); }
+.reviewKey { background: var(--amber); }
+.processingKey { background: var(--ink-soft); }
+
+.columnLabels,
+.ticketRow {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.15fr) minmax(120px, 0.7fr) minmax(210px, 1.2fr) minmax(110px, 0.62fr) minmax(185px, 0.95fr);
+}
+
+.columnLabels {
+  background: var(--green-950);
+  color: var(--green-100);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.07em;
+  padding: 10px 20px 10px 174px;
+  text-transform: uppercase;
+}
+
+.columnLabels span {
+  padding: 0 12px;
+}
+
+.phaseSection {
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 154px 1fr;
+}
+
+.phaseSection:last-child {
+  border-bottom: 0;
+}
+
+.phaseLabel {
+  align-content: start;
+  background: var(--green-100);
+  border-right: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: 18px;
+}
+
+.phaseLabel strong {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  text-transform: uppercase;
+}
+
+.phaseLabel > span {
+  align-items: center;
+  background: var(--green-900);
+  border-radius: 999px;
+  color: var(--cream-50);
+  display: flex;
+  font-size: 0.74rem;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.phaseLabel small {
+  color: var(--ink-soft);
+  grid-column: 1 / -1;
+  margin-top: 6px;
+}
+
+.ticketList {
+  min-width: 0;
+}
+
+.ticketRow {
+  min-height: 86px;
+  position: relative;
+}
+
+.ticketRow + .ticketRow {
+  border-top: 1px solid var(--rule);
+}
+
+.ticketRow::before {
+  background: var(--green-700);
+  content: "";
+  height: 1px;
+  inset: 50% auto auto 0;
+  position: absolute;
+  width: 20px;
+}
+
+.ticket_needs_review::before { background: var(--amber); }
+.ticket_processing::before { background: var(--ink-soft); }
+
+.ticketRow > div {
+  align-content: center;
+  min-width: 0;
+  padding: 14px 12px;
+}
+
+.ticketRow > div + div {
+  border-left: 1px solid var(--rule);
+}
+
+.ticketRow span,
+.ticketRow strong,
+.ticketRow small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.patientCell strong {
+  color: var(--green-800);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  letter-spacing: 0.025em;
+}
+
+.patientCell > span,
+.stageCell > span {
+  font-weight: 650;
+}
+
+.ticketRow small {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  margin-top: 2px;
+}
+
+.waitCell,
+.statusCell {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.waitCell span {
+  font-variant-numeric: tabular-nums;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.statusCell {
+  justify-content: space-between;
+}
+
+.statusCell > span {
+  overflow: visible;
+}
+
+.statusCell a {
+  align-items: center;
+  border-radius: 50%;
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  text-decoration: none;
+  width: 34px;
+}
+
+.statusCell a:hover {
+  background: var(--green-100);
+}
+
+.lowerGrid {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
+  margin-top: 28px;
+}
+
+.allocationPanel {
+  background: var(--green-950);
+  box-shadow: var(--shadow);
+  color: var(--cream-50);
+  padding: 30px;
+}
+
+.allocationHeading {
+  align-items: flex-start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.allocationHeading p {
+  color: var(--green-200);
+}
+
+.rationale {
+  color: var(--green-100);
+  font-size: 1.02rem;
+  max-width: 68ch;
+}
+
+.waitComparison {
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 253, 245, 0.2);
+  border-top: 1px solid rgba(255, 253, 245, 0.2);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1fr auto 1fr;
+  margin: 24px 0;
+  padding: 18px 0;
+}
+
+.waitComparison span {
+  color: var(--green-200);
+  display: block;
+  font-size: 0.78rem;
+}
+
+.waitComparison strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-top: 4px;
+}
+
+.routeTrace {
+  background: rgba(255, 253, 245, 0.24);
+  display: block;
+  height: 1px;
+  min-width: 58px;
+  overflow: visible;
+  position: relative;
+}
+
+.routeTrace::before,
+.routeTrace::after {
+  background: var(--cream-50);
+  border-radius: 50%;
+  content: "";
+  height: 7px;
+  position: absolute;
+  top: -3px;
+  width: 7px;
+}
+
+.routeTrace::before { left: 0; }
+.routeTrace::after { right: 0; }
+
+.routeTrace i {
+  animation: route-signal 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  background: var(--cream-50);
+  border-radius: 50%;
+  box-shadow: 0 0 0 5px rgba(255, 253, 245, 0.12);
+  height: 7px;
+  left: 0;
+  position: absolute;
+  top: -3px;
+  width: 7px;
+}
+
+.allocation_approved .routeTrace i {
+  animation-iteration-count: 1;
+  left: calc(100% - 7px);
+}
+
+.allocation_rejected .routeTrace i {
+  animation: none;
+}
+
+@keyframes route-signal {
+  0%, 12% { left: 0; }
+  78%, 100% { left: calc(100% - 7px); }
+}
+
+.resourceLine {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.constraintList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  list-style: none;
+  margin: 18px 0 24px;
+  padding: 0;
+}
+
+.constraintList li {
+  align-items: center;
+  color: var(--green-100);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 5px;
+}
+
+.decisionActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.allocationPanel .decisionActions button:first-child {
+  background: var(--cream-50);
+  color: var(--green-950);
+}
+
+.allocationPanel .decisionActions button:last-child {
+  color: var(--green-100);
+}
+
+.decisionMessage {
+  color: var(--green-100);
+  font-size: 0.82rem;
+  margin-bottom: 0;
+}
+
+.activityRail {
+  border-top: 7px solid var(--green-700);
+  padding: 24px 0 0;
+}
+
+.activityRail > div {
+  margin-top: 22px;
+}
+
+.activityRail article {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 44px 10px 1fr;
+  padding-bottom: 20px;
+  position: relative;
+}
+
+.activityRail article:not(:last-child)::after {
+  background: var(--rule);
+  content: "";
+  height: calc(100% - 16px);
+  left: 52px;
+  position: absolute;
+  top: 16px;
+  width: 1px;
+}
+
+.activityRail time {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.eventMark {
+  border-radius: 50%;
+  height: 10px;
+  margin-top: 5px;
+  width: 10px;
+  z-index: 1;
+}
+
+.event_success { background: var(--green-700); }
+.event_attention { background: var(--amber); }
+.event_neutral { background: var(--ink-soft); }
+
+.activityRail strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.activityRail p {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  margin: 4px 0 0;
+}
+
+@media (max-width: 1180px) {
+  .metricsRail {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .metric:nth-child(4)::before {
+    display: none;
+  }
+
+  .metric:nth-child(-n + 3) {
+    border-bottom: 1px solid rgba(255, 253, 245, 0.22);
+  }
+
+  .decisionMetric {
+    grid-column: span 2;
+  }
+
+  .flowBoard {
+    overflow-x: auto;
+  }
+
+  .boardHeader {
+    min-width: 940px;
+  }
+
+  .columnLabels,
+  .phaseSection {
+    min-width: 940px;
+  }
+}
+
+@media (max-width: 760px) {
+  .contextBar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 0;
+  }
+
+  .apiSource,
+  .demoSource {
+    margin: 6px 0 0;
+  }
+
+  .metricsRail {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .decisionMetric {
+    grid-column: 1 / -1;
+    min-height: 126px;
+  }
+
+  .metric {
+    min-height: 130px;
+    padding: 18px;
+  }
+
+  .metric strong {
+    font-size: 2.7rem;
+  }
+
+  .lowerGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .flowBoard {
+    overflow: visible;
+  }
+
+  .boardHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    min-width: 0;
+    padding: 24px 20px;
+  }
+
+  .columnLabels {
+    display: none;
+  }
+
+  .phaseSection {
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+
+  .phaseLabel {
+    align-items: center;
+    border-bottom: 1px solid var(--rule);
+    border-right: 0;
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .phaseLabel strong {
+    font-size: 1.15rem;
+  }
+
+  .phaseLabel small {
+    font-size: 0.74rem;
+    grid-column: auto;
+    margin: 0 0 0 auto;
+  }
+
+  .ticketRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 126px;
+    padding: 8px 0;
+  }
+
+  .ticketRow::before {
+    width: 12px;
+  }
+
+  .ticketRow > div {
+    padding: 6px 12px;
+  }
+
+  .ticketRow > div + div {
+    border-left: 0;
+  }
+
+  .patientCell {
+    grid-column: 1;
+    grid-row: 1;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .routeCell {
+    border-top: 1px solid var(--rule);
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .stageCell {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .stageCell span,
+  .stageCell small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .waitCell {
+    align-self: stretch;
+    border-left: 1px solid var(--rule) !important;
+    border-top: 1px solid var(--rule);
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .statusCell {
+    align-self: stretch;
+    border-left: 1px solid var(--rule) !important;
+    border-bottom: 1px solid var(--rule);
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 126px;
+  }
+
+  .allocationPanel {
+    padding: 24px 20px;
+  }
+
+  .waitComparison strong {
+    font-size: 2rem;
+  }
+}

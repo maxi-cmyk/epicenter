@@ -1,0 +1,19 @@
+{
+  "name": "@epicenter/shared",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./contracts": "./src/contracts/index.ts",
+    "./contracts/generated": "./src/contracts/api.generated.ts",
+    "./database": "./src/contracts/database.types.ts",
+    "./styles/globals.css": "./src/styles/globals.css",
+    "./ui/Button": "./src/ui/Button.tsx",
+    "./ui/LoadingBoard": "./src/ui/LoadingBoard.tsx",
+    "./ui/PageHeader": "./src/ui/PageHeader.tsx",
+    "./ui/StatusBadge": "./src/ui/StatusBadge.tsx"
+  },
+  "peerDependencies": {
+    "lucide-react": "1.31.0",
+    "react": "19.2.8"
+  }
+}

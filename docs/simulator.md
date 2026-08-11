@@ -52,8 +52,10 @@ Each simulated patient retains one ID, one `Q-*` ticket, and one original orderi
 Use synthetic attributes only:
 
 - booked or walk-in intake;
+- explicit administrative-priority class supplied by the appointment source (`standard` or `administratively_urgent`), never inferred from symptoms or demographics;
 - scheduled time and actual arrival time;
 - pre-registration completed or incomplete;
+- manual identity/e-card attestation state (`pending`, `completed`, or `unable_to_confirm`) and event time;
 - document readiness result and review reason;
 - consultation/screening pathway;
 - pharmacy required or not required;
@@ -104,6 +106,8 @@ closed / idle / busy / break / reassignment_pending / unavailable
 - scenario started, paused, resumed, reset, and completed;
 - patient scheduled, arrived, queued, service started, service completed, and exited;
 - document processing started, passed, or required review;
+- administrative-priority appointment injected or arrived;
+- manual identity/e-card attestation completed or remained unresolved;
 - review started and resolved;
 - resource opened, became idle/busy, started/ended break, or became unavailable;
 - allocation recommendation generated, accepted, modified, rejected, expired, or reversed; and
@@ -272,9 +276,9 @@ Counts and averages must not conceal tail waits. The primary comparison should s
 ### 9.1 Suggested Structure
 
 ```text
-apps/web/app/staff/simulator/       # visual demo route
-apps/web/features/simulator/        # controls, clinic map, charts, replay
-packages/simulation-core/           # pure deterministic engine
+frontend/nurse/app/simulator/       # nurse-panel visual demo route
+frontend/nurse/features/simulator/  # controls, clinic map, charts, replay
+frontend/shared/simulation-core/    # pure deterministic engine, imported by nurse only
 tests/fixtures/simulation/          # versioned scenario JSON
 tests/simulation/                   # engine and policy tests
 ```
@@ -289,6 +293,8 @@ Use a seeded pseudo-random-number generator and a priority queue ordered by `(si
 - UI state contains only playback position, selected panels, and presenter controls.
 - Analytics derive from the immutable event log rather than reading animation positions.
 - Production queue records and synthetic simulation records must use separate stores and types; the simulator never writes to operational tables.
+- A run may read only a versioned de-identified Supabase seed/snapshot through the backend. The snapshot is copied into simulation state before the run, its hash/version is stored with results, and live database changes cannot alter an in-progress replay.
+- Administrative priority affects only the configured appointment-ordering policy. Clinical urgency remains a physical nurse-led escalation outside the engine and is never predicted or ranked.
 
 ## 10. Validation
 

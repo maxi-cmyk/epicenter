@@ -1,0 +1,325 @@
+.preArrivalPage {
+  margin: 0 auto;
+  max-width: 1320px;
+}
+
+.preArrivalGrid {
+  background: var(--cream-50);
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(390px, 0.85fr);
+  min-width: 0;
+}
+
+.identityPanel,
+.coveragePanel {
+  min-width: 0;
+}
+
+.identityPanel {
+  border-right: 1px solid var(--rule);
+  padding: 0 34px 36px;
+}
+
+.singpassBand {
+  align-items: center;
+  background: var(--green-950);
+  color: var(--cream-50);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto 1fr auto;
+  margin: 0 -34px 30px;
+  min-height: 92px;
+  padding: 18px 28px;
+}
+
+.singpassBand strong,
+.singpassBand span {
+  display: block;
+}
+
+.singpassBand div > span {
+  color: var(--green-200);
+  font-size: 0.8rem;
+}
+
+.verifiedMark {
+  align-items: center;
+  background: var(--cream-50);
+  border-radius: 999px;
+  color: var(--green-950);
+  display: flex !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+  gap: 5px;
+  padding: 7px 10px;
+}
+
+.validationTable {
+  border: 1px solid var(--rule);
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.validationTable thead {
+  background: var(--green-100);
+  color: var(--green-900);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.validationTable th,
+.validationTable td {
+  border: 1px solid var(--rule);
+  min-height: 58px;
+  padding: 14px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.validationTable thead th {
+  font-weight: 600;
+}
+
+.validationTable tbody th {
+  font-size: 0.84rem;
+  width: 25%;
+}
+
+.validationTable td:nth-child(2) {
+  font-variant-numeric: tabular-nums;
+  width: 42%;
+}
+
+.validationTable td:last-child {
+  width: 33%;
+}
+
+.validated,
+.notCompared {
+  font-size: 0.78rem;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.validated { color: var(--green-800); }
+.notCompared { color: var(--ink-soft); }
+
+.boundaryNote {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  margin: 22px 0 0;
+  max-width: 68ch;
+}
+
+.coveragePanel {
+  padding: 40px clamp(26px, 4vw, 48px);
+}
+
+.coveragePanel > svg {
+  color: var(--green-800);
+}
+
+.coveragePanel h2 {
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 4vw, 3.4rem);
+  letter-spacing: -0.02em;
+  line-height: 0.98;
+  margin: 20px 0 14px;
+  text-wrap: balance;
+  text-transform: uppercase;
+}
+
+.coveragePanel > p {
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.coverageChoices {
+  display: grid;
+  gap: 10px;
+  margin: 28px 0 22px;
+}
+
+.coverageChoices button {
+  align-items: flex-start;
+  background: var(--cream-100);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto 1fr;
+  min-height: 86px;
+  padding: 18px;
+  text-align: left;
+  transition: background-color 180ms ease-out, border-color 180ms ease-out;
+}
+
+.coverageChoices button:hover {
+  background: var(--green-100);
+}
+
+.coverageChoices .selectedChoice {
+  background: var(--green-100);
+  border-color: var(--green-700);
+}
+
+.coverageChoices strong,
+.coverageChoices small {
+  display: block;
+}
+
+.coverageChoices small {
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+.uploadField {
+  background: var(--cream-100);
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.uploadField input,
+.uploadField small {
+  display: block;
+  margin-top: 8px;
+}
+
+.uploadField small {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.submissionSuccess,
+.submissionError {
+  display: grid;
+  gap: 3px;
+  margin-top: 18px;
+  padding: 14px 16px;
+}
+
+.submissionSuccess {
+  background: var(--green-100);
+  color: var(--green-950);
+}
+
+.submissionError {
+  background: var(--red-soft);
+  color: #6f211c;
+}
+
+.submissionSuccess span,
+.submissionError span {
+  font-size: 0.9rem;
+}
+
+.submissionSuccess small,
+.submissionError small {
+  color: inherit;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+  .preArrivalGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .identityPanel {
+    border-bottom: 1px solid var(--rule);
+    border-right: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .identityPanel {
+    padding: 0 18px 28px;
+  }
+
+  .singpassBand {
+    grid-template-columns: auto 1fr;
+    margin: 0 -18px 24px;
+    padding: 16px 18px;
+  }
+
+  .verifiedMark {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .validationTable {
+    max-width: 100%;
+  }
+
+  .validationTable,
+  .validationTable tbody,
+  .validationTable tr,
+  .validationTable th,
+  .validationTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .validationTable thead {
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .validationTable tr {
+    display: grid;
+    grid-template-columns: minmax(112px, 0.72fr) minmax(0, 1.28fr);
+  }
+
+  .validationTable tr + tr {
+    border-top: 1px solid var(--rule);
+  }
+
+  .validationTable th,
+  .validationTable td,
+  .validationTable tbody th,
+  .validationTable td:nth-child(2),
+  .validationTable td:last-child {
+    border: 0;
+    min-height: 0;
+    width: auto;
+  }
+
+  .validationTable th {
+    grid-row: 1 / span 2;
+  }
+
+  .validationTable td {
+    border-left: 1px solid var(--rule);
+  }
+
+  .validationTable td + td {
+    border-top: 1px solid var(--rule);
+  }
+
+  .validationTable td::before {
+    color: var(--ink-soft);
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+  }
+
+  .coveragePanel {
+    padding: 32px 18px;
+  }
+}

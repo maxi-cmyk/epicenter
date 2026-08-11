@@ -25,7 +25,7 @@
 
 | Layer | Technology | Purpose |
 | --- | --- | --- |
-| Web application | Next.js with TypeScript and App Router | Staff workspace, tokenized upload pages, and demo patient account |
+| Web applications | Two Next.js applications with TypeScript and App Router | Separate patient and nurse panels with shared generated API contracts only |
 | UI | Tailwind CSS, shadcn/ui primitives, Lucide SVG icons | Accessible responsive components without structural emoji |
 | Client data | TanStack Query | Loading/error/retry state, cache invalidation, polling fallback, and manual queue refresh |
 | Forms and validation | React Hook Form + Zod | Staff corrections, attestations, questionnaires, and upload validation |
@@ -41,8 +41,8 @@
 | Evidence mapping | Page number + supporting source excerpt | Staff-reviewable evidence without requiring a separate cloud OCR platform |
 | Rules engine | Python + versioned Postgres `eligibility_rules` | Deterministic package, eligibility, billing, and queue decisions |
 | Operational analytics and allocation advisor | Postgres views + plain Python rules | P50/P90 waits, near-term staff-minute demand, constraint-aware resource recommendations, and outcome measurement without a separate ML platform |
-| MCP portability | Custom Python MCP server plus selected first-party Microsoft MCPs | Exposes Epicenter domain services to Copilot Studio while reusing Microsoft Learn and optional governed Power BI/Fabric capabilities where they already fit |
-| Deployment | Vercel for Next.js; Railway for API/MCP/worker; managed Supabase | Familiar Git-based deployment without Azure infrastructure |
+| MCP portability | Epicenter Operations MCP, Insurance Format Registry MCP, and selected first-party Microsoft MCPs | Narrow domain tools, approved-format authoring, Microsoft Learn development guidance, and required de-identified Power BI analytics after backend completion |
+| Deployment | Two Vercel projects; Railway for shared API/MCP/worker; managed Supabase | Independent patient/nurse releases against one backend and source of truth |
 | Observability | Structured JSON logs + Railway deployment/runtime logs | Request/job tracing without logging raw NRIC or document contents |
 | Testing | Vitest, React Testing Library, Playwright, Pytest | Unit, component, API, policy, and end-to-end verification |
 | Tooling | pnpm, uv, ESLint, Prettier, Ruff, mypy | Reproducible installs and consistent TypeScript/Python quality checks |
@@ -52,11 +52,11 @@ Exact dependency versions should be pinned when the repository is scaffolded rat
 ## 3. System Topology
 
 ```text
-Staff browser                 Patient browser / token link
-      │                                   │
-      └────────────── Next.js web app ────┘
-                           │
-                    FastAPI REST API
+Nurse browser                    Patient browser / token link
+      │                                      │
+Nurse Next.js app                  Patient Next.js app
+      │                                      │
+      └─────────────── FastAPI REST API ─────┘
                       │     │      │
                       │     │      └── MCP server → Copilot Studio
                       │     │
@@ -76,27 +76,18 @@ The API and MCP server call the same service functions. MCP tools must not conta
 
 ## 4. Frontend
 
-### 4.1 One Next.js Application, Two Surfaces
+### 4.1 Two Next.js Applications, One Backend
 
 ```text
-app/
-├── staff/                  # authenticated operational workspace
-│   ├── queue/
-│   ├── review/
-│   ├── upload/
-│   ├── records/
-│   ├── billing/
-│   ├── audit/
-│   └── counters/
-├── patient/                # seeded demo-account routes
-│   ├── queue/
-│   ├── payment/
-│   └── records/
-└── upload/[token]/         # single-use appointment-scoped flow
+frontend/
+├── nurse/app/              # Today, Review, Patients, Simulator, Audit
+├── patient/app/            # Registration, Queue, Payment, Records, upload token
+└── shared/                 # generated API types and safe primitives only
 ```
 
-- Server-render the authenticated shell and initial route data where practical.
-- Keep staff and patient route layouts separate so internal review data cannot accidentally appear in patient components.
+- Build and deploy each panel independently, with a distinct origin allowlisted by the shared backend.
+- Server-render each authenticated shell and initial route data where practical.
+- Keep nurse and patient routes in different applications so internal review data cannot accidentally appear in patient bundles or navigation.
 - Use Clerk middleware for coarse route protection and enforce authorization again in the API/database.
 - Pass the Clerk session token to Supabase through its native Clerk third-party auth integration; write RLS policies against `auth.jwt()->>'sub'`, because Clerk user IDs are strings rather than Supabase UUIDs.
 - Never expose a Supabase service-role key, Clerk secret, OpenAI key, or raw document-storage path to the browser.
@@ -340,7 +331,7 @@ Deployment order:
 3. Create the OpenAI project/key using synthetic documents only.
 4. Deploy `epicenter-api-mcp` from GitHub to Railway, set its variables, configure `/healthz`, and generate a public domain.
 5. Deploy `epicenter-worker` from the same repository with the worker start command and no public domain.
-6. Deploy the Next.js app to Vercel and set its API base URL to the Railway domain.
+6. Deploy the patient and nurse Next.js applications as separate Vercel projects and set both API base URLs to the same Railway domain.
 7. Register `https://<railway-domain>/mcp` in Copilot Studio.
 
 The initial demo must use synthetic data. Before processing real patient documents, confirm provider terms, retention, residency, access controls, and any required healthcare agreements.
@@ -362,17 +353,14 @@ The UI and stored status must make mocked behavior visible; it must not imply th
 ## 12. Suggested Repository Layout
 
 ```text
-apps/
-├── web/                     # Next.js staff + patient application
-├── api/                     # FastAPI HTTP service
-├── worker/                  # document job worker
-└── mcp/                     # MCP transport/tool declarations
-packages/
-├── api-client/              # generated TypeScript API client
-├── ui/                      # shared accessible UI primitives
-└── contracts/               # schemas/fixtures where sharing is safe
+frontend/
+├── patient/                 # separate patient Next.js app / Vercel project
+├── nurse/                   # separate nurse Next.js app / Vercel project
+└── shared/                  # generated API client + safe shared UI primitives
 backend/
-└── core/                    # extraction, rules, queue, billing, audit services
+├── app/                     # one FastAPI API/MCP service for both panels
+├── worker/                  # document-processing worker
+└── persistence/             # matching SQL Editor schema snapshot
 supabase/
 ├── migrations/
 ├── seed.sql
@@ -415,7 +403,7 @@ pnpm lint + typecheck + test
 pnpm playwright test
 ruff check + mypy + pytest
 Supabase migration/RLS tests
-Production builds for web and Python containers
+Production builds for patient, nurse, and Python containers
 ```
 
 Automated checks are necessary but not sufficient. A clinic pilot also requires the human and operational release gates in [epic_lessons.md](./epic_lessons.md): representative role-task validation, zero-false-ready shadow results, alert ownership, channel parity, interface reconciliation, downtime drill, trained superusers, stabilization support, pause criteria, and named rollback ownership.

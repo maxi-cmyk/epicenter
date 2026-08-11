@@ -111,7 +111,7 @@ components:
 
 **Creative North Star: "Clinical Wayfinding as Operating System"**
 
-Epicenter presents clinic administration as a legible route through states, evidence, and staff decisions. Warm cream paper and a faint square grid keep the interface humane, while deep clinic-green bands, fixed columns, hairline rules, numbered steps, and explicit status markers make every operational path easy to scan.
+Epicenter presents clinic administration as a legible route through states, evidence, and staff decisions. Warm cream paper and a faint square grid keep the interface humane, while deep clinic-green bands, fixed columns, hairline rules, numbered steps, and explicit status markers make every operational path easy to scan. The patient and nurse experiences are separate application shells over one shared visual foundation: patient work is mobile-first and focused, while nurse work is desktop/tablet-first and operationally dense.
 
 The system is calm rather than sterile and precise rather than decorative. Its strongest visual moments are functional: the persistent navigation rail, condensed room-sign headings, the patient readiness board, the one-ticket route, and the dark allocation decision panel. Administrative automation stays visually subordinate to clear staff confirmation and escalation language.
 
@@ -121,6 +121,7 @@ The system is calm rather than sterile and precise rather than decorative. Its s
 - Condensed uppercase display type paired with a plain, highly legible body face.
 - Flat and tonal layouts structured by hairline rules, with selective ambient lift for major work surfaces.
 - Explicit route, step, status, ticket, evidence, and human-decision markers.
+- Shared tokens and primitives with distinct patient and nurse shell compositions.
 - Responsive compositions that preserve operational hierarchy on desktop, tablet, and narrow mobile screens.
 
 ## Colors
@@ -177,17 +178,23 @@ The palette uses a dark clinical green as the operating frame, cream as the work
 
 ## Layout
 
-The desktop application uses a fixed 230px deep-green navigation rail and a flexible main canvas with 34px top padding, fluid horizontal gutters, and surface-specific content widths between 1280px and 1480px. The 32px background grid aligns the visual world without forcing every component onto a rigid card grid.
+The shared package owns the cream grid canvas, type, focus treatment, reduced-motion behavior, and reusable buttons, status badges, page headers, and loading boards. Each application owns its shell and workflow compositions; shared visual language does not mean a shared navigation frame.
+
+The patient application is mobile-first. Its focused deep-green header is 82px on wider screens and 68px below 620px; its main canvas uses fluid 18px–72px gutters. The pre-arrival workspace is capped at 1320px, uses an asymmetric two-column composition on wide screens, and becomes one column at 900px. Below 620px, validation remains a semantic table in markup but is visually re-composed into bordered per-field blocks: the row header stays beside stacked booking-value and validation cells, repeated `data-label` text replaces the visually hidden column header, and the state remains explicit text plus icon rather than color alone.
+
+The nurse application is desktop/tablet-first. It uses a fixed 230px deep-green navigation rail and a flexible main canvas with 34px top padding, fluid horizontal gutters, and surface-specific content widths between 1280px and 1480px. The 32px background grid aligns the visual world without forcing every component onto a rigid card grid.
 
 Operational boards use fixed semantic columns and hairline cell divisions. Metric tiles form one continuous band, patient phases remain visibly grouped, and major exception workspaces use asymmetric split panes. Common gaps cluster around 10px, 18px, 24px, and 28px; major surface padding ranges from 24px to 48px.
 
-At 1180px the metric rail wraps and the full patient board can scroll horizontally. At 900px the fixed side rail becomes a 72px bottom navigation bar with a 58px mobile header. At 760px and below the queue board is re-composed into ticket, status, stage, wait, and route blocks instead of merely shrinking the desktop table. Split workspaces stack between 860px and 980px, and dense tables retain horizontal scrolling when their column meaning must be preserved.
+At 1180px the nurse metric rail wraps and the full patient board can scroll horizontally. At 900px the nurse rail becomes a 72px bottom navigation bar with a 58px mobile header. At 760px and below the nurse queue board is re-composed into ticket, status, stage, wait, and route blocks instead of merely shrinking the desktop table. Nurse split workspaces stack between 860px and 980px, and dense tables retain horizontal scrolling when their column meaning must be preserved.
 
 ### Named Rules
 
 **The Route-Before-Decoration Rule.** Grid lines, dividers, columns, and bands must clarify patient or staff movement through the system.
 
 **The Responsive Recomposition Rule.** On narrow screens, preserve state and route hierarchy by changing the grid structure; do not collapse operational data into an undifferentiated card stack.
+
+**The Shell Boundary Rule.** Share tokens and true primitives across applications, but keep patient navigation and mobile validation in the patient shell and staff navigation, authentication framing, and dense operational boards in the nurse shell.
 
 ## Elevation & Depth
 
@@ -247,7 +254,13 @@ The overall form language is rectilinear and board-like. Workboards, metric band
 
 ### Navigation
 
-Desktop navigation is a fixed deep-green rail with a cream active route, green-tinted inactive labels, 19px line icons, and 46px minimum row height. Below 900px it becomes a four-route bottom bar with icon-over-label items, paired with a compact deep-green header that keeps the product and synthetic-data marker visible.
+Patient navigation is a focused deep-green registration header with the Epicenter mark, the `Patient registration` destination label, and an explicit synthetic-journey marker. It does not inherit staff routes or a bottom navigation bar.
+
+Nurse navigation is a fixed deep-green rail with a cream active route, green-tinted inactive labels, 19px line icons, and 46px minimum row height. Below 900px it becomes a four-route bottom bar with icon-over-label items, paired with a compact deep-green header that keeps the product and synthetic-data marker visible.
+
+### Registration Validation
+
+The patient registration comparison uses native table markup with a hidden explanatory caption, scoped column and row headers, and plain-language validation states. Below 620px, CSS changes its visual layout: each field becomes a two-column block, the booking value and validation result carry visible generated labels, and the caption and scoped-header markup remain intact.
 
 ### Patient Readiness Board
 
@@ -270,6 +283,7 @@ Review evidence appears in a two-column hairline grid with source notes under ea
 - **Do** use hairline rules and fixed alignment to make dense operational data scannable.
 - **Do** pair every colored status with readable text and an icon or shape cue.
 - **Do** re-compose dense boards on mobile while keeping ticket, route, stage, wait, and status visible.
+- **Do** keep patient and nurse shells separate while importing shared tokens and primitives from the shared package.
 - **Do** reserve the strongest deep-green field for orientation and decisions that deserve staff attention.
 
 ### Don't:
@@ -278,5 +292,6 @@ Review evidence appears in a two-column hairline grid with source notes under ea
 - **Don't** use amber or red as decorative accents; they indicate attention, exception, rejection, or escalation.
 - **Don't** round major boards, metric bands, evidence tables, or allocation surfaces.
 - **Don't** add shadows to individual rows and content fragments when a tonal field or rule communicates the hierarchy.
+- **Don't** turn the patient flow into a scaled-down staff dashboard or expose nurse navigation in the patient shell.
 - **Don't** use condensed uppercase typography for long instructions or evidence explanations.
 - **Don't** hide human confirmation, administrative-only scope, or the persistent patient ticket behind color-only shorthand.

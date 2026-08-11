@@ -21,7 +21,7 @@ async function captureSignedOut(viewport, filename) {
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
-  await page.goto("http://127.0.0.1:3000", { waitUntil: "networkidle" });
+  await page.goto("http://127.0.0.1:3001", { waitUntil: "networkidle" });
   const signInHeading = page.getByRole("heading", { name: "Open the operations workspace" });
   await signInHeading.waitFor();
   await page.getByRole("heading", { name: "Staff access to today's clinic flow" }).waitFor();

@@ -47,10 +47,12 @@ Copilot Studio supports MCP tools and resources through Streamable HTTP. It no l
 | MCP server | Epicenter use | Phase | Decision |
 | --- | --- | --- | --- |
 | **Epicenter custom MCP** | Safe access to project-specific queue, readiness, eligibility, operational, allocation, and simulation services | P0 | Required; no first-party MCP implements this domain logic |
+| **Insurance Format Registry MCP** | Retrieve approved synthetic/de-identified insurance-format examples and propose versioned extraction mappings for fixture validation | P0/P1 | Required custom development tool; never learns from live patient records or activates rules autonomously |
 | **Microsoft Learn MCP** | Retrieve current Microsoft documentation while developing/configuring Copilot Studio, Power Platform, Fabric, Power BI, or Azure | P0 development | Use in the maker/developer agent, not the staff operations agent |
 | **Microsoft Dataverse MCP Server** | Natural-language access to Dataverse tables if a Microsoft-native deployment selects Dataverse as an authoritative store | P1 option; preview | Do not add merely to mirror Supabase data |
-| **Power BI remote MCP Server** | Query a de-identified aggregate Epicenter semantic model for operational insights | P1 option; preview | Strong fit for the Intelligence Loop after tenant/licensing/security validation |
+| **Power BI remote MCP Server** | Query a de-identified aggregate Epicenter semantic model for operational insights | Required completion stream; preview | Deliver after core backend; feature-flag behind tenant/licensing/security validation and retain a non-MCP dashboard fallback |
 | **Fabric Core MCP Server** | Manage or inspect Fabric workspaces/items that host the aggregate analytics pipeline | P1 development/admin; preview | Keep out of the patient/staff operations agent |
+| **Supabase MCP Server** | Development-time schema/query inspection against the synthetic project | Development only | Project-scoped, read-only, non-production; never connect it to patient or nurse agents |
 | **Azure MCP Server** | Developer/operations access to Azure resources, logs, storage, or App Service if an Azure deployment is adopted | Deployment-dependent | Internal development/operations only; current Railway/Supabase baseline gains little from it |
 
 ### 2.1 Why not connect everything to one agent?
@@ -63,7 +65,7 @@ Each connected MCP server expands the agent's tool surface and data boundary. Co
 4. separate staff operations, analytics, and developer/admin agents; and
 5. apply Power Platform data policies before testing with anything beyond synthetic data.
 
-The staff operations agent should normally connect only to the Epicenter MCP. Microsoft Learn, Fabric Core, Azure, and model-authoring tools belong in maker/developer or administrator contexts.
+The staff operations agent should normally connect only to the Epicenter MCP. The Insurance Format Registry belongs in a maker/reviewer agent, Power BI in an analytics-specific agent, and Microsoft Learn, Supabase, Fabric Core, Azure, and model-authoring tools in developer or administrator contexts.
 
 ## 3. Epicenter MCP Responsibilities
 
@@ -112,6 +114,12 @@ Copilot must not:
 - return source-document binaries, signed URLs, raw document text, credentials, or connection strings.
 
 Human approval remains in the dedicated UI because it requires explicit review, role checks, re-authentication where applicable, transactional writes, and an immutable audit event. Copilot may direct an authorized staff member to that screen.
+
+### 3.4 Insurance Format Registry boundary
+
+The format registry MCP may retrieve approved template metadata, document-type schemas, issuer/code mappings, checkbox conventions, and fixture-validation results, then create a draft mapping proposal for each new insurance form. The proposal identifies the relevant fields, source-evidence requirements, normalization rules, and fixture tests. It receives only synthetic or formally de-identified examples. It cannot query operational patient tables, retrieve source-document binaries from production, train continuously from nurse corrections, change an active extraction prompt/schema/rule, or decide eligibility.
+
+Every draft includes its source fixture set, proposed field mapping, required/optional fields, checked-option semantics, regression result, author, and version. Promotion happens outside MCP through maker/checker approval, shadow validation, atomic activation, and rollback. Once a version is active, its extraction results are written through the shared backend to a database staging record with source evidence and `pending_review`; the MCP cannot write canonical operational tables. Staff confirmation is required before a backend transaction promotes confirmed facts into canonical patient, coverage, and eligibility records, with mapping version and audit provenance retained.
 
 ## 4. Epicenter MCP Tool Catalogue
 
@@ -329,11 +337,11 @@ Never use a global service-role database client without an explicit actor and au
 
 ### 8.1 P0 — Minimal and credible
 
-Connect the Copilot Studio demo agent only to the Epicenter MCP. Connect the maker/developer environment to Microsoft Learn MCP for current Microsoft implementation guidance.
+Connect the Copilot Studio demo agent only to the Epicenter MCP. Connect a separate maker/reviewer environment to the Insurance Format Registry MCP and Microsoft Learn MCP for approved mapping work and current Microsoft implementation guidance.
 
 This profile preserves the existing Vercel + Railway + Supabase + Clerk baseline and avoids adding preview data platforms merely for branding.
 
-### 8.2 P1 — Microsoft analytics profile
+### 8.2 Required post-backend Microsoft analytics profile
 
 1. Export only de-identified aggregate `operational_events` measures to a governed Fabric/Power BI model.
 2. Keep patient records, raw documents, exact identifiers, and staff-level productivity data out of that model.
@@ -341,6 +349,8 @@ This profile preserves the existing Vercel + Railway + Supabase + Clerk baseline
 4. Use Fabric Core MCP only in a developer/admin agent to inspect or manage the workspace—not in the staff operations agent.
 
 This profile answers questions such as “Which stage had the highest P90 wait this week?” without giving the analytics agent access to source documents or individual patient journeys.
+
+Power BI MCP remains preview. If tenant settings, licensing, Entra consent, or data policy block it, the nurse panel's aggregate dashboard remains the operational fallback and the blocked provider-side gate is documented rather than bypassed.
 
 ### 8.3 Optional Dataverse profile
 
@@ -480,12 +490,13 @@ Backend rules remain the source of truth; these instructions only improve orches
 3. Add list/run/compare simulator tools only after the deterministic engine contract exists.
 4. Connect the Epicenter MCP to a dedicated Copilot Studio demo agent.
 5. Use Microsoft Learn MCP in the maker/developer environment to verify current Microsoft configuration guidance.
-6. Demonstrate one-ticket review, an operational-pressure question, an allocation explanation, and a synthetic baseline comparison.
+6. Build the Insurance Format Registry MCP against synthetic/de-identified fixtures and demonstrate one draft mapping passing regression without activating itself.
+7. Demonstrate one-ticket review, an operational-pressure question, an allocation explanation, and a synthetic baseline comparison.
 
-### P1 — Microsoft analytics profile
+### Required post-backend Microsoft analytics profile
 
 1. Produce a de-identified aggregate operational model.
-2. Evaluate Power BI remote MCP with the clinic tenant, Entra application, data policy, licensing, and preview risk.
+2. Configure and validate Power BI remote MCP with the clinic tenant, Entra application, data policy, licensing, and preview risk; retain the normal aggregate dashboard as the unavailable-provider fallback.
 3. Optionally use Fabric Core MCP in a separate developer/admin agent.
 4. Evaluate Dataverse only as an explicit authoritative bounded context, never as an unowned mirror.
 5. Complete privacy/security review before any real operational data reaches a Microsoft analytics service.

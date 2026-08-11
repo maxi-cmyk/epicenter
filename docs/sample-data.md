@@ -45,7 +45,7 @@ npx supabase db push --include-seed
 
 `db push --include-seed` applies pending migrations and the idempotent seed without resetting the linked database. Always inspect the project reference and the CLI dry run before applying it to a shared environment.
 
-The browser publishable key cannot create tables or perform this privileged import. Keep `EPICENTER_SUPABASE_SECRET_KEY`, the CLI access token, and the database password out of `frontend/.env.local` and out of Git.
+The browser publishable key cannot create tables or perform this privileged import. Keep `EPICENTER_SUPABASE_SECRET_KEY`, the CLI access token, and the database password out of both `frontend/patient/.env.local` and `frontend/nurse/.env.local`, and out of Git.
 
 ## Access boundary
 

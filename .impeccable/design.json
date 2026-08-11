@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-11T12:33:03Z",
+  "generatedAt": "2026-08-11T17:48:53Z",
   "title": "Design System: Epicenter",
   "extensions": {
     "colorMeta": {
@@ -164,12 +164,13 @@
       }
     ],
     "breakpoints": [
-      { "name": "compact-form", "value": "620px" },
-      { "name": "mobile-board", "value": "760px" },
-      { "name": "stack-kiosk", "value": "860px" },
-      { "name": "mobile-shell", "value": "900px" },
-      { "name": "stack-review", "value": "980px" },
-      { "name": "wrap-dashboard", "value": "1180px" }
+      { "name": "patient-validation", "value": "620px" },
+      { "name": "nurse-mobile-board", "value": "760px" },
+      { "name": "nurse-stack-kiosk", "value": "860px" },
+      { "name": "patient-stack-workspace", "value": "900px" },
+      { "name": "nurse-mobile-shell", "value": "900px" },
+      { "name": "nurse-stack-review", "value": "980px" },
+      { "name": "nurse-wrap-dashboard", "value": "1180px" }
     ]
   },
   "components": [
@@ -208,7 +209,7 @@
     {
       "name": "Active Navigation Route",
       "kind": "nav",
-      "description": "The cream route marker inside the fixed deep-green application rail.",
+      "description": "The cream route marker inside the nurse application's fixed deep-green rail.",
       "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-active\" href=\"#\" aria-current=\"page\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><rect x=\"4\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"14\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"4\" y=\"14\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"6\" height=\"6\" rx=\"1\"/></svg><span>Operations</span></a></nav>",
       "css": ".ds-nav { background:var(--green-950); padding:18px; width:230px; } .ds-nav-active { align-items:center; background:var(--cream-50); border-radius:8px; color:var(--green-950); display:flex; font:600 .94rem/1.2 var(--font-body); gap:12px; min-height:46px; padding:0 12px; text-decoration:none; } .ds-nav-active svg { fill:none; height:19px; stroke:currentColor; stroke-width:2; width:19px; } .ds-nav-active:focus-visible { outline:3px solid #d18b32; outline-offset:3px; }"
     },
@@ -240,16 +241,24 @@
       "description": "A numbered route stage that makes supervised intake progress textual and visual.",
       "html": "<ol class=\"ds-steps\"><li class=\"ds-step-current\" aria-current=\"step\"><span>1</span><strong>Supervised intake</strong></li><li><span>2</span><strong>Processing</strong></li></ol>",
       "css": ".ds-steps { background:var(--green-950); color:var(--green-200); display:grid; grid-template-columns:1fr 1fr; list-style:none; margin:0; padding:0; } .ds-steps li { align-items:center; display:flex; gap:10px; min-height:66px; padding:12px 18px; position:relative; } .ds-steps li+li::before { background:rgba(255,253,245,.2); bottom:15px; content:\"\"; left:0; position:absolute; top:15px; width:1px; } .ds-steps li>span { align-items:center; border:1px solid var(--green-500); border-radius:50%; display:flex; font:400 .76rem/1 var(--font-body); height:28px; justify-content:center; width:28px; } .ds-steps strong { font:700 .84rem/1.2 var(--font-body); } .ds-steps .ds-step-current { background:var(--cream-50); color:var(--green-950); } .ds-steps .ds-step-current>span { background:var(--green-700); border-color:var(--green-700); color:var(--cream-50); }"
+    },
+    {
+      "name": "Patient Registration Validation",
+      "kind": "custom",
+      "description": "A patient comparison table that re-composes into labelled field blocks below 620px while retaining its caption and scoped-header markup.",
+      "html": "<table class=\"ds-validation\"><caption>Comparison of booking details with consented Myinfo data</caption><thead><tr><th scope=\"col\">Registration field</th><th scope=\"col\">Booking value</th><th scope=\"col\">Validation</th></tr></thead><tbody><tr><th data-label=\"Field\" scope=\"row\">Full name</th><td data-label=\"Booking value\">Loh Wei Ming</td><td data-label=\"Validation\" class=\"ds-validation-ok\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m5 12 4 4L19 6\"/></svg>Source validated</td></tr></tbody></table>",
+      "css": ".ds-validation { border:1px solid var(--rule); border-collapse:collapse; color:var(--ink); font-family:var(--font-body); width:100%; } .ds-validation caption { clip:rect(0,0,0,0); clip-path:inset(50%); height:1px; overflow:hidden; position:absolute; white-space:nowrap; width:1px; } .ds-validation thead { background:var(--green-100); color:var(--green-900); font:600 .78rem/1 var(--font-display); letter-spacing:.05em; text-transform:uppercase; } .ds-validation th,.ds-validation td { border:1px solid var(--rule); padding:14px 12px; text-align:left; } .ds-validation-ok { color:var(--green-800); font-size:.78rem; font-weight:700; } .ds-validation-ok svg { fill:none; height:15px; margin-right:5px; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2.2; vertical-align:middle; width:15px; } @media(max-width:620px){ .ds-validation,.ds-validation tbody,.ds-validation tr,.ds-validation th,.ds-validation td { display:block; width:100%; } .ds-validation thead { clip:rect(0,0,0,0); clip-path:inset(50%); height:1px; overflow:hidden; position:absolute; white-space:nowrap; width:1px; } .ds-validation tr { display:grid; grid-template-columns:minmax(112px,.72fr) minmax(0,1.28fr); } .ds-validation th,.ds-validation td { border:0; width:auto; } .ds-validation th { grid-row:1/span 2; } .ds-validation td { border-left:1px solid var(--rule); } .ds-validation td+td { border-top:1px solid var(--rule); } .ds-validation td::before { color:var(--ink-soft); content:attr(data-label); display:block; font:600 .68rem/1 var(--font-display); letter-spacing:.04em; margin-bottom:3px; text-transform:uppercase; } }"
     }
   ],
   "narrative": {
     "northStar": "Clinical Wayfinding as Operating System",
-    "overview": "Epicenter presents clinic administration as a legible route through states, evidence, and staff decisions. Warm cream paper and a faint square grid keep the interface humane, while deep clinic-green bands, fixed columns, hairline rules, numbered steps, and explicit status markers make every operational path easy to scan.\n\nThe system is calm rather than sterile and precise rather than decorative. Its strongest visual moments are functional: the persistent navigation rail, condensed room-sign headings, the patient readiness board, the one-ticket route, and the dark allocation decision panel. Administrative automation stays visually subordinate to clear staff confirmation and escalation language.",
+    "overview": "Epicenter presents clinic administration as a legible route through states, evidence, and staff decisions. Warm cream paper and a faint square grid keep the interface humane, while deep clinic-green bands, fixed columns, hairline rules, numbered steps, and explicit status markers make every operational path easy to scan. The patient and nurse experiences are separate application shells over one shared visual foundation: patient work is mobile-first and focused, while nurse work is desktop/tablet-first and operationally dense.\n\nThe system is calm rather than sterile and precise rather than decorative. Its strongest visual moments are functional: the persistent navigation rail, condensed room-sign headings, the patient readiness board, the one-ticket route, and the dark allocation decision panel. Administrative automation stays visually subordinate to clear staff confirmation and escalation language.",
     "keyCharacteristics": [
       "Cream paper and 32px grid surfaces with deep-green wayfinding bands.",
       "Condensed uppercase display type paired with a plain, highly legible body face.",
       "Flat and tonal layouts structured by hairline rules, with selective ambient lift for major work surfaces.",
       "Explicit route, step, status, ticket, evidence, and human-decision markers.",
+      "Shared tokens and primitives with distinct patient and nurse shell compositions.",
       "Responsive compositions that preserve operational hierarchy on desktop, tablet, and narrow mobile screens."
     ],
     "rules": [
@@ -259,6 +268,7 @@
       { "name": "The Plain-Language Rule", "body": "Supporting copy remains sentence case, short, and explicit about the person, state, or next action.", "section": "typography" },
       { "name": "The Route-Before-Decoration Rule", "body": "Grid lines, dividers, columns, and bands must clarify patient or staff movement through the system.", "section": "layout" },
       { "name": "The Responsive Recomposition Rule", "body": "On narrow screens, preserve state and route hierarchy by changing the grid structure; do not collapse operational data into an undifferentiated card stack.", "section": "layout" },
+      { "name": "The Shell Boundary Rule", "body": "Share tokens and true primitives across applications, but keep patient navigation and mobile validation in the patient shell and staff navigation, authentication framing, and dense operational boards in the nurse shell.", "section": "layout" },
       { "name": "The Tonal-First Rule", "body": "Establish hierarchy with fields, bands, and rules before adding shadow.", "section": "elevation" },
       { "name": "The One-Level Lift Rule", "body": "Ambient elevation belongs to complete work surfaces, not to every row, metric, or content fragment.", "section": "elevation" },
       { "name": "The Board-and-Control Rule", "body": "Keep operational surfaces square; reserve rounded geometry for things a person selects, edits, or reads as a compact state.", "section": "shapes" }
@@ -269,6 +279,7 @@
       "Do use hairline rules and fixed alignment to make dense operational data scannable.",
       "Do pair every colored status with readable text and an icon or shape cue.",
       "Do re-compose dense boards on mobile while keeping ticket, route, stage, wait, and status visible.",
+      "Do keep patient and nurse shells separate while importing shared tokens and primitives from the shared package.",
       "Do reserve the strongest deep-green field for orientation and decisions that deserve staff attention."
     ],
     "donts": [
@@ -276,6 +287,7 @@
       "Don't use amber or red as decorative accents; they indicate attention, exception, rejection, or escalation.",
       "Don't round major boards, metric bands, evidence tables, or allocation surfaces.",
       "Don't add shadows to individual rows and content fragments when a tonal field or rule communicates the hierarchy.",
+      "Don't turn the patient flow into a scaled-down staff dashboard or expose nurse navigation in the patient shell.",
       "Don't use condensed uppercase typography for long instructions or evidence explanations.",
       "Don't hide human confirmation, administrative-only scope, or the persistent patient ticket behind color-only shorthand."
     ]

@@ -27,6 +27,15 @@ class ServiceTarget(StrEnum):
     OVER_TARGET = "over_target"
 
 
+class CoverageAction(StrEnum):
+    REUSE = "reuse"
+    REPLACE = "replace"
+
+
+class PatientSubmissionOutcome(StrEnum):
+    UNDER_REVIEW = "under_review"
+
+
 class QueueTicket(BaseModel):
     id: str
     patient_id: str
@@ -114,6 +123,21 @@ class KioskCheckInRequest(BaseModel):
     registration_source: str = "supervised_kiosk"
     nurse_supervisor: str = Field(min_length=2, max_length=80)
     clinical_escalation: bool = False
+
+
+class PreArrivalSubmissionRequest(BaseModel):
+    appointment_id: str = Field(min_length=2, max_length=80)
+    coverage_action: CoverageAction
+    file_name: str | None = Field(default=None, max_length=255)
+
+
+class PreArrivalSubmissionResult(BaseModel):
+    success: bool = True
+    synthetic: bool = True
+    outcome: PatientSubmissionOutcome = PatientSubmissionOutcome.UNDER_REVIEW
+    processing_reference: str
+    message: str
+    next_action: str
 
 
 class ActionResult(BaseModel):

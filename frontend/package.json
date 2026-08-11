@@ -1,38 +1,37 @@
 {
-  "name": "epicenter-frontend",
+  "name": "epicenter-frontends",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "patient",
+    "nurse",
+    "shared"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "patient": "cross-env APP_ROLE=patient next dev -p 3000",
-    "nurse": "cross-env APP_ROLE=nurse next dev -p 3001",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "dev": "npm run dev:patient",
+    "dev:patient": "npm run dev --workspace @epicenter/patient",
+    "dev:nurse": "npm run dev --workspace @epicenter/nurse",
+    "patient": "npm run dev:patient",
+    "nurse": "npm run dev:nurse",
+    "build": "npm run build:patient && npm run build:nurse",
+    "contracts:generate": "node scripts/generate-contracts.mjs",
+    "contracts:check": "node scripts/generate-contracts.mjs --check",
+    "build:patient": "npm run build --workspace @epicenter/patient",
+    "build:nurse": "npm run build --workspace @epicenter/nurse",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "node --test tests/*.test.mjs",
     "qa:auth": "node tests/auth-visual-qa.mjs",
     "qa:visual": "node tests/visual-qa.mjs"
-  },
-  "dependencies": {
-    "@clerk/nextjs": "^7.7.3",
-    "@fontsource/barlow-condensed": "^5.2.8",
-    "@fontsource/source-sans-3": "^5.2.8",
-    "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.112.3",
-    "lucide-react": "1.31.0",
-    "next": "16.3.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "cross-env": "^7.0.3",
     "eslint": "^9.0.0",
     "eslint-config-next": "16.3.0",
+    "openapi-typescript": "7.13.0",
     "typescript": "^5.9.0"
   }
 }

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.patient_routes import router as patient_router
 from app.api.routes import router
 from app.core.config import get_settings
 
@@ -43,3 +44,4 @@ def healthcheck() -> dict[str, object]:
 
 
 app.include_router(router, prefix=settings.api_prefix)
+app.include_router(patient_router, prefix=settings.api_prefix)
