@@ -212,7 +212,7 @@ The product has two deliberately separate interface surfaces.
 
 **Patient surface:** a minimal token-scoped upload flow plus a small seeded demo account with Home, Queue, Payment, and Records. Patients see only their own appointment, document-submission outcome, queue/counter status, mocked payment/receipt, and read-only visit/questionnaire history. They never see extraction confidence, review reasons, internal rules, audit data, or other patients.
 
-Both surfaces require explicit loading, empty, validation, failure, retry, and success states. Status is communicated through text and accessible semantics, not color alone; staff tables remain keyboard-operable and patient views are mobile-first.
+Both surfaces require explicit loading, empty, validation, failure, retry, and success states. Status is communicated through text and accessible semantics, not color alone; staff tables remain keyboard-operable and patient views are mobile-first. Interactive controls use large, generously-spaced touch/click targets, color pairings meet WCAG AA contrast minimums, and the palette is checked against common color-vision deficiencies (protanopia, deuteranopia, tritanopia) so no state depends on red/green discrimination alone — this matters here specifically because registration, review, and pharmacy staff are working under time pressure and older or vision-impaired patients are a routine part of clinic traffic, not an edge case.
 
 ### 4.6 Demo-Scoped Feature — Patient Account (Small, Fixed Demo Pool)
 
@@ -410,6 +410,7 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 - All actions are logged, supporting both audit and the ability to correct systematic extraction errors over time.
 - Patient views expose only patient-scoped outcomes; extraction confidence, review reasons, internal eligibility rules, staff audit data, and other patients are never shown. Where a patient is notified that a document needs fixing (§4.4), only a curated, versioned issue category maps to that notification — never the raw internal `needs_review` reason, source excerpt, or confidence score — and every such notification is itself an immutable, staff-visible audit event (who/what system sent it, category shown, channel, timestamp, delivery outcome, and resulting patient action).
 - Loading, empty, error, retry, disabled, and success states are explicit. Status never relies on color alone, and critical controls are keyboard/touch accessible.
+- Buttons and other primary interactive controls use large touch/click targets (minimum 44×44 px, larger for high-frequency or high-consequence actions such as check-in, confirm, and pay). Color choices meet WCAG AA contrast minimums and are validated against protanopia, deuteranopia, and tritanopia simulation before release, so status, alerts, and readiness states remain distinguishable without relying on color alone.
 
 ### 7.1 EHR Failure-Pattern Controls
 
