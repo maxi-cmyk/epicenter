@@ -31,12 +31,14 @@ Open `http://localhost:3000`. The frontend uses the local API when available and
 
 ## Provider and deployment boundaries
 
-- **Database:** Supabase is the production persistence target. The current prototype deliberately runs from a synthetic in-memory repository until the schema and credentials are supplied; `EPICENTER_SUPABASE_URL` and the server-only `EPICENTER_SUPABASE_SECRET_KEY` are reserved in `backend/.env`.
-- **Authentication:** Clerk wraps the frontend when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, the FastAPI routes require and verify Clerk bearer tokens using the configured issuer and JWKS endpoint.
+- **Database:** Supabase is the production persistence target. The initial migration and an idempotent seed now cover 300 synthetic registrations, 60 questionnaire submissions, and 9 synthetic medical documents. The current API still serves its deterministic in-memory workflow until the Supabase repository adapter is enabled.
+- **Authentication:** Clerk wraps the frontend when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, FastAPI verifies Clerk session tokens with the official Python SDK and `CLERK_SECRET_KEY`; `CLERK_JWT_KEY` is an optional networkless-verification optimization.
 - **Frontend deployment:** create a Vercel project with `frontend/` as its root directory and set the frontend environment variables there.
 - **Backend deployment:** create a Railway service with `backend/` as its root directory. `backend/railway.toml` defines the start command and health check; set `EPICENTER_DEMO_MODE=false`, provider credentials and the deployed `EPICENTER_FRONTEND_ORIGIN` in Railway.
 
 The checked-in provider configuration is a deployment contract, not a claim that live Supabase, Clerk, Vercel or Railway resources have already been provisioned.
+
+Sample-data provenance, identity reconciliation results, and local/hosted database commands are documented in [`docs/sample-data.md`](docs/sample-data.md).
 
 ## Verify
 

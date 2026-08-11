@@ -28,8 +28,16 @@ def healthcheck() -> dict[str, object]:
         "environment": settings.environment,
         "demo_mode": settings.demo_mode,
         "providers": {
-            "database": "supabase" if settings.supabase_configured else "synthetic",
-            "authentication": "clerk" if settings.clerk_configured else "demo",
+            "database": (
+                "synthetic" if settings.demo_mode else ("supabase" if settings.supabase_configured else "unconfigured")
+            ),
+            "authentication": (
+                "demo" if settings.demo_mode else ("clerk" if settings.clerk_configured else "unconfigured")
+            ),
+        },
+        "provider_configuration": {
+            "supabase": settings.supabase_configured,
+            "clerk": settings.clerk_configured,
         },
     }
 

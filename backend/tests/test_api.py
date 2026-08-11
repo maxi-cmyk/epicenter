@@ -14,7 +14,7 @@ def test_healthcheck() -> None:
 
 
 def test_production_routes_fail_closed_without_clerk_configuration() -> None:
-    app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False)
+    app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False, _env_file=None)
     try:
         response = client.get("/api/v1/dashboard")
     finally:

@@ -1,0 +1,198 @@
+.authLoading {
+  align-items: center;
+  background: var(--green-950);
+  color: var(--cream-50);
+  display: flex;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  justify-content: center;
+  letter-spacing: 0.02em;
+  min-height: 100vh;
+  text-transform: uppercase;
+}
+
+.authConfigurationError {
+  align-items: flex-start;
+  background: var(--green-950);
+  color: var(--cream-50);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(32px, 8vw, 112px);
+}
+
+.authConfigurationError span {
+  color: var(--green-200);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.authConfigurationError h1 {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 8vw, 6rem);
+  line-height: 0.92;
+  margin: 20px 0;
+  max-width: 10ch;
+  text-transform: uppercase;
+}
+
+.authConfigurationError p {
+  color: var(--green-100);
+  max-width: 58ch;
+}
+
+.authConfigurationError code {
+  color: var(--cream-50);
+}
+
+.signInPage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);
+  min-height: 100vh;
+}
+
+.signInContext {
+  background: var(--green-950);
+  color: var(--cream-50);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100vh;
+  padding: clamp(36px, 6vw, 88px);
+}
+
+.signInBrand {
+  align-items: center;
+  display: flex;
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  gap: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.signInBrand span {
+  align-items: center;
+  background: var(--cream-50);
+  border-radius: 50% 50% 12px 50%;
+  color: var(--green-950);
+  display: flex;
+  height: 52px;
+  justify-content: center;
+  width: 52px;
+}
+
+.signInContext h1 {
+  font-family: var(--font-display);
+  font-size: clamp(3.2rem, 6vw, 5.8rem);
+  letter-spacing: -0.025em;
+  line-height: 0.88;
+  margin: 48px 0 24px;
+  max-width: 8ch;
+  text-transform: uppercase;
+}
+
+.signInContext p {
+  color: var(--green-100);
+  font-size: 1.08rem;
+  margin: 0;
+  max-width: 58ch;
+}
+
+.assuranceList {
+  display: grid;
+  gap: 14px;
+  list-style: none;
+  margin: 48px 0;
+  padding: 0;
+}
+
+.assuranceList li {
+  align-items: center;
+  border-top: 1px solid rgba(255, 253, 245, 0.18);
+  display: flex;
+  font-weight: 600;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.signInContext small {
+  color: var(--green-200);
+}
+
+.signInControl {
+  align-items: center;
+  background: var(--cream-100);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(24px, 5vw, 72px);
+}
+
+.signInTask {
+  width: min(100%, 420px);
+}
+
+.signInTask h2 {
+  color: var(--green-950);
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 0.95;
+  margin: 12px 0;
+  text-transform: uppercase;
+}
+
+.signInTask > p {
+  color: var(--ink-soft);
+  margin: 0 0 28px;
+}
+
+.accountDock {
+  align-items: center;
+  background: var(--cream-50);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  display: flex;
+  min-height: 42px;
+  padding: 5px 10px;
+  position: fixed;
+  right: 24px;
+  top: 18px;
+  z-index: 30;
+}
+
+@media (max-width: 780px) {
+  .signInPage {
+    grid-template-columns: 1fr;
+  }
+
+  .signInContext {
+    order: 2;
+    min-height: auto;
+    padding: 32px 24px 40px;
+  }
+
+  .signInContext h1 {
+    font-size: clamp(2.6rem, 13vw, 4rem);
+    margin-top: 48px;
+  }
+
+  .signInControl {
+    min-height: 100svh;
+    order: 1;
+    padding: 32px 18px 48px;
+  }
+
+  .accountDock {
+    background: transparent;
+    border: 0;
+    min-height: 0;
+    padding: 0;
+    right: 14px;
+    top: 12px;
+  }
+}

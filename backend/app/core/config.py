@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,13 +10,20 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     frontend_origin: str = "http://localhost:3000"
     demo_mode: bool = True
-    supabase_url: str | None = None
-    supabase_publishable_key: str | None = None
+    supabase_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("EPICENTER_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
+    )
+    supabase_publishable_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "EPICENTER_SUPABASE_PUBLISHABLE_KEY",
+            "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        ),
+    )
     supabase_secret_key: str | None = None
     clerk_secret_key: str | None = Field(default=None, validation_alias="CLERK_SECRET_KEY")
-    clerk_issuer: str | None = Field(default=None, validation_alias="CLERK_ISSUER")
-    clerk_jwks_url: str | None = Field(default=None, validation_alias="CLERK_JWKS_URL")
-    clerk_audience: str | None = Field(default=None, validation_alias="CLERK_AUDIENCE")
+    clerk_jwt_key: str | None = Field(default=None, validation_alias="CLERK_JWT_KEY")
 
     @property
     def supabase_configured(self) -> bool:
@@ -24,7 +31,7 @@ class Settings(BaseSettings):
 
     @property
     def clerk_configured(self) -> bool:
-        return bool(self.clerk_issuer and self.clerk_jwks_url)
+        return bool(self.clerk_secret_key)
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="EPICENTER_", extra="ignore")
 

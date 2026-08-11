@@ -1,0 +1,113 @@
+[
+  {
+    "source_record_key": "medical_chit:01_mrdeb_referral",
+    "issuer_code": "MRDEB",
+    "issuer_name": "Meridian Life Assurance Pte Ltd",
+    "document_kind": "medical_referral_letter",
+    "subject_name": "Loh Wei Ming",
+    "subject_identifier": "S8010946C",
+    "issued_on": "2026-08-04",
+    "requirements": ["Chest X-Ray", "HIV Antibody Test", "Treadmill ECG"],
+    "administrative_facts": {"policy_number": "MRD707314", "policyholder": "Coral Harbour Pte Ltd"},
+    "automation_disposition": "confirm"
+  },
+  {
+    "source_record_key": "medical_chit:02_evwpa_voucher",
+    "issuer_code": "EVWPA",
+    "issuer_name": "Everwell Insurance Group",
+    "document_kind": "health_checkup_voucher",
+    "subject_name": "Lim Arjun",
+    "subject_identifier": "T2221854H",
+    "issued_on": "2026-06-02",
+    "expires_on": "2026-09-30",
+    "appointment_at": "2026-07-30T08:50:00+08:00",
+    "requirements": ["Medical Examination", "Lipid Profile", "UFEME", "Resting ECG"],
+    "administrative_facts": {"policy_number": "EVW563298", "clinic": "Everwell Health Screening Centre"},
+    "automation_disposition": "confirm"
+  },
+  {
+    "source_record_key": "medical_chit:03_evwme_invitation",
+    "issuer_code": "EVWME",
+    "issuer_name": "Everwell Insurance Group",
+    "document_kind": "medical_test_invitation",
+    "subject_name": "Devi Hui Min",
+    "issued_on": "2026-06-09",
+    "requirements": ["Adult Medical Examination"],
+    "administrative_facts": {"policy_number": "EVW975136", "certificate_number": "C-58393", "completion_window_weeks": 8},
+    "automation_disposition": "staff_review",
+    "review_reason": "No patient identifier appears in the document; name-only matching is not sufficient."
+  },
+  {
+    "source_record_key": "medical_chit:04_blpde_followup",
+    "issuer_code": "BLPDE",
+    "issuer_name": "Bluepeak Prosperity Life",
+    "document_kind": "underwriting_follow_up",
+    "subject_name": "Yeo Nur Aisyah",
+    "subject_identifier": "T1800429G",
+    "issued_on": "2026-07-29",
+    "requirements": ["Manager approval", "Full Medical Examination", "Anti-HIV Test", "Proof of residential address"],
+    "administrative_facts": {"proposal_number": "BLP795612", "no_paramedics": true, "address_proof_max_age_months": 12},
+    "automation_disposition": "confirm"
+  },
+  {
+    "source_record_key": "medical_chit:05_blphs_wellness",
+    "issuer_code": "BLPHS",
+    "issuer_name": "Bluepeak Prosperity Life",
+    "document_kind": "wellness_package_voucher",
+    "subject_name": "Loh Amir",
+    "expires_on": "2028-07-14",
+    "requirements": ["Complete History Taking", "Complete Physical Examination", "BMI and Fat Composition", "Blood pressure measurement", "Full Blood Count", "Cholesterol screening", "Liver function screening", "Kidney function screening", "Thyroid function screening", "Resting ECG", "Medical Report Consultation"],
+    "administrative_facts": {"policy_number": "BLP301158", "package_code": "WELL2"},
+    "automation_disposition": "staff_review",
+    "review_reason": "No patient identifier appears in the document; name-only matching is not sufficient."
+  },
+  {
+    "source_record_key": "medical_chit:06_nstnbu_requirements",
+    "issuer_code": "NSTNBU",
+    "issuer_name": "Northstar Life Assurance",
+    "document_kind": "further_requirements_letter",
+    "subject_name": "Wong Siti",
+    "subject_identifier": "S2915369H",
+    "issued_on": "2026-07-23",
+    "expires_on": "2026-08-13",
+    "requirements": ["Two repeat Urine Examination and Microscopy on different days"],
+    "administrative_facts": {"contract_number": "NST245095", "plan": "Northstar Elite Term II"},
+    "automation_disposition": "confirm"
+  },
+  {
+    "source_record_key": "medical_chit:07_mol_authorisation",
+    "issuer_code": "MOL0199VME",
+    "issuer_name": "Ministry of Learning Civil Service Medical Scheme",
+    "document_kind": "medical_examination_authorisation",
+    "subject_name": "Kumar Sheng Yang",
+    "subject_identifier": "S8001691D",
+    "requirements": ["PEE226 Medical Examination", "MMR Dose 1 if applicable", "Electrocardiogram (ECG)"],
+    "administrative_facts": {"purpose": "Pre-employment", "agency": "Ministry of Learning", "scheme_of_service": "MKL"},
+    "automation_disposition": "confirm"
+  },
+  {
+    "source_record_key": "medical_chit:08_mol_vital_authorisation",
+    "issuer_code": "MOL0199VME",
+    "issuer_name": "Ministry of Learning Civil Service Medical Scheme",
+    "document_kind": "medical_examination_authorisation",
+    "subject_name": "Loh Hui Min",
+    "subject_identifier": "T7605473J",
+    "issued_on": "2026-07-17",
+    "requirements": [],
+    "administrative_facts": {"purpose": "Pre-employment", "agency": "Ministry of Learning", "scheme_of_service": "Learning Support Scheme", "billing_unit": "VITAL"},
+    "automation_disposition": "staff_review",
+    "review_reason": "The authorisation states the purpose but does not select a medical examination package or tests."
+  },
+  {
+    "source_record_key": "medical_chit:09_mrdeb_appointment_email",
+    "issuer_code": "MRDEB",
+    "issuer_name": "Coral Harbour Pte Ltd / Meridian Life Assurance",
+    "document_kind": "appointment_email",
+    "subject_name": "Ali Amir",
+    "appointment_at": "2026-07-30T08:50:00+08:00",
+    "requirements": ["Fast for at least 9 hours", "Bring identification card", "Bring appointment and clinic confirmation"],
+    "administrative_facts": {"clinic": "Meridian Panel Clinic, Novena", "appointment_is_administrative": true},
+    "automation_disposition": "staff_review",
+    "review_reason": "No patient identifier appears in the email; name-only matching is not sufficient."
+  }
+]

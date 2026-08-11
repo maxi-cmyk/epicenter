@@ -1,8 +1,7 @@
 from typing import Annotated
 
-import jwt
+from clerk_backend_api import AuthenticateRequestOptions, authenticate_request
 from fastapi import Depends, HTTPException, Request, status
-from jwt import PyJWKClient
 from pydantic import BaseModel
 
 from app.core.config import Settings, get_settings
@@ -27,22 +26,20 @@ def require_staff(
             detail="Clerk authentication is not configured.",
         )
 
-    authorization = request.headers.get("Authorization", "")
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required.")
-
     try:
-        signing_key = PyJWKClient(settings.clerk_jwks_url).get_signing_key_from_jwt(token)
-        claims = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["RS256"],
-            issuer=settings.clerk_issuer,
-            audience=settings.clerk_audience,
-            options={"verify_aud": bool(settings.clerk_audience)},
+        request_state = authenticate_request(
+            request,
+            AuthenticateRequestOptions(
+                secret_key=settings.clerk_secret_key,
+                jwt_key=settings.clerk_jwt_key,
+                authorized_parties=[settings.frontend_origin],
+                accepts_token=["session_token"],
+            ),
         )
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Clerk token.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Clerk session.") from exc
 
-    return StaffPrincipal(subject=claims["sub"], source="clerk")
+    if not request_state.is_signed_in or not request_state.payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid Clerk session required.")
+
+    return StaffPrincipal(subject=request_state.payload["sub"], source="clerk")
