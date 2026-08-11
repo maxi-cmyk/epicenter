@@ -78,10 +78,17 @@ Epicenter is not only a queue-speed intervention. It shifts administrative work 
 - **Operational cost must be realistic.** The solution should be economically viable to deploy, not merely technically impressive.
 - Everything else may be automated: document interpretation, eligibility checks, package matching, and registration data entry.
 
+### 2.1 Operating and Integration Assumptions
+
+- **Scheduled-patient booking uses Singpass and Myinfo.** The production concept assumes that a patient authenticates with [Singpass Login](https://docs.developer.singpass.gov.sg/docs/products/singpass-login) when booking and explicitly consents to share the minimum required government-sourced profile fields through [Myinfo](https://docs.developer.singpass.gov.sg/docs/products/myinfo). Singpass authenticates the patient; Myinfo supplies the consented data used for registration-level validation.
+- **Every participating clinic provides a supervised walk-in kiosk.** Each clinic is assumed to operate at least one registration kiosk under the physical supervision of trained nurses. The kiosk is an intake channel for walk-in registration and document capture, not an unattended replacement for clinic staff.
+- These are deployment assumptions, not claims that live Singpass/Myinfo or production kiosk integrations are implemented in the hackathon demo. The demo may use clearly labelled synthetic responses and kiosk states to prove the workflow contract.
+
 ## 3. Goals
 
 | Goal | Success signal |
 | --- | --- |
+| Validate scheduled-patient registration data before arrival | Consented Myinfo claims are compared field by field with the booking record; matches retain provenance and conflicts create review reasons without silent overwrite |
 | Retrieve and process patient/coverage information before the patient reaches the front desk | Pre-registration data (identity, coverage, package) is resolved ahead of arrival for scheduled appointments, and rapidly on arrival for walk-ins |
 | Eliminate manual document interpretation | Chit/voucher/referral-letter content is extracted and structured automatically, not read and re-typed by staff |
 | Capture the patient's core data once and reuse it across every touchpoint that needs it | All five re-entry/re-check points identified in §1.3(b) — not just registration-to-questionnaire — draw from a single record |
@@ -119,7 +126,7 @@ Epicenter is not only a queue-speed intervention. It shifts administrative work 
 
 ### 4.2 Core Add-On Feature — Single-Ticket Readiness Routing
 
-**What it does:** Every arriving patient receives one persistent visit ticket. The patient never takes a second number, restarts their wait, or joins a separate walk-in line. Behind that single patient-facing queue, staff manage two operational workstreams: **ready service** for administratively cleared cases and **assisted review** for unresolved exceptions. For booked patients, processing happens before arrival. For walk-ins, processing still happens at the counter, but document interpretation and rules matching are automated rather than manual; walk-ins receive the processing-speed benefit, not the pre-arrival benefit.
+**What it does:** Every arriving patient receives one persistent visit ticket. The patient never takes a second number, restarts their wait, or joins a separate walk-in line. Behind that single patient-facing queue, staff manage two operational workstreams: **ready service** for administratively cleared cases and **assisted review** for unresolved exceptions. For booked patients, processing happens before arrival. For walk-ins, registration and document capture begin at the clinic's nurse-supervised kiosk, so processing still happens on site; document interpretation and rules matching are automated rather than manual. Walk-ins receive the processing-speed benefit, not the pre-arrival benefit.
 
 **Routing rule:**
 
@@ -142,11 +149,12 @@ IF any gate fails → ASSISTED REVIEW (same ticket, waiting age retained)
 
 - Every visit has exactly one patient-facing queue ticket and one original ordering timestamp. State changes and counter reassignments update that record rather than issuing a new number.
 - A booked patient's readiness decision may be made during pre-registration. Ready status is granted only after every prerequisite passes; it is never inferred from booking status alone.
-- A walk-in begins in `processing` while the document and registration checks run. If all gates pass and staff confirms the result, the same ticket becomes `ready`; only a failed gate changes it to `needs_review` with an actionable reason.
+- A walk-in begins in `processing` when the nurse-supervised kiosk creates the visit ticket and captures registration data and documents. If all gates pass and staff confirms the result, the same ticket becomes `ready`; only a failed gate changes it to `needs_review` with an actionable reason.
 - Resolving an exception changes the same ticket from `needs_review` to `ready`. Its waiting age continues from the original check-in time and the patient never returns to the end of the line.
 - When a reviewed ticket becomes `ready`, service ordering continues to use the clinic-approved ordering key based on its original appointment/check-in time; the state transition does not assign a fresh timestamp. Already-called patients are not displaced.
 - Review work has configurable age thresholds and visible escalation alerts. Flexible counters can be reassigned when the oldest unresolved ticket approaches the clinic's service target, preventing exception cases from being starved while ready work continues.
 - `ready` and `needs_review` are internal operational states, not separate patient journeys or measures of clinical priority. Staff-led clinical escalation always takes precedence and remains outside the administrative routing algorithm.
+- **Physical clinical-urgency handling:** At the patient's first physical contact, including arrival at the supervised kiosk, a trained nurse applies the clinic's existing red-flag or triage protocol before the patient follows normal administrative routing. If the nurse identifies an urgent clinical need, they escalate the patient immediately through the clinic's approved urgent-care pathway; kiosk completion, missing documents, unresolved eligibility, or a `needs_review` state must never delay that escalation. Epicenter and the kiosk do not infer urgency from symptoms, documents, model confidence, or demographic data. Epicenter may record only that an authorised staff member marked the visit `staff_escalated`, together with who recorded it and when, while clinical observations and the decision rationale remain in the clinic's approved clinical system. Administrative processing may be deferred or continue in parallel, but it never overrides the staff escalation.
 - Readiness is visible to staff with a machine-readable reason such as `processing`, `prereg_incomplete`, `missing_document`, `extraction_needs_review`, `expired_document`, or `ambiguous_match`.
 - Staff can see workstream composition and waiting age to manage counter allocation in real time, but cannot mark a patient `ready` unless all readiness prerequisites are satisfied.
 - The staff queue board tracks appointment date/time and separates patients into **Incoming**, **Ongoing**, and **Finished** views:
@@ -181,7 +189,9 @@ The questionnaire/consent surface visibly separates read-only prefilled identity
 
 **What it does:** For scheduled (non-walk-in) appointments, the system processes the patient's coverage document and pre-fills registration and questionnaire data before the patient arrives. On arrival, front-desk staff only need to perform identity verification and confirm the pre-processed information, rather than starting document interpretation from zero. Pre-registration lets a booked patient reach `ready` before arrival; walk-ins can reach the same state after one-time check-in processing without joining another queue.
 
-**Submission mechanism — patient upload link, not a full patient account.** Rather than building a full patient-facing account system (separate login, credential management, its own auth surface), a scheduled patient receives a tokenized, single-use upload link tied to their specific appointment — e.g., sent by SMS/email at booking. The link opens a minimal, unauthenticated-but-scoped page: upload the coverage document, done. No password, no account, no persistent session. For corporate batch screening, the same mechanism extends naturally — each employee gets their own tokenized link ahead of the scheduled screening day, rather than staff manually collecting documents from a group.
+**Booking identity and registration pre-check.** In the production concept, the patient authenticates with Singpass Login while booking and explicitly consents to the minimum required Myinfo fields. Epicenter validates the signed/encrypted response through the approved server-side integration, then compares the consented identity and contact claims with the appointment's registration record. Exact normalized agreement marks each comparable registration field as `source_validated`; missing, expired, malformed, or conflicting data produces a field-level review reason and never silently overwrites the clinic record. The system stores source, retrieval time, validation outcome, and a protected identifier reference—not the fact that a Singpass session occurred as proof of in-person identity verification. Staff still perform and attest to the mandatory physical identity and e-card checks on arrival.
+
+**Submission mechanism — patient upload link, not a persistent Epicenter account.** After the Singpass-authenticated booking pre-check, a scheduled patient receives a tokenized, single-use upload link tied to that appointment — e.g., sent by SMS/email at booking. The link opens a minimal, unauthenticated-but-scoped page: upload the coverage document, done. The patient does not create or retain separate Epicenter credentials or a persistent session. For corporate batch screening, the same mechanism extends naturally — each employee gets their own tokenized link ahead of the scheduled screening day, rather than staff manually collecting documents from a group.
 
 **Check-first coverage reuse.** Before showing the upload control, the system resolves the appointment-bound patient by normalized NRIC/FIN/passport, using email only as an unambiguous fallback inside the already authorized scope, and checks for a prior coverage document. A new patient, a conflicting/name-only match, or a patient with no prior document proceeds directly to the standard upload flow. A returning patient sees only the prior issuer and document date — for example, "We have your Meridian coverage on file from 12 February 2026. Still the same?" — with two choices:
 
@@ -313,7 +323,8 @@ The judged operational impact is demonstrated through the deterministic, synthet
 
 ```text
 Patient's coverage document (chit/voucher/referral letter)
-   → captured via upload/scan (pre-arrival) or at check-in (walk-in)
+   → booked patient: Singpass Login + consented Myinfo registration pre-check
+   → captured via upload/scan (pre-arrival) or nurse-supervised kiosk (walk-in)
    → Document Extraction Layer (schema-constrained parsing of varied layouts)
    → Typed facts + selected options + page/source-excerpt evidence
    → Readiness gates: required fields, identifier, validity, and evidence
@@ -335,11 +346,13 @@ Patient's coverage document (chit/voucher/referral letter)
 
 | Layer | Function | Notes |
 | --- | --- | --- |
+| Singpass/Myinfo Booking Pre-Check | Authenticates the booking patient and compares consented government-sourced claims with registration-level identity/contact fields | Conceptual production adapter; mismatches route to field-level staff review, never silently overwrite the clinic record, and never replace in-person verification |
 | Document Extraction Layer | Schema-constrained parsing of PDFs/images into typed facts, selected options, and page/source-excerpt evidence | Handles the nine supplied document variants without assuming every field exists |
 | Eligibility & Package Matching Engine | Versioned rules lookup using issuer code plus document type, package/check-up code, and requested items | Issuer code alone is insufficient because one code can occur on different document types; decisions remain deterministic, not LLM inference |
 | Patient/Registration Record Store | Single structured record per patient, reused across registration and questionnaire steps | Eliminates the duplicate-entry problem named in §1.1/§4.3 |
 | Staff Review Interface | Presents extracted + matched data for confirmation before finalising | Human-in-the-loop; each field shows page/excerpt evidence, with region highlighting only when coordinates exist |
 | Pre-Arrival Intake Channel | Where scheduled patients submit documents ahead of arrival, via a tokenized single-use upload link (no patient account/login) tied to their appointment | Directly addresses the "before they reach the front desk" requirement in the brief, without the added auth/security surface of a full patient account (see §4.4) |
+| Nurse-Supervised Walk-In Kiosk | Creates the walk-in's one visit ticket and captures registration details and coverage documents on site | Assumed at every participating clinic; a trained nurse supervises intake, handles accessibility/help needs, and applies the clinic's physical red-flag protocol before normal routing |
 | Coverage Reuse Check | Resolves the appointment-bound/authenticated patient by normalized identifier, with unambiguous scoped email fallback, then records reuse or replacement | Avoids duplicate uploads without exposing a public patient lookup or bypassing validity, eligibility, and staff review |
 | Queue Operations Board | Tracks scheduled/check-in time, Incoming/Ongoing/Finished status, readiness state, waiting age, and expected vs. actual queue/counter numbers | Gives staff one date-aware operational view while preserving one ticket per visit |
 | Manual Check Attestation | Records which staff member confirmed completion of the approved manual identity/e-card process and when | Stores no automated verification decision; check-in fails safely if the attestation cannot be saved |
@@ -384,6 +397,8 @@ Per the official constraint (Copilot Studio use not required during the hackatho
 ## 7. Guardrails & Human-in-the-Loop Requirements
 
 - Identity verification and e-card validation are never automated, under any configuration. This is a hard constraint, not a design preference.
+- Singpass authentication and Myinfo registration-field validation do not count as the mandatory in-person identity or e-card check. They reduce re-entry and identify inconsistent registration data before arrival; trained staff still complete and attest to the physical check.
+- A kiosk never independently determines clinical urgency or finalises identity, eligibility, or readiness. A supervising nurse may interrupt kiosk intake and trigger the clinic's approved urgent-care pathway at any time.
 - The interface only records a staff attestation after those checks are completed manually. It does not capture evidence, scan identity/e-card data, suggest a result, or treat a failed save as a successful check.
 - No eligibility/coverage/billing determination is finalised without staff confirmation.
 - Every extracted field is explainable — traceable to the specific part of the source document that produced it.
@@ -418,6 +433,7 @@ For the hackathon, these controls are demonstrated through the nine-fixture vali
 
 | Metric | Target |
 | --- | --- |
+| Registration pre-check | Every comparable synthetic Myinfo/booking field produces an auditable `source_validated`, `missing`, `expired`, `malformed`, or `conflict` outcome; no conflict silently overwrites the clinic registration record |
 | Document extraction accuracy | All nine split document fixtures produce schema-valid output or an explicit review reason; required extracted facts and selected checkboxes are correct against fixture expectations |
 | Patient matching safety | All six identifier-bearing document fixtures match the intended registration record; all three identifier-free fixtures require staff review rather than name-only auto-linking |
 | Dataset import integrity | 300 registration rows load once; 51 uniquely matched questionnaire people link by normalized identifier; six unmatched people are reported without silent patient creation; three dual-questionnaire patients retain both records |
