@@ -8,6 +8,8 @@ It turns unstructured coverage documents into an auditable readiness state, reso
 
 > **Pitch:** Epicenter finds administrative problems before they become queues. It combines document readiness, targeted intervention, single-ticket routing, and human-approved resource recommendations in one measurable workflow.
 
+The system is deliberately conservative: ambiguous or unusual documents route to staff review rather than being guessed, so the first-pass automation rate will be below 100% by design.
+
 The differentiator is not any individual dashboard, reminder, or allocation algorithm. It is the closed loop connecting them:
 
 ```text
@@ -35,6 +37,10 @@ Epicenter's narrower advantage is that it creates an earlier operational signal 
 - whether that action improved the patient journey without moving the bottleneck elsewhere.
 
 This makes operational intelligence an extension of the core readiness workflow rather than a disconnected BI product.
+
+Staff still confirm every determination. The system's contribution is collapsing 3–5 minutes of document reading into an estimated ~30-second confirmation action; that estimate is a demo assumption to validate with timed staff testing, not a measured clinic result.
+
+For booked patients, processing happens before arrival. For walk-ins, processing still happens at the counter, but document interpretation and rules matching are automated rather than performed manually; walk-ins receive the processing-speed benefit, not the pre-arrival benefit.
 
 ## 3. Hackathon Priorities
 
@@ -106,7 +112,7 @@ In the serial baseline, document handling blocks the counter and increases the w
 
 Replay the same patients with Epicenter. The system identifies the missing prerequisite before the appointment and sends one targeted reminder. The patient resolves it, and the readiness record records what changed and why.
 
-The ambiguous case is not guessed or marked ready. It remains visible for assisted review.
+The ambiguous case is not guessed or marked ready. It remains visible for assisted review, making clear that first-pass automation is intentionally below 100%.
 
 ### Scene 3 — Prove there is only one queue journey
 
@@ -171,7 +177,7 @@ Do not claim a percentage improvement unless the comparison uses identical arriv
 | “Will patients be sent to another queue?” | No. Review is an internal work state on the same visit and ticket; original waiting age and ordering are preserved. |
 | “Are the results real?” | The document fixtures test concrete behaviour. Flow improvements are seeded simulations and are labelled as such; a real clinic would require calibration and shadow validation. |
 | “Will staff get flooded with alerts?” | P0 demonstrates one owned, actionable, deduplicated, expiring alert and measures what happened to it. |
-| “Does AI decide coverage or staffing?” | No. Extraction produces evidence; deterministic rules gate readiness; authorised staff confirm sensitive outcomes and approve allocation changes. |
+| “Does AI decide coverage or staffing?” | No. Extraction produces evidence; deterministic rules gate readiness; authorised staff confirm every determination and approve allocation changes. Ambiguous or unusual documents route to review rather than being guessed. |
 
 ## 7. Delivery Order and Cut Line
 
@@ -200,4 +206,3 @@ Never cut the deterministic readiness gates, single-ticket invariant, human appr
 ## 8. Closing Message
 
 > Epicenter does not try to rebuild hospital infrastructure. It targets the administrative uncertainty that becomes tomorrow's queue. By resolving what it can before arrival, preserving one patient journey when it cannot, and turning the remaining workload into explainable human decisions, Epicenter makes outpatient operations more predictable, auditable, and fair.
-
