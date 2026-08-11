@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-11T12:33:03Z",
+  "title": "Design System: Epicenter",
+  "extensions": {
+    "colorMeta": {
+      "deep-clinic-green": {
+        "role": "primary",
+        "displayName": "Deep Clinic Green",
+        "canonical": "#12372d",
+        "tonalRamp": ["#0b211b", "#12372d", "#17473a", "#1f5a49", "#2d6d58", "#5d9475", "#c8dbc9", "#e0ebdc"]
+      },
+      "clinic-green": {
+        "role": "primary",
+        "displayName": "Clinic Green",
+        "canonical": "#17473a",
+        "tonalRamp": ["#0b211b", "#12372d", "#17473a", "#1f5a49", "#2d6d58", "#5d9475", "#c8dbc9", "#e0ebdc"]
+      },
+      "route-green": {
+        "role": "primary",
+        "displayName": "Route Green",
+        "canonical": "#2d6d58",
+        "tonalRamp": ["#0b211b", "#12372d", "#17473a", "#1f5a49", "#2d6d58", "#5d9475", "#c8dbc9", "#e0ebdc"]
+      },
+      "muted-green": {
+        "role": "primary",
+        "displayName": "Muted Green",
+        "canonical": "#5d9475",
+        "tonalRamp": ["#0b211b", "#12372d", "#17473a", "#1f5a49", "#2d6d58", "#5d9475", "#c8dbc9", "#e0ebdc"]
+      },
+      "green-rule-wash": {
+        "role": "neutral",
+        "displayName": "Green Rule Wash",
+        "canonical": "#c8dbc9",
+        "tonalRamp": ["#0b211b", "#12372d", "#17473a", "#1f5a49", "#2d6d58", "#5d9475", "#c8dbc9", "#e0ebdc"]
+      },
+      "green-surface": {
+        "role": "neutral",
+        "displayName": "Green Surface",
+        "canonical": "#e0ebdc",
+        "tonalRamp": ["#0b211b", "#12372d", "#17473a", "#1f5a49", "#2d6d58", "#5d9475", "#c8dbc9", "#e0ebdc"]
+      },
+      "cream-paper": {
+        "role": "neutral",
+        "displayName": "Cream Paper",
+        "canonical": "#f7f2e3",
+        "tonalRamp": ["#332f24", "#554f3d", "#776f56", "#9d9273", "#c6b997", "#ebe2cb", "#f7f2e3", "#fffdf5"]
+      },
+      "raised-paper": {
+        "role": "neutral",
+        "displayName": "Raised Paper",
+        "canonical": "#fffdf5",
+        "tonalRamp": ["#332f24", "#554f3d", "#776f56", "#9d9273", "#c6b997", "#ebe2cb", "#f7f2e3", "#fffdf5"]
+      },
+      "paper-edge": {
+        "role": "neutral",
+        "displayName": "Paper Edge",
+        "canonical": "#ebe2cb",
+        "tonalRamp": ["#332f24", "#554f3d", "#776f56", "#9d9273", "#c6b997", "#ebe2cb", "#f7f2e3", "#fffdf5"]
+      },
+      "operational-ink": {
+        "role": "neutral",
+        "displayName": "Operational Ink",
+        "canonical": "#17332b",
+        "tonalRamp": ["#0b1c17", "#17332b", "#29473e", "#53665f", "#788981", "#a7b2ad", "#d3dad6", "#f3f6f4"]
+      },
+      "muted-ink": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#53665f",
+        "tonalRamp": ["#0b1c17", "#17332b", "#29473e", "#53665f", "#788981", "#a7b2ad", "#d3dad6", "#f3f6f4"]
+      },
+      "attention-amber": {
+        "role": "secondary",
+        "displayName": "Attention Amber",
+        "canonical": "#a95816",
+        "tonalRamp": ["#301304", "#572307", "#7a340d", "#a95816", "#c87a31", "#dda760", "#f5dfbd", "#fff5e8"]
+      },
+      "attention-surface": {
+        "role": "secondary",
+        "displayName": "Attention Surface",
+        "canonical": "#f5dfbd",
+        "tonalRamp": ["#301304", "#572307", "#7a340d", "#a95816", "#c87a31", "#dda760", "#f5dfbd", "#fff5e8"]
+      },
+      "critical-red": {
+        "role": "tertiary",
+        "displayName": "Critical Red",
+        "canonical": "#9e3d36",
+        "tonalRamp": ["#2c0d0a", "#541a16", "#772a25", "#9e3d36", "#bc635a", "#d79087", "#f3d7d0", "#fff2ef"]
+      },
+      "critical-surface": {
+        "role": "tertiary",
+        "displayName": "Critical Surface",
+        "canonical": "#f3d7d0",
+        "tonalRamp": ["#2c0d0a", "#541a16", "#772a25", "#9e3d36", "#bc635a", "#d79087", "#f3d7d0", "#fff2ef"]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#262626", "#484848", "#6a6a6a", "#8d8d8d", "#b0b0b0", "#d2d2d2", "#eeeeee", "#ffffff"]
+      },
+      "hairline-rule": {
+        "role": "neutral",
+        "displayName": "Hairline Rule",
+        "canonical": "rgba(23, 71, 58, 0.2)",
+        "tonalRamp": ["rgba(23, 71, 58, 0.8)", "rgba(23, 71, 58, 0.65)", "rgba(23, 71, 58, 0.5)", "rgba(23, 71, 58, 0.38)", "rgba(23, 71, 58, 0.28)", "rgba(23, 71, 58, 0.2)", "rgba(23, 71, 58, 0.12)", "rgba(23, 71, 58, 0.06)"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Operational Display",
+        "purpose": "Large page titles and first-view orientation."
+      },
+      "headline": {
+        "displayName": "Board Headline",
+        "purpose": "Workboard, decision, result, and activity headings."
+      },
+      "title": {
+        "displayName": "Route Title",
+        "purpose": "Ticket identifiers, phase names, and local panel titles."
+      },
+      "body": {
+        "displayName": "Operational Body",
+        "purpose": "Instructions, evidence, explanations, and controls."
+      },
+      "label": {
+        "displayName": "State Label",
+        "purpose": "Status, source, metric, field, and route labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "ambient-work-surface",
+        "value": "0 18px 45px rgba(40, 55, 46, 0.12)",
+        "purpose": "One restrained lift for complete workboards and split workspaces."
+      },
+      {
+        "name": "primary-action",
+        "value": "0 8px 18px rgba(23, 71, 58, 0.22)",
+        "purpose": "Default lift for primary actions."
+      },
+      {
+        "name": "primary-action-hover",
+        "value": "0 11px 24px rgba(23, 71, 58, 0.25)",
+        "purpose": "Hover emphasis for primary actions."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-change",
+        "value": "180ms ease-out",
+        "purpose": "Color, shadow, and one-pixel lift on controls and selectable rows."
+      },
+      {
+        "name": "route-signal",
+        "value": "2.4s cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Moves the allocation signal between current and proposed wait states."
+      },
+      {
+        "name": "loading-pulse",
+        "value": "1.4s ease-in-out infinite alternate",
+        "purpose": "Low-contrast loading-board pulse."
+      }
+    ],
+    "breakpoints": [
+      { "name": "compact-form", "value": "620px" },
+      { "name": "mobile-board", "value": "760px" },
+      { "name": "stack-kiosk", "value": "860px" },
+      { "name": "mobile-shell", "value": "900px" },
+      { "name": "stack-review", "value": "980px" },
+      { "name": "wrap-dashboard", "value": "1180px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The default primary action on light or dark operational surfaces.",
+      "html": "<button class=\"ds-btn-primary\">Approve move<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m5 12 4 4L19 6\"/></svg></button>",
+      "css": ".ds-btn-primary { align-items:center; background:var(--green-900); border:0; border-radius:8px; box-shadow:0 8px 18px rgba(23,71,58,.22); color:var(--cream-50); cursor:pointer; display:inline-flex; font:650 16px/1.2 var(--font-body); gap:12px; justify-content:center; min-height:44px; padding:0 18px; transition:background-color 180ms ease-out,box-shadow 180ms ease-out,transform 180ms ease-out; } .ds-btn-primary svg { fill:none; height:17px; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2.2; width:17px; } .ds-btn-primary:hover { background:var(--green-800); box-shadow:0 11px 24px rgba(23,71,58,.25); transform:translateY(-1px); } .ds-btn-primary:active { transform:translateY(0); } .ds-btn-primary:focus-visible { outline:3px solid #d18b32; outline-offset:3px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A bordered action for refresh, keep, or reversible alternatives.",
+      "html": "<button class=\"ds-btn-secondary\">Refresh board<svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7\"/></svg></button>",
+      "css": ".ds-btn-secondary { align-items:center; background:var(--cream-50); border:0; border-radius:8px; box-shadow:inset 0 0 0 1px var(--green-700); color:var(--green-900); cursor:pointer; display:inline-flex; font:650 16px/1.2 var(--font-body); gap:12px; justify-content:center; min-height:44px; padding:0 18px; transition:background-color 180ms ease-out,transform 180ms ease-out; } .ds-btn-secondary svg { fill:none; height:17px; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2.2; width:17px; } .ds-btn-secondary:hover { background:var(--green-100); transform:translateY(-1px); } .ds-btn-secondary:active { transform:translateY(0); } .ds-btn-secondary:focus-visible { outline:3px solid #d18b32; outline-offset:3px; }"
+    },
+    {
+      "name": "Ready Status",
+      "kind": "chip",
+      "refersTo": "status-ready",
+      "description": "A text-and-icon state marker for confirmed readiness, approval, or on-track service.",
+      "html": "<span class=\"ds-status-ready\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m8 12 2.5 2.5L16 9\"/></svg>Ready</span>",
+      "css": ".ds-status-ready { align-items:center; background:var(--green-100); border-radius:999px; color:var(--green-950); display:inline-flex; font:700 .78rem/1 var(--font-body); gap:6px; padding:7px 10px; white-space:nowrap; } .ds-status-ready svg { fill:none; height:14px; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2.2; width:14px; }"
+    },
+    {
+      "name": "Needs Review Status",
+      "kind": "chip",
+      "refersTo": "status-review",
+      "description": "The administrative exception marker, always pairing amber with an icon and explicit text.",
+      "html": "<span class=\"ds-status-review\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M10.3 3.7 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.7a2 2 0 0 0-3.4 0Z\"/><path d=\"M12 9v4m0 3h.01\"/></svg>Needs review</span>",
+      "css": ".ds-status-review { align-items:center; background:var(--amber-soft); border-radius:999px; color:#713807; display:inline-flex; font:700 .78rem/1 var(--font-body); gap:6px; padding:7px 10px; white-space:nowrap; } .ds-status-review svg { fill:none; height:14px; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2.2; width:14px; }"
+    },
+    {
+      "name": "Active Navigation Route",
+      "kind": "nav",
+      "description": "The cream route marker inside the fixed deep-green application rail.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-active\" href=\"#\" aria-current=\"page\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><rect x=\"4\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"14\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"4\" y=\"14\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"6\" height=\"6\" rx=\"1\"/></svg><span>Operations</span></a></nav>",
+      "css": ".ds-nav { background:var(--green-950); padding:18px; width:230px; } .ds-nav-active { align-items:center; background:var(--cream-50); border-radius:8px; color:var(--green-950); display:flex; font:600 .94rem/1.2 var(--font-body); gap:12px; min-height:46px; padding:0 12px; text-decoration:none; } .ds-nav-active svg { fill:none; height:19px; stroke:currentColor; stroke-width:2; width:19px; } .ds-nav-active:focus-visible { outline:3px solid #d18b32; outline-offset:3px; }"
+    },
+    {
+      "name": "Standard Text Input",
+      "kind": "input",
+      "refersTo": "input-standard",
+      "description": "The kiosk text field for patient and supervisor data.",
+      "html": "<label class=\"ds-field\"><span>Patient name</span><input placeholder=\"Enter the patient’s full name\" /></label>",
+      "css": ".ds-field { color:var(--ink); display:block; font:700 .85rem/1.4 var(--font-body); } .ds-field input { background:var(--cream-50); border:1px solid var(--green-500); border-radius:8px; color:var(--ink); display:block; font:400 1rem/1.5 var(--font-body); margin-top:6px; min-height:48px; padding:0 14px; width:100%; } .ds-field input::placeholder { color:#66786f; } .ds-field input:focus-visible { outline:3px solid #d18b32; outline-offset:3px; }"
+    },
+    {
+      "name": "Clinic Metric Tile",
+      "kind": "custom",
+      "description": "A dense deep-green metric cell within the continuous clinic summary band.",
+      "html": "<div class=\"ds-metric\"><span>Ready before arrival</span><strong>78%</strong><small>18 of 23 booked patients</small><em>+9% vs baseline</em></div>",
+      "css": ".ds-metric { background:var(--green-900); color:var(--cream-50); min-height:148px; padding:22px 24px; position:relative; width:250px; } .ds-metric>span { color:var(--green-100); display:block; font:600 .82rem/1.2 var(--font-body); } .ds-metric strong { display:block; font:700 4.1rem/.9 var(--font-display); letter-spacing:-.025em; margin:12px 0 8px; } .ds-metric small { color:var(--green-100); display:block; font:400 .78rem/1.2 var(--font-body); } .ds-metric em { color:var(--cream-50); display:block; font:700 .75rem/1.2 var(--font-body); margin-top:8px; }"
+    },
+    {
+      "name": "Patient Ticket Route",
+      "kind": "custom",
+      "description": "The signature row preserving ticket, patient, route, stage, wait, and readable state.",
+      "html": "<article class=\"ds-ticket\"><div class=\"ds-ticket-patient\"><strong>Q-018</strong><span>Amir Loh</span><small>Walk-in</small></div><div><span>Review 2</span><small>Actual route</small></div><div><span>Voucher review</span><small>Confirmation pending</small></div><div><span>18 min</span></div><div><span class=\"ds-ticket-status\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M10.3 3.7 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.7a2 2 0 0 0-3.4 0Z\"/><path d=\"M12 9v4m0 3h.01\"/></svg>Needs review</span></div></article>",
+      "css": ".ds-ticket { background:var(--cream-50); border-top:1px solid var(--rule); color:var(--ink); display:grid; font-family:var(--font-body); grid-template-columns:1.15fr .7fr 1.2fr .62fr .95fr; min-height:86px; position:relative; } .ds-ticket::before { background:var(--amber); content:\"\"; height:1px; left:0; position:absolute; top:50%; width:20px; } .ds-ticket>div { align-content:center; display:grid; min-width:0; padding:14px 12px; } .ds-ticket>div+div { border-left:1px solid var(--rule); } .ds-ticket span,.ds-ticket strong,.ds-ticket small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ds-ticket-patient strong { color:var(--green-800); font:700 1.2rem/1 var(--font-display); letter-spacing:.025em; } .ds-ticket span { font-weight:650; } .ds-ticket small { color:var(--ink-soft); font-size:.76rem; margin-top:2px; } .ds-ticket-status { align-items:center; background:var(--amber-soft); border-radius:999px; color:#713807; display:inline-flex!important; font-size:.78rem; gap:6px; padding:7px 10px; width:max-content; } .ds-ticket-status svg { fill:none; height:14px; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2.2; width:14px; }"
+    },
+    {
+      "name": "Kiosk Progress Step",
+      "kind": "custom",
+      "description": "A numbered route stage that makes supervised intake progress textual and visual.",
+      "html": "<ol class=\"ds-steps\"><li class=\"ds-step-current\" aria-current=\"step\"><span>1</span><strong>Supervised intake</strong></li><li><span>2</span><strong>Processing</strong></li></ol>",
+      "css": ".ds-steps { background:var(--green-950); color:var(--green-200); display:grid; grid-template-columns:1fr 1fr; list-style:none; margin:0; padding:0; } .ds-steps li { align-items:center; display:flex; gap:10px; min-height:66px; padding:12px 18px; position:relative; } .ds-steps li+li::before { background:rgba(255,253,245,.2); bottom:15px; content:\"\"; left:0; position:absolute; top:15px; width:1px; } .ds-steps li>span { align-items:center; border:1px solid var(--green-500); border-radius:50%; display:flex; font:400 .76rem/1 var(--font-body); height:28px; justify-content:center; width:28px; } .ds-steps strong { font:700 .84rem/1.2 var(--font-body); } .ds-steps .ds-step-current { background:var(--cream-50); color:var(--green-950); } .ds-steps .ds-step-current>span { background:var(--green-700); border-color:var(--green-700); color:var(--cream-50); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Clinical Wayfinding as Operating System",
+    "overview": "Epicenter presents clinic administration as a legible route through states, evidence, and staff decisions. Warm cream paper and a faint square grid keep the interface humane, while deep clinic-green bands, fixed columns, hairline rules, numbered steps, and explicit status markers make every operational path easy to scan.\n\nThe system is calm rather than sterile and precise rather than decorative. Its strongest visual moments are functional: the persistent navigation rail, condensed room-sign headings, the patient readiness board, the one-ticket route, and the dark allocation decision panel. Administrative automation stays visually subordinate to clear staff confirmation and escalation language.",
+    "keyCharacteristics": [
+      "Cream paper and 32px grid surfaces with deep-green wayfinding bands.",
+      "Condensed uppercase display type paired with a plain, highly legible body face.",
+      "Flat and tonal layouts structured by hairline rules, with selective ambient lift for major work surfaces.",
+      "Explicit route, step, status, ticket, evidence, and human-decision markers.",
+      "Responsive compositions that preserve operational hierarchy on desktop, tablet, and narrow mobile screens."
+    ],
+    "rules": [
+      { "name": "The Route Color Rule", "body": "Green shows the normal administrative route; amber and red are reserved for states that require attention or intervention.", "section": "colors" },
+      { "name": "The Paper-and-Band Rule", "body": "Use cream for work and deep green for orientation, headers, metrics, and consequential decisions.", "section": "colors" },
+      { "name": "The Room-Sign Rule", "body": "Use condensed uppercase type for orientation and operational hierarchy, not for paragraphs or recovery instructions.", "section": "typography" },
+      { "name": "The Plain-Language Rule", "body": "Supporting copy remains sentence case, short, and explicit about the person, state, or next action.", "section": "typography" },
+      { "name": "The Route-Before-Decoration Rule", "body": "Grid lines, dividers, columns, and bands must clarify patient or staff movement through the system.", "section": "layout" },
+      { "name": "The Responsive Recomposition Rule", "body": "On narrow screens, preserve state and route hierarchy by changing the grid structure; do not collapse operational data into an undifferentiated card stack.", "section": "layout" },
+      { "name": "The Tonal-First Rule", "body": "Establish hierarchy with fields, bands, and rules before adding shadow.", "section": "elevation" },
+      { "name": "The One-Level Lift Rule", "body": "Ambient elevation belongs to complete work surfaces, not to every row, metric, or content fragment.", "section": "elevation" },
+      { "name": "The Board-and-Control Rule", "body": "Keep operational surfaces square; reserve rounded geometry for things a person selects, edits, or reads as a compact state.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do frame every workflow with an explicit route, stage, state, or next-action marker.",
+      "Do preserve cream paper, the 32px grid, and deep-green bands as the dominant material system.",
+      "Do use hairline rules and fixed alignment to make dense operational data scannable.",
+      "Do pair every colored status with readable text and an icon or shape cue.",
+      "Do re-compose dense boards on mobile while keeping ticket, route, stage, wait, and status visible.",
+      "Do reserve the strongest deep-green field for orientation and decisions that deserve staff attention."
+    ],
+    "donts": [
+      "Don't turn the interface into a generic floating-card dashboard; the implemented system is a connected wayfinding board.",
+      "Don't use amber or red as decorative accents; they indicate attention, exception, rejection, or escalation.",
+      "Don't round major boards, metric bands, evidence tables, or allocation surfaces.",
+      "Don't add shadows to individual rows and content fragments when a tonal field or rule communicates the hierarchy.",
+      "Don't use condensed uppercase typography for long instructions or evidence explanations.",
+      "Don't hide human confirmation, administrative-only scope, or the persistent patient ticket behind color-only shorthand."
+    ]
+  }
+}

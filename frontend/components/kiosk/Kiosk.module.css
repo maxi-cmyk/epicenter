@@ -1,0 +1,280 @@
+.kioskPage {
+  margin: 0 auto;
+  max-width: 1280px;
+}
+
+.steps {
+  background: var(--green-950);
+  color: var(--green-200);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.steps li {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-height: 66px;
+  padding: 12px 18px;
+  position: relative;
+}
+
+.steps li + li::before {
+  background: rgba(255, 253, 245, 0.2);
+  content: "";
+  inset: 15px auto 15px 0;
+  position: absolute;
+  width: 1px;
+}
+
+.steps li > span {
+  align-items: center;
+  border: 1px solid var(--green-500);
+  border-radius: 50%;
+  display: flex;
+  font-size: 0.76rem;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.steps strong {
+  font-size: 0.84rem;
+}
+
+.steps .currentStep {
+  background: var(--cream-50);
+  color: var(--green-950);
+}
+
+.steps .currentStep > span,
+.steps .completeStep > span {
+  background: var(--green-700);
+  border-color: var(--green-700);
+  color: var(--cream-50);
+}
+
+.kioskGrid {
+  background: var(--cream-50);
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+}
+
+.kioskForm {
+  padding: 36px clamp(24px, 5vw, 58px) 44px;
+}
+
+.kioskForm fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.kioskForm legend,
+.kioskResult h2 {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 24px;
+  text-transform: uppercase;
+}
+
+.kioskForm label:not(.fileField) {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.kioskForm input[type="text"],
+.kioskForm input:not([type]) {
+  background: var(--cream-50);
+  border: 1px solid var(--green-500);
+  border-radius: 8px;
+  color: var(--ink);
+  display: block;
+  min-height: 48px;
+  padding: 0 14px;
+  width: 100%;
+}
+
+.kioskForm input::placeholder {
+  color: #66786f;
+}
+
+.fileField {
+  cursor: pointer;
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 8px 0 22px;
+}
+
+.fileField > span {
+  background: var(--green-100);
+  border: 1px dashed var(--green-700);
+  display: block;
+  margin-top: 6px;
+  padding: 20px;
+}
+
+.fileField strong,
+.fileField small {
+  display: block;
+}
+
+.fileField small {
+  color: var(--ink-soft);
+  font-weight: 400;
+  margin-top: 3px;
+}
+
+.fileField input {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.urgencyGate {
+  border-bottom: 1px solid var(--rule);
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto 1fr;
+  margin: 26px 0 24px;
+  padding: 20px 0;
+}
+
+.urgencyGate > svg {
+  color: var(--green-800);
+}
+
+.urgencyGate p {
+  color: var(--ink-soft);
+  margin: 4px 0 12px;
+}
+
+.urgencyGate label {
+  align-items: center;
+  display: flex !important;
+  gap: 8px;
+  margin: 0 !important;
+}
+
+.urgencyGate input {
+  height: 20px;
+  width: 20px;
+}
+
+.escalationNotice,
+.error {
+  background: var(--red-soft);
+  color: #6f211c;
+  font-weight: 650;
+  padding: 14px;
+}
+
+.kioskResult {
+  background: var(--green-100);
+  border-left: 1px solid var(--rule);
+  padding: 38px clamp(24px, 4vw, 44px);
+}
+
+.ticketLabel {
+  color: var(--green-700);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+}
+
+.ticketNumber {
+  color: var(--green-900);
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(5rem, 12vw, 8rem);
+  letter-spacing: -0.03em;
+  line-height: 0.8;
+  margin-bottom: 24px;
+}
+
+.kioskResult h2 {
+  font-size: 2.5rem;
+  line-height: 0.95;
+  margin-bottom: 14px;
+}
+
+.kioskResult ol {
+  counter-reset: steps;
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+}
+
+.kioskResult li {
+  border-top: 1px solid var(--rule);
+  counter-increment: steps;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 28px 1fr;
+  padding: 14px 0;
+}
+
+.kioskResult li::before {
+  color: var(--green-800);
+  content: counter(steps, decimal-leading-zero);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.kioskResult dl {
+  border-top: 1px solid var(--rule);
+  margin: 26px 0;
+}
+
+.kioskResult dl > div {
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 12px 0;
+}
+
+.kioskResult dt {
+  color: var(--ink-soft);
+}
+
+.kioskResult dd {
+  font-weight: 700;
+  margin: 0;
+  text-align: right;
+}
+
+@media (max-width: 860px) {
+  .kioskGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .kioskResult {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+}
+
+@media (max-width: 620px) {
+  .steps {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .steps li:nth-child(3)::before {
+    display: none;
+  }
+
+  .kioskForm {
+    padding: 28px 18px 34px;
+  }
+}
