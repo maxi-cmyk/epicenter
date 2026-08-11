@@ -285,13 +285,18 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 │ PASS  Patient details       PASS  Questionnaire                 │
 │ FAIL  Coverage document     —     Eligibility match             │
 │                                                                  │
-│ [Send upload reminder] [Upload for patient] [Open review]       │
+│ [Send upload reminder] [Notify patient of issue ▾] [Open review]│
+│ [Upload for patient]                                             │
 │ [Reschedule] [Cancel appointment] [Record no-show]              │
+│                                                                  │
+│ Notifications sent                                               │
+│ 09 Aug 08:02 · document_expired · SMS · Delivered · No action yet│
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 - This replaces the duplicate pre-arrival list: §2.2 owns list-level status; this screen owns one appointment's prerequisites and actions.
 - Reminder delivery shows sending/sent/failed states and retry. Reschedule retains an audit link to the old date; cancel/no-show require confirmation and move the row into Finished with its outcome.
+- **Notify patient of issue** opens a picker limited to the curated, versioned category list (PRD §4.4: `document_unclear`, `document_incomplete`, `document_expired`, `document_type_mismatch`). Staff cannot type a free-text message into this channel — only select a category, so the patient never receives a raw internal review reason, source excerpt, or confidence value. Sending writes a `patient_notifications` row (§4) and an `audit_log` entry (`action_type = send_patient_notification`); the "Notifications sent" list on this screen reads that same table, so staff can see exactly what a patient was told before calling them to a counter.
 
 ### 2.10 Questionnaire and Consent Prefill
 
@@ -497,6 +502,7 @@ Patient screens are mobile-first and expose only the signed-in/token-scoped pati
 
 - The initial state says “Checking for previous coverage…” without exposing data. No prior match proceeds to §3.3; an ambiguous match reveals nothing and also proceeds to upload while flagging staff review.
 - Expired/used/invalid token states explain that the link no longer works and direct the patient to contact the clinic. Reuse success confirms receipt but does not claim eligibility approval.
+- **Reopening a link with an unresolved issue notification** shows a banner above the normal check-first content instead of the usual coverage question, using only the curated category's patient-safe text — e.g. "The photo of your document wasn't clear enough for us to read. Please retake and reupload." — sourced from `patient_notifications` (§4), never the internal `readiness_reasons` value. The banner routes straight to §3.3 upload; there is no "still the same?" reuse question in this state, since the prior upload is the thing that needs replacing. Categories that map to a staff-side issue (e.g. an identifier conflict) never reach this screen as a banner — those stay in the Assisted Review worklist (§2.4) and the patient instead sees the ordinary "under review" outcome with no action prompt.
 
 ### 3.3 Coverage Upload and Outcomes
 
@@ -755,6 +761,30 @@ coverage_documents
 ├── confirmed_by_staff_id (FK, nullable)
 └── confirmed_at
 
+patient_notifications
+├── id (uuid, PK)
+├── patient_id (FK → patients)
+├── queue_entry_id (FK → queue_entries, nullable)
+├── coverage_document_id (FK → coverage_documents, nullable)
+├── upload_link_id (FK → upload_links, nullable)
+├── category                     -- one of the fixed, versioned patient-safe categories:
+│                                    "document_unclear" / "document_incomplete" /
+│                                    "document_expired" / "document_type_mismatch"
+├── category_map_version          -- points at the approved configuration_releases row
+│                                     for configuration_type = "patient_notification_category_map"
+├── channel                      -- "sms" / "email"
+├── sent_by_staff_id (FK → staff_accounts, nullable)  -- null when system-triggered
+├── delivery_status              -- queued / sent / delivered / failed
+├── delivery_failure_reason (nullable)
+├── patient_action               -- none / reopened_link / resubmitted / expired_unactioned
+├── resulting_coverage_document_id (FK → coverage_documents, nullable)
+├── sent_at
+└── actioned_at (nullable)
+    -- backs the "Notify patient of issue" action (design §2.9) and the reopened-link
+    -- banner (design §3.2). `category` is deliberately a closed enum, never free text,
+    -- so a patient can never receive a raw internal readiness_reason, source excerpt,
+    -- or confidence value (PRD §4.4/§7). Every row also produces an audit_log entry.
+
 coverage_reuse_decisions
 ├── id (uuid, PK)
 ├── patient_id (FK → patients)
@@ -1011,7 +1041,7 @@ audit_log
 │                                "assign_expected_counter" / "record_manual_checks" /
 │                                "check_in" / "reassign_counter" / "confirm_billing" /
 │                                "reschedule_visit" / "cancel_visit" / "record_no_show" /
-│                                "complete_visit"
+│                                "complete_visit" / "send_patient_notification"
 ├── target_table
 ├── target_id
 ├── details (jsonb)
@@ -1035,6 +1065,7 @@ audit_log
 - `downtime_intake_records` is a bounded recovery store, not a parallel queue database. Its original waiting time survives reconciliation into one canonical `queue_entries` row.
 - `configuration_releases` applies shadow validation, maker/checker approval, effective dates, governing-version attribution, and rollback consistently across rules, prompts, mappings, alerts, and allocation constraints.
 - `coverage_reuse_decisions` records the check-first branch independently of the source document. Reuse points to the prior document but creates a fresh appointment-scoped `eligibility_matches` row, so an old coverage decision is never silently carried forward.
+- `patient_notifications` keeps the patient-facing issue message on a closed, versioned category enum rather than free text, so the same `configuration_releases` maker/checker/rollback pattern used for eligibility rules and readiness gates also governs what wording a patient can ever receive (`configuration_type = "patient_notification_category_map"`). Every row is both the delivery record (§2.9, §3.2) and an audit trail entry — staff can see what was sent, when, and whether the patient acted, without that record ever containing the internal `readiness_reasons` value it was derived from.
 - `touchpoint_reuse_log` is the mechanism that makes "we eliminated duplicate entry across all five touchpoints" a provable, queryable fact in the demo — not just the questionnaire-only claim an earlier draft of this system could support.
 - `upload_links` and `patient_accounts` are two intentionally different mechanisms for two intentionally different needs: a one-time, unauthenticated, appointment-scoped token for the common case (submit a document ahead of a visit), versus a real but small, fixed-pool account for anything requiring returning access (queue status, payment, records history). Collapsing these into one "patient login" table would overstate what's actually been designed — keeping them separate keeps that honest.
 - `billing_reviews` separates staff-confirmed billing from patient payment. `payments.status` uses explicit `mock_*` values so success/failure/receipt states remain visibly demo-only in data, not only in prose that a reader might skip.
