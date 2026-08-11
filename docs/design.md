@@ -396,6 +396,7 @@ Staff views use a persistent desktop/tablet sidebar: **Queue**, **Review**, **Up
 - Staff tables provide search, filters, sorting, pagination/virtualisation for large lists, skeleton loading, actionable errors, and meaningful empty states.
 - Desktop is primary; tablet collapses the sidebar; narrow layouts turn tables into labelled cards without horizontal scrolling. A skip-to-main link bypasses the persistent navigation, visible focus follows visual order, and returning from detail restores list state.
 - Production icons use one SVG icon set. Status always includes text plus icon/shape; wireframe words such as PASS, REVIEW, ALERT, and FAIL are the accessible labels, not color-dependent decoration.
+- Primary action buttons (confirm, check-in, record confirmation, approve/reject allocation) use a minimum 44×44 px target with generous internal padding — bigger than the row-level controls in dense tables — since these are the commit actions staff repeat all day under time pressure. Text/icon color pairs meet WCAG AA contrast (4.5:1 normal text, 3:1 large text/UI components) and the PASS/REVIEW/ALERT/FAIL palette is verified against protanopia, deuteranopia, and tritanopia simulation so no two states are distinguishable only by a red/green or red/orange difference.
 - Interruptive alerts are reserved for conditions requiring immediate action. Every alert has an owner, severity, action, deduplication key, expiry, and resolution state; a repeated event updates the existing alert rather than stacking another modal/banner.
 - Nonurgent conditions appear in their owning worklist or digest. Alert-governance views report volume, repeats, acknowledgement, action, dismissal, and expiry by alert type without ranking individual staff.
 
@@ -603,6 +604,7 @@ Patient screens are mobile-first and expose only the signed-in/token-scoped pati
 
 - Minimum 44×44 px controls, visible focus, labelled inputs with appropriate email/number/tel keyboards, inline errors, screen-reader announcements for queue/counter changes, and no status communicated by color alone.
 - Layout supports 375 px width through tablet without horizontal scroll, respects browser zoom/dynamic text, safe areas, reduced motion, and light/dark contrast. Navigation labels remain visible; structural emoji are replaced with consistent SVG icons in implementation.
+- Primary patient actions — submit/upload, pay now, refresh, yes/no coverage choices — use large buttons well above the 44×44 px floor (full-width or near-full-width on mobile, with clear spacing from adjacent controls), since patients may be older, unfamiliar with the interface, or filling this in while queuing rather than seated at a desk. All button and status colors meet WCAG AA contrast minimums and are checked against protanopia, deuteranopia, and tritanopia simulation; queue/readiness states (ready, needs review, called, delayed) are never told apart by hue alone.
 
 ---
 
