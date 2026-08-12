@@ -36,7 +36,7 @@ Epicenter's narrower advantage is that it creates an earlier operational signal 
 - whether qualified capacity should be temporarily rebalanced; and
 - whether that action improved the patient journey without moving the bottleneck elsewhere.
 
-This makes operational intelligence an extension of the core readiness workflow rather than a disconnected BI product.
+This makes operational intelligence an extension of the core readiness workflow rather than a disconnected dashboard product.
 
 Staff still confirm every determination. The system's contribution is collapsing 3–5 minutes of document reading into an estimated ~30-second confirmation action; that estimate is a demo assumption to validate with timed staff testing, not a measured clinic result.
 
@@ -73,7 +73,8 @@ P0 must form one complete, credible vertical slice. If a feature does not streng
 
 | Extension | Why it is P1 |
 | --- | --- |
-| Power BI or Fabric semantic model and MCP access | Strengthens enterprise analytics but does not prove the core patient outcome |
+| Additional native analytics charts and OpenAI assistant questions | Useful extensions after the core operational loop is proven |
+| Power BI/Fabric aggregate analytics projection | Potential multi-clinic scale option after native metrics are stable; not needed for the core demo and does not require a Power BI MCP |
 | Calibrated forecasting across multiple days or clinics | Requires representative historical operational data |
 | Multiple allocation policies and confidence intervals | Useful for evaluation after the deterministic policy is validated |
 | Rich alert-governance administration | P0 needs only one well-governed alert and visible action-rate evidence |
@@ -81,6 +82,8 @@ P0 must form one complete, credible vertical slice. If a feature does not streng
 | Live SMS or email provider | Adds delivery risk without changing the judged workflow logic |
 | Production EHR, Clinic Assist, NEHR, insurer, or TPA adapters | Requires access, governance, reconciliation, security review, and partner participation |
 | Multi-clinic command centre | Risks making Epicenter look like a smaller copy of established capacity-management products |
+
+Copilot Studio compatibility is a deployment/publication release gate, not a P1 product feature. Development uses OpenAI and the native dashboard; Copilot Studio connects only to the deployed custom Epicenter MCPs. Microsoft-hosted MCPs are not part of the product architecture.
 
 ### Explicitly Deferred
 
@@ -190,11 +193,12 @@ Build in this order:
 5. minimal operational metrics;
 6. one constrained allocation recommendation;
 7. failure-state and downstream-bottleneck demonstration;
-8. Copilot Studio calling one safe Epicenter MCP read tool.
+8. the authenticated Epicenter assistant using OpenAI to call one safe, read-only operations tool.
+9. deployment evidence that the same MCP contract is discoverable and callable from Copilot Studio, without making Copilot part of the local application path.
 
 If time runs short, cut in this order:
 
-1. richer Power BI/Fabric integration;
+1. Power BI/Fabric implementation and additional assistant tools or analytics visualizations;
 2. additional charts and filters;
 3. multiple recommendation types;
 4. live message delivery;

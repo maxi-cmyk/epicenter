@@ -13,6 +13,8 @@ Deliver Epicenter as two independent frontend applications—patient and nurse�
 | Expanded operational schema | Live and verified | The follow-up migration, operational seed, and expanded verification SQL all passed against the synthetic Supabase project. |
 | Shared backend boundary | Live and verified | Supabase repositories, transactional RPC calls, concurrency controls, audit, and protected staff routes passed local tests and the live persistence verifier. |
 | Auth | Complete locally | Patient signup/mapping, staff clinic/role authorization, strict Clerk reverification, and the real-session authorization suite pass against the development Clerk and hosted Supabase projects. Production credential handoff remains a deployment concern. |
+| AI and MCP integration | Scoped, not started | OpenAI is the development/application LLM; custom Streamable HTTP MCP endpoints will remain client-neutral and be verified in Copilot Studio after deployment. |
+| Analytics presentation | Scoped, not started | Build the native dashboard and simulator from FastAPI/Supabase contracts. Power BI/Fabric is deferred to a future aggregate-only scale option. |
 | Deployment | Not started | Everything is still local. Railway and Vercel have not been deployed. |
 
 ## Scope
@@ -35,6 +37,8 @@ Deliver Epicenter as two independent frontend applications—patient and nurse�
 - Online learning from live patient documents.
 - Live Clinic Assist, NEHR, TPA, or payment integrations.
 - Production-scale patient identity and access management.
+- Power BI/Fabric implementation during development or as a P0 dependency.
+- Copilot Studio as a local runtime or a dependency of the patient/nurse applications; only deployment/publication compatibility is required.
 
 ## Tasks
 
@@ -272,7 +276,7 @@ Nurse validation and workload:
 
 **Status: Partial — the three initial versioned snapshots/runs and nurse-only read API exist; the engine, animated tab, metric adapters, and comparison controls remain**
 
-The Simulator is a dedicated nurse-panel tab for replaying a clinic day as a controllable animation. It should make the operational BI measures understandable by showing the same queue, wait, throughput, utilisation, bottleneck, and allocation data both as moving clinic flow and as synchronized charts. Queue movement must come from the deterministic simulation event log—not from animation timers or Power BI refreshes—while de-identified aggregates may come from Power BI when available or the FastAPI/Supabase metric adapter as the normal fallback.
+The Simulator is a dedicated nurse-panel tab for replaying a clinic day as a controllable animation. It should make operational measures understandable by showing the same queue, wait, throughput, utilisation, bottleneck, and allocation data both as moving clinic flow and as synchronized charts. Queue movement must come from the deterministic simulation event log—not from animation timers or model output—while de-identified aggregates come from the shared FastAPI/Supabase metric adapter.
 
 Seeded starting scenarios, kept first:
 
@@ -290,11 +294,11 @@ Simulation engine and data contracts:
 
 - [ ] Expand the minimal seeded payloads into validated scenario fixtures containing arrivals, stage/service-time samples, resources, breaks, routing rules, interventions, assumptions, and a timezone-aware simulation window.
 - [ ] Implement a pure deterministic discrete-event engine whose event log is the source of truth for the animation and derived metrics.
-- [ ] Freeze the chosen versioned snapshot at run start so database or BI refreshes cannot change an in-progress replay.
+- [ ] Freeze the chosen versioned snapshot at run start so database or metric refreshes cannot change an in-progress replay.
 - [ ] Keep the simulator in isolated synthetic types/storage and deny it write access to operational patient, queue, staffing, and audit tables.
 - [ ] Add one shared de-identified metric contract for queue length, oldest wait, P50/P90 wait, throughput, work in progress, utilisation, readiness, review clearance, fairness gap, and allocation effect.
-- [ ] Add metric adapters for FastAPI/Supabase and, when the tenant gate is available, the Power BI aggregate model; label the active source, snapshot time, assumptions, and stale/unavailable state.
-- [ ] Ensure the normal database-backed dashboard and simulator remain usable when Power BI MCP is unavailable, delayed, or disabled.
+- [ ] Use the shared FastAPI/Supabase metric adapter for the dashboard, custom Operations MCP, and simulator; label the source, snapshot time, assumptions, and stale/unavailable state.
+- [ ] Ensure the normal database-backed dashboard and simulator remain usable when OpenAI or either custom MCP endpoint is unavailable, delayed, or disabled.
 
 Simulator tab and playback:
 
@@ -318,27 +322,33 @@ Decisions intentionally left for later:
 
 - [ ] Choose the clinic day/date window to simulate and document why it is representative; do not hard-code that product decision into the engine.
 - [ ] Review whether the current seeded `dynamic_allocation` run should remain the labelled ideal-state comparison, be renamed as a recommended-policy scenario, or be replaced after the representative day and assumptions are chosen.
-- [ ] Decide whether Power BI is the primary presentation source or an optional analytics overlay after tenant, licensing, refresh-latency, and MCP availability are confirmed.
+- [ ] Confirm the native Next.js dashboard as the sole analytics presentation layer and select the chart library after accessibility, bundle-size, animation, and testing tradeoffs are evaluated.
 
 Validation and safety:
 
 - [ ] Prove same scenario/version/seed/configuration produces the same event log and metrics after reset or replay.
 - [ ] Prove one patient retains exactly one ticket and original waiting age, patient counts are conserved, resources cannot serve two patients, and queues/metrics reconcile exactly with the exported event log.
 - [ ] Prove simulation cannot write operational tables, expose identifiers, infer clinical urgency, create a second ticket, reset waiting age, or enact an unapproved/expired allocation.
-- [ ] Test empty queues, simultaneous events, midnight/day boundaries, stale or missing BI data, provider outage, invalid fixtures, very high queue volume, pause/reset during activity, and high-speed rendering.
+- [ ] Test empty queues, simultaneous events, midnight/day boundaries, stale or missing metric data, provider outage, invalid fixtures, very high queue volume, pause/reset during activity, and high-speed rendering.
 - [ ] Verify keyboard controls, screen-reader labels, non-colour state cues, reduced motion, responsive layout, and readable aggregation at `50×`.
 
-### 9. Deliver the MCP layer with strict separation
+### 9. Deliver the OpenAI assistant and Copilot-compatible MCP layer
 
-**Status: Not started**
+**Status: Not started — contracts are scoped; implementation follows stable core workflows and dashboard metrics**
 
-- [ ] Expose narrow Epicenter Operations MCP read/explain and synthetic-simulator tools over Streamable HTTP.
+- [ ] Add the server-side OpenAI Responses API adapter with environment validation, timeouts, usage metadata, and safe provider-error handling.
+- [ ] Expose narrow Epicenter Operations read/explain and synthetic-simulator tools over client-neutral Streamable HTTP for the Responses API remote MCP tool.
 - [ ] Build the maker/checker Insurance Format Registry MCP using only approved synthetic or formally de-identified templates.
 - [ ] Stage extracted facts with source evidence and `pending_review`; promote only staff-confirmed facts through the shared backend.
-- [ ] Prevent the MCP from learning from live patient records, writing canonical tables directly, or deciding eligibility.
-- [ ] Connect the Power BI remote MCP to a de-identified aggregate model, subject to tenant/licensing/preview gates, with a normal dashboard fallback.
-- [ ] Keep Microsoft Learn developer-only and Supabase MCP project-scoped/read-only against non-production data.
-- [ ] Require a named owner, unique capability, least privilege, data boundary, tests, and removal criteria for every additional MCP.
+- [ ] Prevent OpenAI and every tool/MCP adapter from learning from live patient records, writing canonical tables directly, or deciding eligibility.
+- [ ] Add queue, de-identified operational-summary, allocation-explanation, and simulator tools using curated FastAPI/Supabase contracts; do not expose arbitrary SQL.
+- [ ] Build the authenticated nurse assistant UI and FastAPI orchestration route; the browser must never receive the OpenAI API key or call the provider directly.
+- [ ] Allow only task-relevant tools per request and re-authorize every tool execution against the signed-in actor, role, clinic, and record scope.
+- [ ] Require a named owner, unique capability, least privilege, data boundary, tests, and removal criteria for every additional AI tool or MCP endpoint.
+- [ ] Keep tool names, schemas, authentication boundaries, annotations, and errors portable: do not rely on an OpenAI-only MCP extension that would prevent Copilot Studio discovery or calls.
+- [ ] Verify initialization, `tools/list`, valid/invalid calls, authorization, timeouts, response bounds, and audit attribution with an independent MCP client before cloud deployment.
+- [ ] Keep the MCP inventory limited to the custom Operations and Insurance Format Registry servers; reject Microsoft-hosted, duplicate, or generic data-access MCPs.
+- [ ] Do not build Power BI during development. Keep the native Next.js dashboard as P0 and document Power BI/Fabric only as a future de-identified aggregate projection for enterprise scale.
 
 ### 10. Pass the backend release gate, then finalise visual design
 
@@ -362,19 +372,27 @@ Validation and safety:
 - [ ] Allowlist both exact Vercel origins.
 - [ ] Apply production-intended Supabase migrations and synthetic seed.
 - [ ] Configure Clerk and the supported Supabase integration.
-- [ ] Register Railway `/mcp` in Microsoft Copilot Studio.
-- [ ] Configure the Power BI analytics agent separately.
+- [ ] Configure the server-side `OPENAI_API_KEY` and evaluated model identifier in Railway secrets without exposing either to the browser.
+- [ ] Deploy and smoke-test the authenticated nurse assistant route against reviewed operations tools.
+- [ ] Keep Insurance Format Registry tools restricted to the separate maker/reviewer workflow.
+- [ ] Add both public Streamable HTTP MCP endpoints to Copilot Studio and verify that only intended tools are discovered.
+- [ ] Do not add Microsoft-hosted MCPs; integrate future external services only through separately approved application adapters while the two custom MCPs remain the agent tool plane.
+- [ ] Reconcile one Copilot Studio read-only synthetic operations call with the native API/dashboard and record the server version, authentication mode, test evidence, and rollback steps.
+- [ ] Complete the applicable Copilot Studio publication/licensing gate; if the available trial permits testing but not publishing, report that limitation without claiming the channel is published.
+- [ ] Verify that disabling OpenAI or either custom MCP does not affect either web application or the database-backed analytics/simulator path.
 - [ ] Run authenticated public-origin smoke tests through Railway to Supabase.
 - [ ] Verify health, restart behavior, audit persistence, remote Git refs, and rollback instructions.
 
 ## Immediate next actions
 
 1. Continue Tasks 5–8 using the persistence and authorization foundations already completed.
-2. Start MCP work only after the protected operational workflows are stable.
+2. Start the client-neutral MCP work only after the protected operational workflows are stable; use OpenAI during development and run the Copilot Studio compatibility check after deployment.
 3. Deploy Railway/Vercel only after the backend release gate passes locally and against the synthetic Supabase project.
 4. Provision production nurse identities and distribute judge credentials outside the repository as part of Task 11.
 
 ## Open questions
 
 - Will the judged build use a live Singpass/Myinfo sandbox, or the documented synthetic adapter only?
-- Does the Microsoft tenant have the Power BI MCP preview setting, Copilot/Fabric capacity, Entra consent, and data-policy approval required for the analytics integration?
+- Which evaluated OpenAI model will be pinned separately for document extraction and staff-assistant workloads after fixture, latency, and cost comparisons?
+- Which authentication mode and Copilot Studio licence/publication path will be approved for the deployed compatibility check?
+- At what multi-clinic scale, if any, would a governed Power BI/Fabric aggregate projection add enough value beyond the native dashboard to justify its tenant, licensing, and reconciliation cost?

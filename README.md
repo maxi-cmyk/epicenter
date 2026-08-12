@@ -1,14 +1,29 @@
 # Epicenter
 
-Epicenter is a synthetic outpatient administrative-readiness demo. It turns varied coverage documents into evidence-backed readiness states, keeps every patient on one persistent ticket, and presents constrained operational recommendations for staff approval.
+Epicenter is a synthetic outpatient administrative-readiness demo. It turns varied coverage documents into evidence-backed readiness states, keeps every patient on one persistent ticket, and presents constrained operational recommendations for staff approval. OpenAI is the application LLM during development and is accessed only through the backend; the deployed custom MCP endpoints remain compatible with Copilot Studio as required by the publication brief.
 
 ## Repository
 
 - `frontend/patient/` — independently built Next.js patient registration and pre-arrival experience with public patient-only Clerk enrollment.
 - `frontend/nurse/` — independently built Next.js staff operations, assisted review and supervised kiosk experience with Clerk authentication.
 - `frontend/shared/` — generated data contracts, design tokens and safe presentation primitives shared by both apps.
-- `backend/` — FastAPI domain services and Clerk JWT-protected HTTP API for readiness, kiosk check-in and allocation decisions.
+- `backend/` — FastAPI domain services, Clerk JWT-protected HTTP API, and the server-side OpenAI integration for document intelligence and reviewed assistant tools.
 - `docs/` — PRD, design, architecture, simulator, pitch and supporting research.
+
+See [`docs/openai_integration.md`](docs/openai_integration.md) for the native analytics dashboard, OpenAI Responses API integration, Copilot-compatible MCP contract, and deferred Power BI/Fabric scalability option.
+
+## OpenAI configuration
+
+OpenAI requests originate from FastAPI or the private worker, never from either browser application. Supply the API key only through an ignored local backend environment file or the Railway secret manager:
+
+```text
+OPENAI_API_KEY=...
+OPENAI_MODEL=...
+```
+
+Do not create a `NEXT_PUBLIC_OPENAI_API_KEY` variable, commit the key, paste it into documentation, or return it through an API/tool response. The exact model is pinned only after the document fixtures and assistant tasks are evaluated for correctness, latency, and cost. Normal patient/nurse workflows, the native dashboard, and the deterministic simulator must continue to work when OpenAI is unavailable.
+
+Copilot Studio and Power BI are not required for local development. Epicenter uses only its custom Operations and Insurance Format Registry MCP servers. Their Railway endpoints use client-neutral Streamable HTTP so the same reviewed tools can be connected to Copilot Studio at deployment/publication time without forking the business logic. Microsoft-hosted MCPs are not dependencies. The built-in Next.js dashboard remains the P0 analytics surface.
 
 ## Run locally
 
@@ -156,6 +171,8 @@ npm run contracts:check
 - **Patient demo boundary:** each verified patient account is attached only to the configured synthetic scenario. Pre-arrival submissions return a patient-safe outcome pending any required staff confirmation; privileged operational data remains behind FastAPI.
 - **Frontend deployment:** create one Vercel project rooted at `frontend/patient/` and another rooted at `frontend/nurse/`. Set each app's browser-safe environment variables independently; both use the same Railway API URL.
 - **Backend deployment:** create a Railway service with `backend/` as its root directory. `backend/railway.toml` defines the start command and health check; set `EPICENTER_DEMO_MODE=false`, provider credentials and the deployed `EPICENTER_FRONTEND_ORIGINS` (comma-separated; both the patient and nurse deployment URLs) in Railway.
+- **MCP publication compatibility:** expose the reviewed Operations and Insurance Format Registry servers over public HTTPS Streamable HTTP, verify tool discovery and a read-only synthetic call in Copilot Studio, and keep licensing/publication as an explicit manual release gate.
+- **Analytics scaling:** use the native dashboard for development and the core demo. Consider Power BI/Fabric only later through a reconciled de-identified aggregate projection; it is never the operational source of truth.
 
 The checked-in provider configuration is a deployment contract, not a claim that live Supabase, Clerk, Vercel or Railway resources have already been provisioned.
 

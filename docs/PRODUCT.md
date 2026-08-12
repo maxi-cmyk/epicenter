@@ -38,6 +38,9 @@ The product is used at outpatient clinics during busy arrival periods. Scheduled
 - Identity and e-card checks remain manual and in person. Singpass/Myinfo validation and kiosk intake never replace them.
 - Allocation advice is explainable, constrained to qualified resources, expiring, and human-approved.
 - Live Singpass, Clerk, Supabase, OpenAI, messaging, payment, EHR, insurer, and TPA integrations are not claimed by the local demo.
+- OpenAI is the development/application LLM; the deployed custom MCP contract must remain compatible with Copilot Studio without making Copilot a local runtime dependency.
+- Only the custom Operations and Insurance Format Registry MCPs are used. They must run from OpenAI during development and remain connectable from Copilot Studio after deployment.
+- The native dashboard is the P0 analytics surface. Power BI/Fabric is a deferred, aggregate-only scalability option without a Power BI MCP dependency, not a source of truth or core-demo dependency.
 
 ## Brand Commitments
 

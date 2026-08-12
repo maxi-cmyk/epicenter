@@ -5,6 +5,7 @@
 - **Status:** Proposed demo extension
 - **Purpose:** Make patient flow, bottlenecks, and resource-allocation effects visible and measurable
 - **Related documents:** [PRD.md](./PRD.md), [design.md](./design.md), and [techStack.md](./techStack.md)
+- **Presentation boundary:** Native Next.js charts use FastAPI/Supabase metrics; Power BI/Fabric is not required for development or P0
 
 ## 1. Product Question
 
@@ -13,6 +14,8 @@ How does Epicenter change the movement of patients and administrative work throu
 The simulator should let judges see patients arrive, receive one persistent ticket, move through registration, consultation, pharmacy, billing, and exit, while counters and qualified staff become busy, idle, or reassigned. It should compare a serial baseline with Epicenter's pre-arrival processing, single-ticket readiness routing, and human-approved dynamic resource allocation.
 
 The simulator is an explanatory and testing tool. It is not a production scheduler, a clinical digital twin, or evidence that the configured assumptions match a real Parkway Shenton clinic.
+
+The native dashboard is the authoritative visualisation. The custom Operations MCP may return the same typed, de-identified snapshots for explanation by OpenAI during development and by Copilot Studio after deployment, but neither agent nor a future Power BI/Fabric projection drives the event log or simulation state.
 
 ## 2. Demo Outcomes
 

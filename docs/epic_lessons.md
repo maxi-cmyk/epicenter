@@ -4,7 +4,7 @@
 
 - **Status:** Design input and risk-control checklist
 - **Scope:** Documented Epic-specific failures plus broader EHR implementation failure patterns relevant to Epicenter
-- **Related documents:** [PRD.md](./PRD.md), [design.md](./design.md), [techStack.md](./techStack.md), [simulator.md](./simulator.md), and [microsoft_mcp.md](./microsoft_mcp.md)
+- **Related documents:** [PRD.md](./PRD.md), [design.md](./design.md), [techStack.md](./techStack.md), [simulator.md](./simulator.md), and [openai_integration.md](./openai_integration.md)
 - **Last reviewed:** 9 August 2026
 
 ## 1. Interpretation Boundary
@@ -198,7 +198,7 @@ The main lesson from large EHR programmes is also a scope lesson: Epicenter shou
 - real offline encrypted device storage and multi-device conflict synchronization;
 - autonomous staffing changes or predictive clinical-resource allocation;
 - hospital-wide, multi-clinic, or big-bang rollout machinery;
-- production Power BI/Fabric/Dataverse analytics pipelines;
+- production Power BI/Fabric analytics pipelines before the optional enterprise-scale phase is approved;
 - independent clinical validation or claims of production/regulatory readiness; and
 - comprehensive alert-governance administration UI.
 

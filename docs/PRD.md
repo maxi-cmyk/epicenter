@@ -4,7 +4,7 @@
 
 - **Status:** Draft v2 (delivery-aligned)
 - **Track:** Hack4Health 2026, Technical Track
-- **Constraint alignment:** Microsoft Copilot Studio portability (per official constraints)
+- **AI integration:** OpenAI Responses API during development, consuming two client-neutral Epicenter MCP servers that remain Copilot Studio-compatible for deployment/publication
 
 ## 1. Problem Statement
 How might we automate pre-registration and eligibility verification for both scheduled appointments and walk-in patients, so the necessary information is retrieved and processed before they reach the front desk, eliminating the need for staff to manually determine coverage, benefits, and screening packages while ensuring identity verification is still completed securely in person?
@@ -115,7 +115,8 @@ Simplification does not mean hiding unresolved work, bypassing deterministic rea
 
 ## 2. Constraints (from Official Brief — Non-Negotiable)
 
-- **Copilot Studio portability required.** The solution does not need to be built entirely in Copilot Studio during the hackathon, but must demonstrably be portable/integrable into it.
+- **Copilot Studio publication portability is required.** Development does not need to run in Copilot Studio, but the deployed public MCP endpoints must be compatible with it and pass the publication compatibility gate.
+- **OpenAI is the development and application LLM.** All application model access is server-side through the Responses API. Power BI is not required during development, and the P0 analytics surface is Epicenter's native dashboard.
 - **Identity verification and e-card validation must remain in-person** and are explicitly out of scope for automation. This PRD does not propose automating these steps under any circumstance.
 - **Operational cost must be realistic.** The solution should be economically viable to deploy, not merely technically impressive.
 - Everything else may be automated: document interpretation, eligibility checks, package matching, and registration data entry.
@@ -500,20 +501,22 @@ Dataset reconciliation rules:
 
 The idempotent seed must be applied to the designated synthetic Supabase project before patient/nurse integration testing. Seed verification records the expected table counts, questionnaire reconciliation outcomes, six identifier-bearing versus three identifier-free document paths, derived appointments/tickets/counters/staff, and simulator scenario versions. Applying a local seed file is not treated as proof of hosted population; the linked project is queried after import and the result is retained as deployment evidence.
 
-### 6.4 Copilot Studio / Microsoft Ecosystem Portability
-
-Per the official constraint (Copilot Studio use not required during the hackathon, but portability must be demonstrated):
+### 6.4 OpenAI Runtime and Copilot-Compatible Tool Integration
 
 - Document extraction and eligibility-matching logic exposed as clean API endpoints with defined input/output schemas.
-- Epicenter-specific document, eligibility, single-ticket readiness, operational-summary, allocation-advice, and synthetic-simulator capabilities are exposed through narrow custom MCP tools backed by the same authorized service layer as the web application.
+- Epicenter-specific document, eligibility, single-ticket readiness, operational-summary, allocation-advice, and synthetic-simulator capabilities are exposed through the custom Epicenter Operations MCP, backed by the same authorized service layer as the web application. OpenAI Responses API is the development/application client; the deployed Streamable HTTP contract also supports Copilot Studio as a publication client without duplicating business rules.
 - A separate **Insurance Format Registry MCP** supports the document pipeline by retrieving approved synthetic/de-identified format examples, field schemas, checkbox conventions, issuer/document-type mappings, and fixture-validation results. For each new insurance form, it proposes the relevant field schema, extraction mapping, required source evidence, and fixture tests. Every version passes regression and maker/checker approval before activation. An active version may extract future documents only into a database staging record marked `pending_review`; after staff confirmation, the shared backend transaction promotes the confirmed facts into canonical patient, coverage, and eligibility tables. The MCP never learns online from live patient records, writes directly to canonical tables, changes an active rule autonomously, or decides eligibility.
-- The **Power BI remote MCP** is a required analytics integration after the core backend is complete. It queries only a de-identified aggregate semantic model for wait, readiness, exception, throughput, and allocation-effect measures. Because the service is currently preview, tenant enablement, Entra permissions, licensing, data policy, and a non-MCP dashboard fallback are release gates; the nurse workflow must not depend on its availability.
-- First-party MCPs are used only where they own the capability: Microsoft Learn MCP for current maker/developer guidance; optional Fabric model-authoring tools in a separate developer/admin context; and Supabase MCP only for project-scoped, read-only development against synthetic/non-production data. Dataverse or Azure MCP is introduced only when that platform becomes authoritative, never as a duplicate data path.
+- The **Epicenter Operations MCP** supplies bounded queue, wait, readiness, exception, throughput, utilisation, allocation-effect, and simulator data from the same FastAPI services and curated Supabase aggregate views used by the product. No external analytics model or duplicated data store is required for development or P0.
+- The authenticated nurse application owns the assistant UI. FastAPI selects the actor-scoped MCP tool set, mints short-lived MCP authorization, calls OpenAI, re-authorizes every tool execution, and returns the final answer. The patient and nurse applications remain fully usable when OpenAI or either MCP is unavailable.
+- OpenAI Responses API is the application LLM for approved server-side document understanding and structured language-model tasks. It never makes final eligibility, readiness, billing, queue, clinical-priority, or allocation decisions; deterministic services and human approval retain those responsibilities.
 - Real identity/e-card attestations, corrections, readiness approvals, billing confirmations, and resource-allocation decisions remain in the re-authenticated staff UI. MCP may retrieve or explain their stored state but cannot perform them in P0.
 - Simulation MCP tools accept only approved versioned synthetic scenarios and bounded overrides, and label every result with its seed, assumptions version, and synthetic status.
-- Additional MCPs are added only when a named capability is not already owned by FastAPI or an approved first-party service, with least-privilege tools, a defined data boundary, explicit owner, threat review, and removal criteria. MCP is never a generic database console.
-- Submission includes a diagram mapping this architecture to Copilot Studio's action/knowledge-source model, and conceptually to Clinic Assist/NEHR integration points, per judging criteria §5.
-- Detailed tool boundaries, Microsoft MCP selection, authentication, Power Platform data-policy controls, and acceptance tests are defined in [microsoft_mcp.md](./microsoft_mcp.md).
+- Copilot Studio is not a development dependency. Before publication, both public MCP endpoints must pass HTTPS Streamable HTTP initialization, tool discovery, authentication, schema, authorization, and safe read-only-call checks from Copilot Studio.
+- Epicenter uses only its custom Operations and Insurance Format Registry MCPs. Microsoft-hosted MCPs are not dependencies; Copilot Studio is supported solely as a publication client for the deployed custom servers.
+- The native Next.js dashboard remains the authoritative P0 analytics presentation and fallback. Power BI/Fabric is retained only as a future, governed, de-identified aggregate projection for enterprise/multi-clinic scale; it cannot become the source of truth or a prerequisite for the simulator or queue view.
+- Additional MCPs are added only when a named capability is not already owned by FastAPI or an approved service, with least-privilege tools, a defined data boundary, explicit owner, threat review, and removal criteria. MCP is never a generic database console.
+- Submission includes a diagram mapping the OpenAI Responses API, Copilot-compatible reviewed MCP tools, deterministic service layer, native analytics dashboard, optional future Power BI/Fabric projection, and conceptual Clinic Assist/NEHR integration points.
+- Detailed tool boundaries, authentication, dashboard replacement, OpenAI orchestration, and acceptance tests are defined in [openai_integration.md](./openai_integration.md).
 
 ## 7. Guardrails & Human-in-the-Loop Requirements
 
@@ -579,13 +582,15 @@ For the hackathon, these controls are demonstrated through the nine-fixture vali
 | Manual-check boundary | 100% of identity/e-card records are staff attestations of a manually completed process; the demo contains no automated verification result or simulated scan |
 | Screen-state completeness | Demo covers loading, empty, validation/error, retry, and success for upload/reuse, review, queue, payment, and records flows |
 | Patient/staff separation | Patient demo routes expose only the signed-in/token-scoped patient's outcomes and never expose confidence, review reasons, rules, or audit records |
-| Copilot Studio portability | Copilot Studio discovers and safely calls at least one custom Epicenter tool; the demo documents which first-party Microsoft MCPs are used, deferred, or rejected and why |
+| OpenAI assistant integration | The authenticated nurse assistant calls at least one reviewed Epicenter tool through the Responses API, reports only tool-grounded facts, and remains unable to perform approval-bound actions |
+| Copilot Studio deployment compatibility | The deployed Streamable HTTP MCP server is discoverable in Copilot Studio and one read-only synthetic tool result reconciles with the native API/dashboard; publication/licensing limitations are recorded honestly |
+| Custom MCP boundary | Only the reviewed Operations and Insurance Format Registry servers are enabled; neither duplicates Supabase nor bypasses deterministic Epicenter rules |
 | Separate panel contract | Patient and nurse panels build and deploy independently, share one versioned backend API, and cannot navigate into each other's routes or data scopes |
 | Patient outcome clarity | Every registration submission shows `accepted`, `rejected`, or `under_review`; every rejection includes one curated safe reason and a concrete next action |
 | Intentional CRUD | Every approved create/update/delete and sensitive reveal fails without fresh password reverification; successful mutations retain actor, reason, before/after values, timestamp, and version |
 | Nurse workflow simplicity | A nurse can take the oldest actionable ticket from Today through review, manual-check attestation, outcome, and routing on one task screen without opening the generic data browser |
 | Database-backed simulator isolation | Nurse-panel simulator loads a versioned Supabase seed/snapshot, reproduces allocation/administrative-urgency/manual-identity states, and produces zero writes to operational tables |
-| Required MCP delivery | Epicenter Operations MCP and Insurance Format Registry MCP pass contract/security tests; Power BI MCP queries only the approved de-identified model and has a tested unavailable/preview fallback |
+| Tool integration | Epicenter Operations and Insurance Format Registry tools pass contract/security tests; metrics reconcile with the curated backend, and the product never depends on model or MCP availability |
 
 ## 10. Key Risks & Mitigations
 
@@ -626,7 +631,8 @@ For the hackathon, these controls are demonstrated through the nine-fixture vali
 | Simulator corrupts real queue or patient state | Copy a versioned approved seed/snapshot into isolated simulation types/tables and deny simulator code write access to operational repositories |
 | “Urgent appointment” is mistaken for automated clinical triage | Treat administrative urgency as an explicit source field only; preserve physical nurse-led red-flag escalation and never infer clinical urgency from patient data |
 | Insurance-format MCP silently changes eligibility behavior | Restrict it to approved synthetic/de-identified format knowledge and draft proposals; require fixture regression, maker/checker activation, version attribution, and rollback |
-| Preview Power BI MCP becomes a production dependency | Keep it analytics-only, de-identified, tenant-gated, and feature-flagged; retain the nurse panel's normal aggregate dashboard when MCP is unavailable |
+| OpenAI or an MCP endpoint becomes a production dependency | Keep model/tool access as an optional adapter over shared services; retain normal workflows and the native aggregate dashboard when the provider or MCP transport is unavailable |
+| Copilot Studio or Power BI becomes a development blocker | Require only a client-neutral MCP contract during development; verify Copilot compatibility at deployment, and keep Power BI/Fabric optional, aggregate-only, and deferred |
 
 ## 11. Remaining Decisions
 

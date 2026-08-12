@@ -4,7 +4,7 @@
 
 - **Status:** Recommended implementation baseline
 - **Sources:** [PRD.md](./PRD.md), [design.md](./design.md), and [simulator.md](./simulator.md)
-- **Priority:** Hackathon speed, low operational cost, clear security boundaries, and Microsoft Copilot Studio portability
+- **Priority:** Hackathon speed, low operational cost, clear security boundaries, a server-side OpenAI integration, and portable MCP publication
 
 ## 1. Architecture Principles
 
@@ -37,11 +37,12 @@
 | File storage | Private Supabase Storage bucket | Coverage photos/PDFs and generated demo receipts |
 | Realtime queue updates | Supabase Realtime | Queue/counter changes shared between staff and patient screens |
 | Background processing | Postgres-backed job table + Python worker | Reliable document extraction without adding Redis for the demo |
-| Document extraction | OpenAI Responses API with PDF/image inputs and Structured Outputs | Converts the coverage document directly into the validated coverage schema |
+| Application LLM and document extraction | OpenAI Responses API with PDF/image inputs and Structured Outputs | Powers approved server-side language-model tasks and converts coverage documents into the validated extraction schema |
 | Evidence mapping | Page number + supporting source excerpt | Staff-reviewable evidence without requiring a separate cloud OCR platform |
 | Rules engine | Python + versioned Postgres `eligibility_rules` | Deterministic package, eligibility, billing, and queue decisions |
 | Operational analytics and allocation advisor | Postgres views + plain Python rules | P50/P90 waits, near-term staff-minute demand, constraint-aware resource recommendations, and outcome measurement without a separate ML platform |
-| MCP portability | Epicenter Operations MCP, Insurance Format Registry MCP, and selected first-party Microsoft MCPs | Narrow domain tools, approved-format authoring, Microsoft Learn development guidance, and required de-identified Power BI analytics after backend completion |
+| Agent tools | Custom Epicenter Operations MCP and Insurance Format Registry MCP | Own all agent-facing domain workflows while remaining client-neutral and compatible with Copilot Studio |
+| Analytics presentation | Native Next.js dashboard over FastAPI/Supabase metrics | P0 implementation; Power BI/Fabric is deferred to an optional aggregate-only scale projection |
 | Deployment | Two Vercel projects; Railway for shared API/MCP/worker; managed Supabase | Independent patient/nurse releases against one backend and source of truth |
 | Observability | Structured JSON logs + Railway deployment/runtime logs | Request/job tracing without logging raw NRIC or document contents |
 | Testing | Vitest, React Testing Library, Playwright, Pytest | Unit, component, API, policy, and end-to-end verification |
@@ -58,7 +59,9 @@ Nurse Next.js app                  Patient Next.js app
       │                                      │
       └─────────────── FastAPI REST API ─────┘
                       │     │      │
-                      │     │      └── MCP server → Copilot Studio
+                      │     │      └── OpenAI Responses API
+                      │     │                 │
+                      │     │                 └── reviewed Epicenter MCP tools
                       │     │
                       │     └── Postgres job queue → Python worker
                       │                                │
@@ -70,6 +73,12 @@ Nurse Next.js app                  Patient Next.js app
                                 ├── Clerk third-party auth
                                 ├── Private Storage
                                 └── Realtime
+
+Copilot Studio (deployment/publication only)
+      └── same public HTTPS Streamable HTTP Epicenter MCP tools
+
+Future scale only
+      └── de-identified aggregates → optional Power BI/Fabric model
 ```
 
 The API and MCP server call the same service functions. MCP tools must not contain a second implementation of extraction, rules, or authorization logic.
@@ -284,7 +293,7 @@ It stores no scan, image, biometric, automated score, or generated verification 
 - Track acknowledgement, action, dismissal, expiry, repeats, and time-to-resolution by alert type. Do not publish individual staff rankings.
 - Alert-policy changes follow the same shadow, maker/checker, effective-date, regression, and rollback controls as eligibility/readiness rules.
 
-## 9. MCP and Copilot Studio Portability
+## 9. OpenAI Runtime and Copilot-Compatible MCP Transport
 
 The custom Epicenter MCP exposes only narrow domain tools that call the same authenticated service layer:
 
@@ -301,9 +310,13 @@ epicenter_compare_simulation_runs(baseline_run_id, epicenter_run_id)
 
 MCP tools return typed, minimal payloads and never bypass RLS/role checks or staff confirmation. Real readiness, correction, billing, identity/e-card, and allocation-approval writes remain in the staff UI. Simulation tools operate only on synthetic isolated state and label every result with scenario, seed, assumptions version, and `synthetic=true`.
 
-Use first-party Microsoft MCP servers only for capabilities they own: Microsoft Learn MCP in the maker/developer environment; optional Power BI/Fabric MCP for a de-identified aggregate analytics model after tenant review; Dataverse MCP only if Dataverse becomes authoritative for a bounded context; and Azure MCP only for internal Azure development/operations if an Azure deployment is adopted. Do not connect developer/admin MCP servers to the staff operations agent or mirror the Supabase source of truth merely to add another MCP.
+The authenticated nurse application contains the Epicenter assistant. During development and normal application use, FastAPI calls the OpenAI Responses API with the reviewed Epicenter Operations MCP and, only for the maker/reviewer workflow, the Insurance Format Registry MCP. The Operations MCP serves curated queue, aggregate analytics, allocation, and simulator contracts from existing FastAPI/Supabase services. The Registry MCP serves only approved synthetic or formally de-identified fixtures.
 
-The complete tool, authentication, governance, and rollout contract is in [microsoft_mcp.md](./microsoft_mcp.md).
+The same public HTTPS Streamable HTTP servers must remain compatible with Copilot Studio at deployment/publication time. OpenAI and Copilot Studio are alternative clients of one tool contract; neither MCP exposes an unrestricted prompt, model proxy, or database console. The complete compatibility profile and verification gate are in [openai_integration.md](./openai_integration.md).
+
+No Microsoft-hosted MCP is required. Live operational queue and simulator data use the custom Operations MCP; document-format maker/checker logic uses the custom Registry MCP. Copilot Studio connects to those same custom servers after deployment.
+
+The native Next.js dashboard is the P0 analytics presentation. Power BI/Fabric is not built during development; it remains an optional future projection over reconciled de-identified aggregates for multi-clinic scale and never replaces the operational source of truth.
 
 ## 10. No-Azure Deployment
 
@@ -318,8 +331,10 @@ Railway
 └── epicenter-worker         Python document-job worker; no public domain
 
 Supabase                     Postgres + private Storage + Realtime
-Clerk                        web sessions + reverification + MCP OAuth
+Clerk                        web sessions + reverification; MCP auth adapter
 OpenAI                       PDF/image extraction + Structured Outputs
+Copilot Studio               deployment/publication compatibility client only
+Power BI/Fabric              optional future aggregate analytics projection
 ```
 
 Both Railway services use the same repository and Python image but different start commands. Only `epicenter-api-mcp` receives a public Railway domain. The worker communicates through the Postgres job table and does not need an inbound port.
@@ -332,7 +347,10 @@ Deployment order:
 4. Deploy `epicenter-api-mcp` from GitHub to Railway, set its variables, configure `/healthz`, and generate a public domain.
 5. Deploy `epicenter-worker` from the same repository with the worker start command and no public domain.
 6. Deploy the patient and nurse Next.js applications as separate Vercel projects and set both API base URLs to the same Railway domain.
-7. Register `https://<railway-domain>/mcp` in Copilot Studio.
+7. After the core product is stable, deploy `/mcp/operations` and `/mcp/insurance-registry`, then enable the authenticated nurse assistant through the OpenAI Responses API.
+8. Verify both endpoints as Streamable HTTP MCP servers and connect at least one safe read-only synthetic tool in the Copilot Studio test panel; treat publishing/licensing as a manual release gate.
+
+Power BI/Fabric is deliberately absent from this deployment sequence. Revisit it only if enterprise/multi-clinic reporting justifies a governed aggregate projection beyond the native dashboard.
 
 The initial demo must use synthetic data. Before processing real patient documents, confirm provider terms, retention, residency, access controls, and any required healthcare agreements.
 

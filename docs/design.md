@@ -1142,5 +1142,8 @@ Any failed gate sets `needs_review` with reason codes. Model confidence may prio
 - Clinic-approved package names, billing arrangements, and interpretation of each synthetic rule fixture.
 - Staffing targets and service-time expectations for ready and review workstreams.
 - The operational cost estimate for OpenAI document processing, Railway, Supabase, Clerk, and Vercel at the expected demo/production volume.
+- The final deployed Copilot Studio authentication and publication/licensing path. Development uses OpenAI and the native application; the custom Streamable HTTP MCP contract must remain portable to Copilot Studio.
+- The final Copilot Studio onboarding details for the two custom Epicenter MCPs; no Microsoft-hosted MCP is required.
+- The threshold at which a governed de-identified Power BI/Fabric aggregate projection would add enough multi-clinic value to justify its tenant, licensing, refresh, and reconciliation overhead. It is not part of the P0 interface and does not require a Power BI MCP.
 - Whether precise source bounding boxes justify adding a local/specialized OCR adapter after the page/excerpt baseline works.
 - Final policy for resolving the six unmatched questionnaire people and any future conflicting source identities in a production import.
