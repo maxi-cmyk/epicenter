@@ -32,6 +32,21 @@ class CoverageAction(StrEnum):
     REPLACE = "replace"
 
 
+class TpaSubmissionStatus(StrEnum):
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+
+
+class DocumentCategory(StrEnum):
+    """Payer paperwork (TPA, CHAS, corporate insurance, ...) splits into distinct
+    kinds, each with different fields worth capturing."""
+
+    FORM = "form"
+    AUTHORISATION_LETTER = "authorisation_letter"
+    BENEFIT_STRUCTURE = "benefit_structure"
+    CODING_SCHEME = "coding_scheme"
+
+
 class PatientSubmissionOutcome(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
@@ -42,6 +57,54 @@ class PatientAccountSession(BaseModel):
     patient_id: int
     source_record_key: str
     synthetic: bool = True
+
+
+class ChecklistStatus(StrEnum):
+    PASS = "pass"
+    PENDING = "pending"
+    FAIL = "fail"
+    NOT_REQUIRED = "not_required"
+
+
+class PatientSummary(BaseModel):
+    full_name: str
+    identifier_masked: str
+    date_of_birth: date | None = None
+    contact_mobile: str | None = None
+    address: str | None = None
+
+
+class ChecklistItem(BaseModel):
+    label: str
+    status: ChecklistStatus
+    detail: str | None = None
+
+
+class RecordChecklist(BaseModel):
+    patient: PatientSummary | None = None
+    items: list[ChecklistItem] = []
+
+
+class Document(BaseModel):
+    """One piece of payer paperwork on file for a patient (see DocumentCategory for
+    the distinct kinds it can be). Each carries a shared envelope (issuer, category,
+    validity) plus a `facts` map for whatever fields are specific to that category
+    (e.g. a benefit structure's plan tier vs. an authorisation letter's approval
+    number)."""
+
+    id: str
+    category: DocumentCategory
+    issuer_code: str
+    issuer_name: str
+    document_type: str
+    reference_number: str | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+    facts: dict[str, str] = {}
+    confirmed: bool = False
+    confirmed_by: str | None = None
+    confirmed_at: datetime | None = None
+    version: int = Field(default=1, ge=1)
 
 
 class QueueTicket(BaseModel):
@@ -56,13 +119,25 @@ class QueueTicket(BaseModel):
     checked_in_at: datetime | None = None
     original_ordering_at: datetime
     waiting_minutes: int = Field(ge=0)
-    expected_counter: str | None = None
-    actual_counter: str | None = None
+    expected_room: str | None = None
+    actual_room: str | None = None
     processing_stage: str
     service_target: ServiceTarget = ServiceTarget.ON_TRACK
     staff_confirmed: bool = False
     clinical_escalation: bool = False
     version: int = Field(default=1, ge=1)
+    record_checklist: RecordChecklist | None = None
+    documents: list[Document] = []
+    matched_package: str | None = None
+    package_confirmed: bool = False
+    package_confirmed_by: str | None = None
+    package_confirmed_at: datetime | None = None
+    billing_code: str | None = None
+    uncovered_cost: float | None = None
+    queue_number: str | None = None
+    billing_confirmed: bool = False
+    billing_confirmed_by: str | None = None
+    billing_confirmed_at: datetime | None = None
 
 
 class ReviewCase(BaseModel):
@@ -203,8 +278,64 @@ class DocumentProcessingRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
 
 
-class CounterAssignmentRequest(BaseModel):
-    counter_number: str = Field(min_length=2, max_length=40)
+class MedicationItem(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    quantity: int = Field(ge=1)
+    unit_cost: float = Field(ge=0)
+
+
+class MedicationDispense(BaseModel):
+    id: str
+    ticket_id: str
+    items: list[MedicationItem]
+    total_cost: float = Field(ge=0)
+    dispensed_by: str
+    dispensed_at: datetime
+    version: int = Field(default=1, ge=1)
+
+
+class MedicationDispenseRequest(BaseModel):
+    items: list[MedicationItem] = Field(min_length=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class TpaSubmission(BaseModel):
+    id: str
+    ticket_id: str
+    status: TpaSubmissionStatus
+    documents: list[Document]
+    checkup_summary: str
+    medication: MedicationDispense | None = None
+    submitted_by: str | None = None
+    submitted_at: datetime | None = None
+    external_reference: str | None = None
+    version: int = Field(default=1, ge=1)
+
+
+class TpaSubmissionConfirmRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class DocumentConfirmRequest(BaseModel):
+    facts: dict[str, str] | None = None
+    reference_number: str | None = Field(default=None, max_length=80)
+    valid_from: date | None = None
+    valid_to: date | None = None
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class PackageConfirmRequest(BaseModel):
+    corrected_package: str | None = Field(default=None, max_length=160)
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class BillingConfirmRequest(BaseModel):
+    corrected_billing_code: str | None = Field(default=None, max_length=80)
+    corrected_uncovered_cost: float | None = Field(default=None, ge=0)
+    corrected_queue_number: str | None = Field(default=None, max_length=40)
     expected_version: int = Field(ge=1)
     idempotency_key: str = Field(min_length=8, max_length=128)
 
@@ -269,3 +400,5 @@ class ActionResult(BaseModel):
     message: str
     ticket: QueueTicket | None = None
     recommendation: AllocationRecommendation | None = None
+    medication: MedicationDispense | None = None
+    tpa_submission: TpaSubmission | None = None

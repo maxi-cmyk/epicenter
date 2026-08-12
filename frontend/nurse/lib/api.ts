@@ -82,3 +82,48 @@ export function checkInWalkIn(patientName: string, nurseSupervisor: string, clin
     body: JSON.stringify({ patient_name: patientName, nurse_supervisor: nurseSupervisor, clinical_escalation: clinicalEscalation, idempotency_key: crypto.randomUUID() }),
   });
 }
+
+export function confirmDocument(
+  ticketId: string,
+  documentId: string,
+  expectedVersion: number,
+  corrections: { facts: Record<string, string>; referenceNumber: string },
+) {
+  return request<ActionResult>(`/tickets/${ticketId}/documents/${documentId}/confirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      facts: corrections.facts,
+      reference_number: corrections.referenceNumber,
+      expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+    }),
+  });
+}
+
+export function confirmPackage(ticketId: string, expectedVersion: number, correctedPackage?: string) {
+  return request<ActionResult>(`/tickets/${ticketId}/package/confirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      corrected_package: correctedPackage || null,
+      expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+    }),
+  });
+}
+
+export function confirmBilling(
+  ticketId: string,
+  expectedVersion: number,
+  corrections: { billingCode?: string; uncoveredCost?: number; queueNumber?: string },
+) {
+  return request<ActionResult>(`/tickets/${ticketId}/billing/confirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      corrected_billing_code: corrections.billingCode || null,
+      corrected_uncovered_cost: corrections.uncoveredCost ?? null,
+      corrected_queue_number: corrections.queueNumber || null,
+      expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+    }),
+  });
+}

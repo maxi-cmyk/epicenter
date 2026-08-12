@@ -10,19 +10,25 @@ from app.data.supabase_client import SupabaseDataError
 from app.domain.models import (
     ActionResult,
     AuditRecord,
-    CounterAssignmentRequest,
+    BillingConfirmRequest,
     DashboardSnapshot,
+    DocumentConfirmRequest,
     DocumentProcessingRequest,
     KioskCheckInRequest,
+    MedicationDispenseRequest,
+    PackageConfirmRequest,
     PatientCreateRequest,
     PatientDeleteRequest,
     PatientList,
     PatientRecord,
     PatientUpdateRequest,
+    QueueTicket,
     RecommendationDecisionRequest,
     SimulatorSnapshot,
     StaffSession,
     TicketTransitionRequest,
+    TpaSubmission,
+    TpaSubmissionConfirmRequest,
 )
 from app.services.allocation import InvalidDecision, normalize_decision
 from app.services.readiness import InvalidTransition
@@ -101,27 +107,62 @@ def process_document(
     return ActionResult(success=True, message="Document result committed with its audit evidence.", ticket=ticket)
 
 
-@router.post("/tickets/{ticket_id}/counter", response_model=ActionResult)
-def assign_counter(
+@router.post("/tickets/{ticket_id}/documents/{document_id}/confirm", response_model=ActionResult)
+def confirm_document(
     ticket_id: str,
-    request: CounterAssignmentRequest,
+    document_id: str,
+    request: DocumentConfirmRequest,
     repository: Repository,
     principal: ReverifiedPrincipal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
-        ticket = repository.assign_counter(ticket_id, request, principal.subject)
+        ticket = repository.confirm_document(ticket_id, document_id, request, principal.subject)
     except (KeyError, StopIteration) as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found") from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
-    return ActionResult(
-        success=True,
-        message="Counter assignment committed without replacing the ticket.",
-        ticket=ticket,
-    )
+    return ActionResult(success=True, message="Document confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/package/confirm", response_model=ActionResult)
+def confirm_package(
+    ticket_id: str,
+    request: PackageConfirmRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_package(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Package rechecked and confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/billing/confirm", response_model=ActionResult)
+def confirm_billing(
+    ticket_id: str,
+    request: BillingConfirmRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_billing(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Billing and queue number rechecked and confirmed by staff.", ticket=ticket)
 
 
 @router.post("/tickets/{ticket_id}/transition", response_model=ActionResult)
@@ -141,6 +182,75 @@ def update_ticket(
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
     return ActionResult(success=True, message=f"{ticket_id} updated without changing its queue identity.", ticket=saved)
+
+
+@router.get("/pharmacy/queue", response_model=list[QueueTicket])
+def get_pharmacy_queue(repository: Repository, principal: Principal) -> list[QueueTicket]:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        snapshot = repository.snapshot()
+    except (SupabaseDataError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase operational schema and seed are not ready.",
+        ) from exc
+    return [ticket for ticket in snapshot.tickets if ticket.visit_phase in ("ongoing", "finished")]
+
+
+@router.post("/tickets/{ticket_id}/medication", response_model=ActionResult, status_code=status.HTTP_201_CREATED)
+def record_medication_dispense(
+    ticket_id: str,
+    request: MedicationDispenseRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        dispense = repository.record_medication_dispense(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found") from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Medication dispense recorded.", medication=dispense)
+
+
+@router.get("/tickets/{ticket_id}/tpa-submission", response_model=TpaSubmission)
+def get_tpa_submission(
+    ticket_id: str,
+    repository: Repository,
+    principal: Principal,
+) -> TpaSubmission:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        submission = repository.draft_tpa_submission(ticket_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return submission
+
+
+@router.post("/tickets/{ticket_id}/tpa-submission/confirm", response_model=ActionResult)
+def confirm_tpa_submission(
+    ticket_id: str,
+    request: TpaSubmissionConfirmRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        submission = repository.confirm_tpa_submission(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(
+        success=True,
+        message="TPA submission confirmed and marked processed.",
+        tpa_submission=submission,
+    )
 
 
 @router.post("/kiosk/check-in", response_model=ActionResult, status_code=status.HTTP_201_CREATED)

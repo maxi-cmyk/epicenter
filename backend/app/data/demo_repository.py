@@ -7,34 +7,74 @@ from app.domain.models import (
     ActivityEvent,
     AllocationRecommendation,
     AuditRecord,
-    CounterAssignmentRequest,
+    BillingConfirmRequest,
+    ChecklistItem,
+    ChecklistStatus,
     DashboardSnapshot,
+    Document,
+    DocumentCategory,
+    DocumentConfirmRequest,
     DocumentProcessingRequest,
     IntakeType,
     KioskCheckInRequest,
+    MedicationDispense,
+    MedicationDispenseRequest,
+    MedicationItem,
     Metric,
+    PackageConfirmRequest,
     PatientCreateRequest,
     PatientDeleteRequest,
     PatientList,
     PatientRecord,
+    PatientSummary,
     PatientUpdateRequest,
     PreArrivalSubmissionRequest,
     PreArrivalSubmissionResult,
     QueueTicket,
     ReadinessState,
     RecommendationDecisionRequest,
+    RecordChecklist,
     RegistrationValidationRequest,
     RegistrationValidationResult,
     ReviewCase,
     ServiceTarget,
     SimulatorSnapshot,
     TicketTransitionRequest,
+    TpaSubmission,
+    TpaSubmissionConfirmRequest,
+    TpaSubmissionStatus,
     VisitPhase,
 )
 
 
 def _at(hour: int, minute: int) -> datetime:
     return datetime(2026, 8, 12, hour, minute, tzinfo=UTC)
+
+
+def _checklist(
+    *,
+    patient: PatientSummary,
+    coverage_status: ChecklistStatus,
+    coverage_detail: str | None,
+    eligibility_status: ChecklistStatus,
+    eligibility_detail: str | None,
+    general_status: ChecklistStatus = ChecklistStatus.NOT_REQUIRED,
+    general_detail: str | None = None,
+    occupational_status: ChecklistStatus = ChecklistStatus.NOT_REQUIRED,
+    occupational_detail: str | None = None,
+) -> RecordChecklist:
+    return RecordChecklist(
+        patient=patient,
+        items=[
+            ChecklistItem(label="Patient details", status=ChecklistStatus.PASS, detail=patient.identifier_masked),
+            ChecklistItem(label="Coverage document", status=coverage_status, detail=coverage_detail),
+            ChecklistItem(label="Eligibility match", status=eligibility_status, detail=eligibility_detail),
+            ChecklistItem(label="General health questionnaire", status=general_status, detail=general_detail),
+            ChecklistItem(
+                label="Occupational health questionnaire", status=occupational_status, detail=occupational_detail
+            ),
+        ],
+    )
 
 
 def build_demo_snapshot() -> DashboardSnapshot:
@@ -63,9 +103,28 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 scheduled_at=_at(10, 0),
                 original_ordering_at=_at(10, 0),
                 waiting_minutes=0,
-                expected_counter="Counter 2",
+                expected_room="Room 2 · Dr Farah",
                 processing_stage="Ready before arrival",
                 staff_confirmed=True,
+                matched_package="WELL2 — Comprehensive Screen",
+                billing_code="WELL2-STD",
+                uncovered_cost=0.0,
+                queue_number="Q014",
+                record_checklist=_checklist(
+                    patient=PatientSummary(
+                        full_name="Loh Wei Ming",
+                        identifier_masked="S***946C",
+                        date_of_birth=date(1988, 3, 15),
+                        contact_mobile="9**1 234",
+                        address="12 Function Place",
+                    ),
+                    coverage_status=ChecklistStatus.PASS,
+                    coverage_detail="Meridian (MRDEB) · voucher",
+                    eligibility_status=ChecklistStatus.PASS,
+                    eligibility_detail="WELL2 — Comprehensive Screen",
+                    general_status=ChecklistStatus.PASS,
+                    general_detail="Verified",
+                ),
             ),
             QueueTicket(
                 id="Q-015",
@@ -78,9 +137,24 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 scheduled_at=_at(10, 15),
                 original_ordering_at=_at(10, 15),
                 waiting_minutes=0,
-                expected_counter="Review 1",
+                expected_room="Review 1",
                 processing_stage="Awaiting coverage document",
                 service_target=ServiceTarget.APPROACHING,
+                record_checklist=_checklist(
+                    patient=PatientSummary(
+                        full_name="Tan Kai Xuan",
+                        identifier_masked="S***398D",
+                        date_of_birth=date(1991, 7, 2),
+                        contact_mobile="8**4 552",
+                        address="88 Harbour Rise",
+                    ),
+                    coverage_status=ChecklistStatus.FAIL,
+                    coverage_detail="No coverage document received",
+                    eligibility_status=ChecklistStatus.FAIL,
+                    eligibility_detail=None,
+                    general_status=ChecklistStatus.PENDING,
+                    general_detail="Not yet submitted",
+                ),
             ),
             QueueTicket(
                 id="Q-017",
@@ -93,8 +167,21 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(9, 34),
                 original_ordering_at=_at(9, 34),
                 waiting_minutes=8,
-                actual_counter="Kiosk A",
+                actual_room="Kiosk A",
                 processing_stage="Document extraction",
+                record_checklist=_checklist(
+                    patient=PatientSummary(
+                        full_name="Mei Chen",
+                        identifier_masked="S***442F",
+                        date_of_birth=date(1995, 11, 20),
+                        contact_mobile="9**7 108",
+                        address="4 Riverwalk Avenue",
+                    ),
+                    coverage_status=ChecklistStatus.PENDING,
+                    coverage_detail="Extraction in progress",
+                    eligibility_status=ChecklistStatus.PENDING,
+                    eligibility_detail=None,
+                ),
             ),
             QueueTicket(
                 id="Q-018",
@@ -107,9 +194,28 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(9, 24),
                 original_ordering_at=_at(9, 24),
                 waiting_minutes=18,
-                actual_counter="Review 2",
+                actual_room="Review 2",
                 processing_stage="Voucher review",
                 service_target=ServiceTarget.APPROACHING,
+                matched_package="Executive screening",
+                billing_code="EXEC-STD",
+                uncovered_cost=45.0,
+                queue_number="Q018",
+                record_checklist=_checklist(
+                    patient=PatientSummary(
+                        full_name="Amir Loh",
+                        identifier_masked="S***451A",
+                        date_of_birth=date(1983, 1, 9),
+                        contact_mobile="9**3 671",
+                        address="21 Bluepeak Lane",
+                    ),
+                    coverage_status=ChecklistStatus.FAIL,
+                    coverage_detail="Bluepeak (BLPHS) · voucher — expired 10 Aug 2026",
+                    eligibility_status=ChecklistStatus.PENDING,
+                    eligibility_detail="Executive screening",
+                    general_status=ChecklistStatus.PASS,
+                    general_detail="Verified",
+                ),
             ),
             QueueTicket(
                 id="Q-019",
@@ -122,9 +228,120 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(9, 37),
                 original_ordering_at=_at(9, 37),
                 waiting_minutes=5,
-                actual_counter="Counter 3",
+                actual_room="Room 3 · Dr Wong",
                 processing_stage="Waiting to be called",
                 staff_confirmed=True,
+                matched_package="PEE226 — Basic Screen",
+                billing_code="PEE226-CHAS",
+                uncovered_cost=8.5,
+                queue_number="Q019",
+                record_checklist=_checklist(
+                    patient=PatientSummary(
+                        full_name="Priya Nair",
+                        identifier_masked="S***458G",
+                        date_of_birth=date(1990, 5, 30),
+                        contact_mobile="8**9 214",
+                        address="17 Coral Drive",
+                    ),
+                    coverage_status=ChecklistStatus.PASS,
+                    coverage_detail="CHAS · referral letter",
+                    eligibility_status=ChecklistStatus.PASS,
+                    eligibility_detail="PEE226 — Basic Screen",
+                    general_status=ChecklistStatus.PASS,
+                    general_detail="Verified",
+                ),
+            ),
+            QueueTicket(
+                id="Q-020",
+                patient_id="P-0463",
+                patient_name="Marcus Lim",
+                intake_type=IntakeType.WALK_IN,
+                visit_phase=VisitPhase.ONGOING,
+                readiness_state=ReadinessState.READY,
+                readiness_reason="all_prerequisites_passed",
+                checked_in_at=_at(9, 20),
+                original_ordering_at=_at(9, 20),
+                waiting_minutes=22,
+                actual_room="Room 2 · Dr Farah",
+                processing_stage="Consultation in progress",
+                staff_confirmed=True,
+                matched_package="TPA-GP01 — GP Consultation",
+                billing_code="TPA-GP01",
+                uncovered_cost=0.0,
+                queue_number="Q020",
+                record_checklist=_checklist(
+                    patient=PatientSummary(
+                        full_name="Marcus Lim",
+                        identifier_masked="S***463B",
+                        date_of_birth=date(1985, 4, 2),
+                        contact_mobile="9**2 640",
+                        address="30 Northshore Drive",
+                    ),
+                    coverage_status=ChecklistStatus.PASS,
+                    coverage_detail="Meridian TPA (MRD-TPA) · membership card",
+                    eligibility_status=ChecklistStatus.PASS,
+                    eligibility_detail="TPA-GP01 — GP Consultation",
+                    general_status=ChecklistStatus.PASS,
+                    general_detail="Verified",
+                ),
+                documents=[
+                    Document(
+                        id="TPADOC-Q020-BEN",
+                        category=DocumentCategory.BENEFIT_STRUCTURE,
+                        issuer_code="MRD-TPA",
+                        issuer_name="Meridian TPA",
+                        document_type="Benefit Schedule 2026",
+                        reference_number="BEN-2026-0417",
+                        valid_from=date(2026, 1, 1),
+                        valid_to=date(2026, 12, 31),
+                        facts={
+                            "membership_number": "MTP-88213045",
+                            "plan_tier": "Standard",
+                            "annual_limit": "2000.00",
+                            "copay_percentage": "10",
+                        },
+                    ),
+                    Document(
+                        id="TPADOC-Q020-AUTH",
+                        category=DocumentCategory.AUTHORISATION_LETTER,
+                        issuer_code="MRD-TPA",
+                        issuer_name="Meridian TPA",
+                        document_type="Pre-authorisation letter",
+                        reference_number="AUTH-88213-GP01",
+                        valid_from=date(2026, 8, 1),
+                        valid_to=date(2026, 8, 31),
+                        facts={
+                            "authorising_officer": "Grace Lim",
+                            "approval_number": "AUTH-88213-GP01",
+                            "scope": "GP Consultation",
+                        },
+                    ),
+                    Document(
+                        id="TPADOC-Q020-CODE",
+                        category=DocumentCategory.CODING_SCHEME,
+                        issuer_code="MRD-TPA",
+                        issuer_name="Meridian TPA",
+                        document_type="Procedure code reference",
+                        reference_number="TPA-GP01",
+                        facts={
+                            "procedure_code": "TPA-GP01",
+                            "code_scheme": "Meridian TPA coding table v3",
+                            "package_name": "GP Consultation",
+                        },
+                    ),
+                    Document(
+                        id="TPADOC-Q020-FORM",
+                        category=DocumentCategory.FORM,
+                        issuer_code="NORTHSHORE-LOGISTICS",
+                        issuer_name="Northshore Logistics",
+                        document_type="Employer claim form",
+                        reference_number="CLAIM-0463",
+                        facts={
+                            "employer_code": "NORTHSHORE-LOGISTICS",
+                            "billing_arrangement": "Direct billing to employer",
+                        },
+                    ),
+                ],
             ),
             QueueTicket(
                 id="Q-011",
@@ -138,9 +355,34 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(8, 22),
                 original_ordering_at=_at(8, 30),
                 waiting_minutes=0,
-                actual_counter="Counter 1",
+                actual_room="Room 1 · Dr Tan",
                 processing_stage="Completed 09:08",
                 staff_confirmed=True,
+                matched_package="WELL2 — Comprehensive Screen",
+                package_confirmed=True,
+                package_confirmed_by="Nurse Aisyah",
+                package_confirmed_at=_at(8, 25),
+                billing_code="WELL2-STD",
+                uncovered_cost=0.0,
+                queue_number="Q011",
+                billing_confirmed=True,
+                billing_confirmed_by="Nurse Aisyah",
+                billing_confirmed_at=_at(8, 26),
+                record_checklist=_checklist(
+                    patient=PatientSummary(
+                        full_name="Siti Rahman",
+                        identifier_masked="S***371K",
+                        date_of_birth=date(1979, 9, 14),
+                        contact_mobile="9**5 830",
+                        address="6 Meridian Court",
+                    ),
+                    coverage_status=ChecklistStatus.PASS,
+                    coverage_detail="Meridian (MRDEB) · voucher",
+                    eligibility_status=ChecklistStatus.PASS,
+                    eligibility_detail="WELL2 — Comprehensive Screen",
+                    general_status=ChecklistStatus.PASS,
+                    general_detail="Verified",
+                ),
             ),
         ],
         review_cases=[
@@ -232,6 +474,20 @@ class DemoRepository:
             )
         }
         self._audit_records: list[AuditRecord] = []
+        self._medication_dispenses: dict[str, MedicationDispense] = {
+            "Q-020": MedicationDispense(
+                id="MED-Q-020",
+                ticket_id="Q-020",
+                items=[
+                    MedicationItem(name="Paracetamol 500mg", quantity=20, unit_cost=0.15),
+                    MedicationItem(name="Amoxicillin 250mg", quantity=15, unit_cost=0.40),
+                ],
+                total_cost=9.0,
+                dispensed_by="Pharmacist Nur Aisyah",
+                dispensed_at=_at(9, 55),
+            )
+        }
+        self._tpa_submissions: dict[str, TpaSubmission] = {}
 
     def snapshot(self) -> DashboardSnapshot:
         with self._lock:
@@ -380,11 +636,11 @@ class DemoRepository:
         )
         return self.transition_ticket(ticket_id, transition, actor)
 
-    def assign_counter(
-        self, ticket_id: str, request: CounterAssignmentRequest, actor: str = "synthetic-staff"
+    def confirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str = "synthetic-staff"
     ) -> QueueTicket:
         with self._lock:
-            key = ("counter_assignment", request.idempotency_key)
+            key = ("document_confirm", request.idempotency_key)
             existing = self._idempotent_results.get(key)
             if isinstance(existing, QueueTicket):
                 return deepcopy(existing)
@@ -392,15 +648,175 @@ class DemoRepository:
             current = self._snapshot.tickets[index]
             if current.version != request.expected_version:
                 raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
-            updated = deepcopy(current)
-            if updated.visit_phase is VisitPhase.INCOMING:
-                updated.expected_counter = request.counter_number
-            else:
-                updated.actual_counter = request.counter_number
-            updated.version += 1
+            doc_index = next(
+                (i for i, doc in enumerate(current.documents) if doc.id == document_id),
+                None,
+            )
+            if doc_index is None:
+                raise KeyError(f"No document {document_id} on file for {ticket_id}")
+            current_doc = current.documents[doc_index]
+            corrected_doc = current_doc.model_copy(
+                update={
+                    "facts": {**current_doc.facts, **request.facts} if request.facts is not None else current_doc.facts,
+                    "reference_number": request.reference_number
+                    if request.reference_number is not None
+                    else current_doc.reference_number,
+                    "valid_from": request.valid_from if request.valid_from is not None else current_doc.valid_from,
+                    "valid_to": request.valid_to if request.valid_to is not None else current_doc.valid_to,
+                    "confirmed": True,
+                    "confirmed_by": actor,
+                    "confirmed_at": datetime.now(UTC),
+                    "version": current_doc.version + 1,
+                }
+            )
+            updated_documents = list(current.documents)
+            updated_documents[doc_index] = corrected_doc
+            updated = current.model_copy(update={"documents": updated_documents, "version": current.version + 1})
             self._snapshot.tickets[index] = updated
             self._idempotent_results[key] = deepcopy(updated)
-            return updated
+            return deepcopy(updated)
+
+    def confirm_package(
+        self, ticket_id: str, request: PackageConfirmRequest, actor: str = "synthetic-staff"
+    ) -> QueueTicket:
+        with self._lock:
+            key = ("package_confirm", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, QueueTicket):
+                return deepcopy(existing)
+            index = next(index for index, ticket in enumerate(self._snapshot.tickets) if ticket.id == ticket_id)
+            current = self._snapshot.tickets[index]
+            if current.version != request.expected_version:
+                raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
+            if current.matched_package is None and request.corrected_package is None:
+                raise KeyError(f"No matched package on file for {ticket_id}")
+            updated = current.model_copy(
+                update={
+                    "matched_package": request.corrected_package or current.matched_package,
+                    "package_confirmed": True,
+                    "package_confirmed_by": actor,
+                    "package_confirmed_at": datetime.now(UTC),
+                    "version": current.version + 1,
+                }
+            )
+            self._snapshot.tickets[index] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
+
+    def confirm_billing(
+        self, ticket_id: str, request: BillingConfirmRequest, actor: str = "synthetic-staff"
+    ) -> QueueTicket:
+        with self._lock:
+            key = ("billing_confirm", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, QueueTicket):
+                return deepcopy(existing)
+            index = next(index for index, ticket in enumerate(self._snapshot.tickets) if ticket.id == ticket_id)
+            current = self._snapshot.tickets[index]
+            if current.version != request.expected_version:
+                raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
+            has_billing = current.billing_code is not None or current.uncovered_cost is not None
+            has_correction = (
+                request.corrected_billing_code is not None
+                or request.corrected_uncovered_cost is not None
+                or request.corrected_queue_number is not None
+            )
+            if not has_billing and not has_correction:
+                raise KeyError(f"No billing/queue information on file for {ticket_id}")
+            updated = current.model_copy(
+                update={
+                    "billing_code": request.corrected_billing_code or current.billing_code,
+                    "uncovered_cost": (
+                        request.corrected_uncovered_cost
+                        if request.corrected_uncovered_cost is not None
+                        else current.uncovered_cost
+                    ),
+                    "queue_number": request.corrected_queue_number or current.queue_number,
+                    "billing_confirmed": True,
+                    "billing_confirmed_by": actor,
+                    "billing_confirmed_at": datetime.now(UTC),
+                    "version": current.version + 1,
+                }
+            )
+            self._snapshot.tickets[index] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
+
+    def record_medication_dispense(
+        self, ticket_id: str, request: MedicationDispenseRequest, actor: str = "synthetic-pharmacist"
+    ) -> MedicationDispense:
+        with self._lock:
+            key = ("medication_dispense", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, MedicationDispense):
+                return deepcopy(existing)
+            if not any(ticket.id == ticket_id for ticket in self._snapshot.tickets):
+                raise KeyError(ticket_id)
+            total_cost = sum(item.quantity * item.unit_cost for item in request.items)
+            dispense = MedicationDispense(
+                id=f"MED-{ticket_id}",
+                ticket_id=ticket_id,
+                items=list(request.items),
+                total_cost=total_cost,
+                dispensed_by=actor,
+                dispensed_at=datetime.now(UTC),
+            )
+            self._medication_dispenses[ticket_id] = dispense
+            self._idempotent_results[key] = deepcopy(dispense)
+            return deepcopy(dispense)
+
+    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission:
+        with self._lock:
+            ticket = next((ticket for ticket in self._snapshot.tickets if ticket.id == ticket_id), None)
+            if ticket is None:
+                raise KeyError(ticket_id)
+            if not ticket.documents:
+                raise KeyError(f"No documents on file for {ticket_id}")
+            existing = self._tpa_submissions.get(ticket_id)
+            if existing is not None and existing.status is TpaSubmissionStatus.SUBMITTED:
+                return deepcopy(existing)
+            checkup_summary = (
+                f"{ticket.record_checklist.items[2].detail} · {ticket.processing_stage}"
+                if ticket.record_checklist and len(ticket.record_checklist.items) > 2
+                else ticket.processing_stage
+            )
+            draft = TpaSubmission(
+                id=f"TPA-{ticket_id}",
+                ticket_id=ticket_id,
+                status=TpaSubmissionStatus.DRAFT,
+                documents=ticket.documents,
+                checkup_summary=checkup_summary,
+                medication=self._medication_dispenses.get(ticket_id),
+                version=existing.version if existing else 1,
+            )
+            self._tpa_submissions[ticket_id] = draft
+            return deepcopy(draft)
+
+    def confirm_tpa_submission(
+        self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str = "synthetic-pharmacist"
+    ) -> TpaSubmission:
+        with self._lock:
+            key = ("tpa_submission_confirm", request.idempotency_key)
+            existing_result = self._idempotent_results.get(key)
+            if isinstance(existing_result, TpaSubmission):
+                return deepcopy(existing_result)
+            submission = self._tpa_submissions.get(ticket_id)
+            if submission is None:
+                raise KeyError(ticket_id)
+            if submission.version != request.expected_version:
+                raise ValueError("The submission changed since it was loaded. Refresh and try again.")
+            updated = submission.model_copy(
+                update={
+                    "status": TpaSubmissionStatus.SUBMITTED,
+                    "submitted_by": actor,
+                    "submitted_at": datetime.now(UTC),
+                    "external_reference": f"CLAIM-{sha256(f'{ticket_id}:{request.idempotency_key}'.encode()).hexdigest()[:10].upper()}",
+                    "version": submission.version + 1,
+                }
+            )
+            self._tpa_submissions[ticket_id] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
 
     def decide_recommendation(
         self,

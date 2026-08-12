@@ -225,22 +225,147 @@ def test_recommendation_requires_explicit_decision() -> None:
     assert response.status_code == 422
 
 
-def test_counter_assignment_preserves_ticket_and_increments_version() -> None:
-    response = client.post(
-        "/api/v1/tickets/Q-017/counter",
-        json={
-            "counter_number": "Counter 4",
-            "expected_version": 1,
-            "idempotency_key": "counter-assignment-test",
-        },
-    )
+def test_pharmacy_queue_lists_ongoing_and_finished_tickets() -> None:
+    response = client.get("/api/v1/pharmacy/queue")
 
     assert response.status_code == 200
-    ticket = response.json()["ticket"]
-    assert ticket["id"] == "Q-017"
-    assert ticket["original_ordering_at"] == "2026-08-12T09:34:00Z"
-    assert ticket["actual_counter"] == "Counter 4"
-    assert ticket["version"] == 2
+    tickets = response.json()
+    assert all(ticket["visit_phase"] in {"ongoing", "finished"} for ticket in tickets)
+    assert any(ticket["id"] == "Q-020" for ticket in tickets)
+
+
+def test_medication_dispense_and_tpa_submission_draft_compose_without_retyping() -> None:
+    dispense_response = client.post(
+        "/api/v1/tickets/Q-020/medication",
+        json={
+            "items": [{"name": "Ibuprofen 200mg", "quantity": 10, "unit_cost": 0.2}],
+            "idempotency_key": "medication-dispense-test",
+        },
+    )
+    assert dispense_response.status_code == 201
+    dispense = dispense_response.json()["medication"]
+    assert dispense["ticket_id"] == "Q-020"
+    assert dispense["total_cost"] == 2.0
+
+    draft_response = client.get("/api/v1/tickets/Q-020/tpa-submission")
+    assert draft_response.status_code == 200
+    draft = draft_response.json()
+    assert draft["status"] == "draft"
+    assert len(draft["documents"]) == 4
+    assert {doc["category"] for doc in draft["documents"]} == {
+        "form",
+        "authorisation_letter",
+        "benefit_structure",
+        "coding_scheme",
+    }
+    assert draft["medication"]["ticket_id"] == "Q-020"
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-020/tpa-submission/confirm",
+        json={"expected_version": draft["version"], "idempotency_key": "tpa-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    submission = confirm_response.json()["tpa_submission"]
+    assert submission["status"] == "submitted"
+    assert submission["external_reference"]
+
+
+def test_registration_confirms_autofilled_tpa_document_without_retyping() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-020")
+    benefit_doc = next(doc for doc in ticket["documents"] if doc["category"] == "benefit_structure")
+    assert benefit_doc["facts"]["membership_number"] == "MTP-88213045"
+    assert benefit_doc["confirmed"] is False
+
+    confirm_response = client.post(
+        f"/api/v1/tickets/Q-020/documents/{benefit_doc['id']}/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "tpa-document-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed_ticket = confirm_response.json()["ticket"]
+    confirmed_doc = next(doc for doc in confirmed_ticket["documents"] if doc["id"] == benefit_doc["id"])
+    assert confirmed_doc["confirmed"] is True
+    assert confirmed_doc["facts"]["membership_number"] == benefit_doc["facts"]["membership_number"]
+    assert confirmed_ticket["version"] == ticket["version"] + 1
+
+
+def test_nurse_explicitly_rechecks_the_matched_package() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-019")
+    assert ticket["matched_package"] == "PEE226 — Basic Screen"
+    assert ticket["package_confirmed"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-019/package/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "package-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["package_confirmed"] is True
+    assert confirmed["matched_package"] == "PEE226 — Basic Screen"
+    assert confirmed["version"] == ticket["version"] + 1
+
+
+def test_nurse_can_correct_a_wrong_matched_package() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-018")
+    assert ticket["matched_package"] == "Executive screening"
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-018/package/confirm",
+        json={
+            "corrected_package": "WELL2 — Comprehensive Screen",
+            "expected_version": ticket["version"],
+            "idempotency_key": "package-correction-test",
+        },
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["package_confirmed"] is True
+    assert confirmed["matched_package"] == "WELL2 — Comprehensive Screen"
+
+
+def test_nurse_explicitly_rechecks_billing_code_uncovered_cost_and_queue_number() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-019")
+    assert ticket["billing_code"] == "PEE226-CHAS"
+    assert ticket["uncovered_cost"] == 8.5
+    assert ticket["queue_number"] == "Q019"
+    assert ticket["billing_confirmed"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-019/billing/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "billing-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["billing_confirmed"] is True
+    assert confirmed["billing_code"] == "PEE226-CHAS"
+    assert confirmed["uncovered_cost"] == 8.5
+    assert confirmed["queue_number"] == "Q019"
+    assert confirmed["version"] == ticket["version"] + 1
+
+
+def test_nurse_can_correct_wrong_billing_uncovered_cost_or_queue_number() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-018")
+    assert ticket["uncovered_cost"] == 45.0
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-018/billing/confirm",
+        json={
+            "corrected_uncovered_cost": 30.0,
+            "corrected_queue_number": "Q018B",
+            "expected_version": ticket["version"],
+            "idempotency_key": "billing-correction-test",
+        },
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["billing_confirmed"] is True
+    assert confirmed["uncovered_cost"] == 30.0
+    assert confirmed["queue_number"] == "Q018B"
+    assert confirmed["billing_code"] == "EXEC-STD"
 
 
 def test_patient_crud_uses_versioned_soft_delete() -> None:

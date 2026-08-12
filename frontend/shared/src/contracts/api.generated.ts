@@ -141,6 +141,23 @@ export interface paths {
         patch: operations["update_patient_api_v1_patients__patient_id__patch"];
         trace?: never;
     };
+    "/api/v1/pharmacy/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Pharmacy Queue */
+        get: operations["get_pharmacy_queue_api_v1_pharmacy_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recommendations/{recommendation_id}/decision": {
         parameters: {
             query?: never;
@@ -175,7 +192,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tickets/{ticket_id}/counter": {
+    "/api/v1/staff/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Staff Session */
+        get: operations["get_staff_session_api_v1_staff_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/billing/confirm": {
         parameters: {
             query?: never;
             header?: never;
@@ -184,8 +218,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Assign Counter */
-        post: operations["assign_counter_api_v1_tickets__ticket_id__counter_post"];
+        /** Confirm Billing */
+        post: operations["confirm_billing_api_v1_tickets__ticket_id__billing_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -203,6 +237,91 @@ export interface paths {
         put?: never;
         /** Process Document */
         post: operations["process_document_api_v1_tickets__ticket_id__document_result_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/documents/{document_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Document */
+        post: operations["confirm_document_api_v1_tickets__ticket_id__documents__document_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/medication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Medication Dispense */
+        post: operations["record_medication_dispense_api_v1_tickets__ticket_id__medication_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/package/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Package */
+        post: operations["confirm_package_api_v1_tickets__ticket_id__package_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/tpa-submission": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Tpa Submission */
+        get: operations["get_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/tpa-submission/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Tpa Submission */
+        post: operations["confirm_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -243,18 +362,173 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp/insurance-registry/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Healthcheck */
+        get: operations["healthcheck_mcp_insurance_registry_healthz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/insurance-registry/initialize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Initialize */
+        post: operations["initialize_mcp_insurance_registry_initialize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/insurance-registry/tools/call": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Call Tool
+         * @description Dispatch a registry tool call after authentication and authorization.
+         */
+        post: operations["call_tool_mcp_insurance_registry_tools_call_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/insurance-registry/tools/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tools */
+        get: operations["list_tools_mcp_insurance_registry_tools_list_get"];
+        put?: never;
+        /** List Tools */
+        post: operations["list_tools_mcp_insurance_registry_tools_list_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/operations/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Healthcheck */
+        get: operations["healthcheck_mcp_operations_healthz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/operations/initialize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Initialize
+         * @description MCP initialization handshake.
+         */
+        post: operations["initialize_mcp_operations_initialize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/operations/tools/call": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Call Tool
+         * @description Dispatch a tool call after authentication and per-tool authorization.
+         */
+        post: operations["call_tool_mcp_operations_tools_call_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/operations/tools/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tools
+         * @description Return the MCP tool inventory. Stable — discovery requires no auth.
+         */
+        get: operations["list_tools_mcp_operations_tools_list_get"];
+        put?: never;
+        /**
+         * List Tools
+         * @description Return the MCP tool inventory. Stable — discovery requires no auth.
+         */
+        post: operations["list_tools_mcp_operations_tools_list_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** ActionResult */
         ActionResult: {
+            medication?: components["schemas"]["MedicationDispense"] | null;
             /** Message */
             message: string;
             recommendation?: components["schemas"]["AllocationRecommendation"] | null;
             /** Success */
             success: boolean;
             ticket?: components["schemas"]["QueueTicket"] | null;
+            tpa_submission?: components["schemas"]["TpaSubmission"] | null;
         };
         /** ActivityEvent */
         ActivityEvent: {
@@ -323,15 +597,32 @@ export interface components {
             /** Target Table */
             target_table: string;
         };
-        /** CounterAssignmentRequest */
-        CounterAssignmentRequest: {
-            /** Counter Number */
-            counter_number: string;
+        /** BillingConfirmRequest */
+        BillingConfirmRequest: {
+            /** Corrected Billing Code */
+            corrected_billing_code?: string | null;
+            /** Corrected Queue Number */
+            corrected_queue_number?: string | null;
+            /** Corrected Uncovered Cost */
+            corrected_uncovered_cost?: number | null;
             /** Expected Version */
             expected_version: number;
             /** Idempotency Key */
             idempotency_key: string;
         };
+        /** ChecklistItem */
+        ChecklistItem: {
+            /** Detail */
+            detail?: string | null;
+            /** Label */
+            label: string;
+            status: components["schemas"]["ChecklistStatus"];
+        };
+        /**
+         * ChecklistStatus
+         * @enum {string}
+         */
+        ChecklistStatus: "pass" | "pending" | "fail" | "not_required";
         /**
          * CoverageAction
          * @enum {string}
@@ -360,6 +651,76 @@ export interface components {
             synthetic: boolean;
             /** Tickets */
             tickets: components["schemas"]["QueueTicket"][];
+        };
+        /**
+         * Document
+         * @description One piece of payer paperwork on file for a patient (see DocumentCategory for
+         *     the distinct kinds it can be). Each carries a shared envelope (issuer, category,
+         *     validity) plus a `facts` map for whatever fields are specific to that category
+         *     (e.g. a benefit structure's plan tier vs. an authorisation letter's approval
+         *     number).
+         */
+        Document: {
+            category: components["schemas"]["DocumentCategory"];
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Confirmed By */
+            confirmed_by?: string | null;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Facts
+             * @default {}
+             */
+            facts: {
+                [key: string]: string;
+            };
+            /** Id */
+            id: string;
+            /** Issuer Code */
+            issuer_code: string;
+            /** Issuer Name */
+            issuer_name: string;
+            /** Reference Number */
+            reference_number?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * DocumentCategory
+         * @description Payer paperwork (TPA, CHAS, corporate insurance, ...) splits into distinct
+         *     kinds, each with different fields worth capturing.
+         * @enum {string}
+         */
+        DocumentCategory: "form" | "authorisation_letter" | "benefit_structure" | "coding_scheme";
+        /** DocumentConfirmRequest */
+        DocumentConfirmRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Facts */
+            facts?: {
+                [key: string]: string;
+            } | null;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Reference Number */
+            reference_number?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
         };
         /** DocumentProcessingRequest */
         DocumentProcessingRequest: {
@@ -414,6 +775,45 @@ export interface components {
              */
             registration_source: string;
         };
+        /** MedicationDispense */
+        MedicationDispense: {
+            /**
+             * Dispensed At
+             * Format: date-time
+             */
+            dispensed_at: string;
+            /** Dispensed By */
+            dispensed_by: string;
+            /** Id */
+            id: string;
+            /** Items */
+            items: components["schemas"]["MedicationItem"][];
+            /** Ticket Id */
+            ticket_id: string;
+            /** Total Cost */
+            total_cost: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** MedicationDispenseRequest */
+        MedicationDispenseRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Items */
+            items: components["schemas"]["MedicationItem"][];
+        };
+        /** MedicationItem */
+        MedicationItem: {
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: number;
+            /** Unit Cost */
+            unit_cost: number;
+        };
         /** Metric */
         Metric: {
             /** Detail */
@@ -424,6 +824,15 @@ export interface components {
             trend?: string | null;
             /** Value */
             value: string;
+        };
+        /** PackageConfirmRequest */
+        PackageConfirmRequest: {
+            /** Corrected Package */
+            corrected_package?: string | null;
+            /** Expected Version */
+            expected_version: number;
+            /** Idempotency Key */
+            idempotency_key: string;
         };
         /** PatientAccountSession */
         PatientAccountSession: {
@@ -502,6 +911,19 @@ export interface components {
          * @enum {string}
          */
         PatientSubmissionOutcome: "accepted" | "rejected" | "under_review";
+        /** PatientSummary */
+        PatientSummary: {
+            /** Address */
+            address?: string | null;
+            /** Contact Mobile */
+            contact_mobile?: string | null;
+            /** Date Of Birth */
+            date_of_birth?: string | null;
+            /** Full Name */
+            full_name: string;
+            /** Identifier Masked */
+            identifier_masked: string;
+        };
         /** PatientUpdateRequest */
         PatientUpdateRequest: {
             /** Contact Mobile */
@@ -558,8 +980,19 @@ export interface components {
         };
         /** QueueTicket */
         QueueTicket: {
-            /** Actual Counter */
-            actual_counter?: string | null;
+            /** Actual Room */
+            actual_room?: string | null;
+            /** Billing Code */
+            billing_code?: string | null;
+            /**
+             * Billing Confirmed
+             * @default false
+             */
+            billing_confirmed: boolean;
+            /** Billing Confirmed At */
+            billing_confirmed_at?: string | null;
+            /** Billing Confirmed By */
+            billing_confirmed_by?: string | null;
             /** Checked In At */
             checked_in_at?: string | null;
             /**
@@ -567,25 +1000,44 @@ export interface components {
              * @default false
              */
             clinical_escalation: boolean;
-            /** Expected Counter */
-            expected_counter?: string | null;
+            /**
+             * Documents
+             * @default []
+             */
+            documents: components["schemas"]["Document"][];
+            /** Expected Room */
+            expected_room?: string | null;
             /** Id */
             id: string;
             intake_type: components["schemas"]["IntakeType"];
+            /** Matched Package */
+            matched_package?: string | null;
             /**
              * Original Ordering At
              * Format: date-time
              */
             original_ordering_at: string;
+            /**
+             * Package Confirmed
+             * @default false
+             */
+            package_confirmed: boolean;
+            /** Package Confirmed At */
+            package_confirmed_at?: string | null;
+            /** Package Confirmed By */
+            package_confirmed_by?: string | null;
             /** Patient Id */
             patient_id: string;
             /** Patient Name */
             patient_name: string;
             /** Processing Stage */
             processing_stage: string;
+            /** Queue Number */
+            queue_number?: string | null;
             /** Readiness Reason */
             readiness_reason: string;
             readiness_state: components["schemas"]["ReadinessState"];
+            record_checklist?: components["schemas"]["RecordChecklist"] | null;
             /** Scheduled At */
             scheduled_at?: string | null;
             /** @default on_track */
@@ -595,6 +1047,8 @@ export interface components {
              * @default false
              */
             staff_confirmed: boolean;
+            /** Uncovered Cost */
+            uncovered_cost?: number | null;
             /**
              * Version
              * @default 1
@@ -628,6 +1082,15 @@ export interface components {
              * @default demo-allocation
              */
             idempotency_key: string;
+        };
+        /** RecordChecklist */
+        RecordChecklist: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ChecklistItem"][];
+            patient?: components["schemas"]["PatientSummary"] | null;
         };
         /** RegistrationValidationRequest */
         RegistrationValidationRequest: {
@@ -717,6 +1180,13 @@ export interface components {
              */
             synthetic: boolean;
         };
+        /** StaffSession */
+        StaffSession: {
+            /** Clinic Id */
+            clinic_id: string;
+            /** Role */
+            role: string;
+        };
         /** TicketTransitionRequest */
         TicketTransitionRequest: {
             /**
@@ -738,6 +1208,42 @@ export interface components {
              */
             staff_confirmed: boolean;
         };
+        /** TpaSubmission */
+        TpaSubmission: {
+            /** Checkup Summary */
+            checkup_summary: string;
+            /** Documents */
+            documents: components["schemas"]["Document"][];
+            /** External Reference */
+            external_reference?: string | null;
+            /** Id */
+            id: string;
+            medication?: components["schemas"]["MedicationDispense"] | null;
+            status: components["schemas"]["TpaSubmissionStatus"];
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Submitted By */
+            submitted_by?: string | null;
+            /** Ticket Id */
+            ticket_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** TpaSubmissionConfirmRequest */
+        TpaSubmissionConfirmRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
+        /**
+         * TpaSubmissionStatus
+         * @enum {string}
+         */
+        TpaSubmissionStatus: "draft" | "submitted";
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1102,6 +1608,26 @@ export interface operations {
             };
         };
     };
+    get_pharmacy_queue_api_v1_pharmacy_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueTicket"][];
+                };
+            };
+        };
+    };
     decide_recommendation_api_v1_recommendations__recommendation_id__decision_post: {
         parameters: {
             query?: never;
@@ -1157,7 +1683,27 @@ export interface operations {
             };
         };
     };
-    assign_counter_api_v1_tickets__ticket_id__counter_post: {
+    get_staff_session_api_v1_staff_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffSession"];
+                };
+            };
+        };
+    };
+    confirm_billing_api_v1_tickets__ticket_id__billing_confirm_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1168,7 +1714,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CounterAssignmentRequest"];
+                "application/json": components["schemas"]["BillingConfirmRequest"];
             };
         };
         responses: {
@@ -1204,6 +1750,178 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DocumentProcessingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_document_api_v1_tickets__ticket_id__documents__document_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_medication_dispense_api_v1_tickets__ticket_id__medication_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationDispenseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_package_api_v1_tickets__ticket_id__package_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackageConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TpaSubmission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TpaSubmissionConfirmRequest"];
             };
         };
         responses: {
@@ -1263,6 +1981,282 @@ export interface operations {
         };
     };
     healthcheck_healthz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    healthcheck_mcp_insurance_registry_healthz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    initialize_mcp_insurance_registry_initialize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    call_tool_mcp_insurance_registry_tools_call_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tools_mcp_insurance_registry_tools_list_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    list_tools_mcp_insurance_registry_tools_list_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    healthcheck_mcp_operations_healthz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    initialize_mcp_operations_initialize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    call_tool_mcp_operations_tools_call_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tools_mcp_operations_tools_list_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    list_tools_mcp_operations_tools_list_post: {
         parameters: {
             query?: never;
             header?: never;

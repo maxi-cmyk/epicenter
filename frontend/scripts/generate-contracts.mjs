@@ -10,7 +10,9 @@ const backendRoot = resolve(frontendRoot, "../backend");
 const generatedPath = resolve(frontendRoot, "shared/src/contracts/api.generated.ts");
 const python = existsSync(resolve(backendRoot, ".venv/bin/python"))
   ? resolve(backendRoot, ".venv/bin/python")
-  : "python3";
+  : existsSync(resolve(backendRoot, ".venv/Scripts/python.exe"))
+    ? resolve(backendRoot, ".venv/Scripts/python.exe")
+    : "python3";
 
 function loadOpenApiSchema() {
   const result = spawnSync(

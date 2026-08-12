@@ -14,12 +14,10 @@ const columns: Array<{ phase: VisitPhase; label: string }> = [
 
 export function PatientFlowBoard({
   loading,
-  onOpenReview,
   onRefresh,
   tickets,
 }: {
   loading: boolean;
-  onOpenReview: (ticket: QueueTicket) => void;
   onRefresh: () => void;
   tickets: QueueTicket[];
 }) {
@@ -55,7 +53,7 @@ export function PatientFlowBoard({
               </div>
               <div className={styles.cardStack}>
                 {columnTickets.length > 0 ? (
-                  columnTickets.map((ticket) => <TicketRow key={ticket.id} onOpenReview={onOpenReview} ticket={ticket} />)
+                  columnTickets.map((ticket) => <TicketRow key={ticket.id} ticket={ticket} />)
                 ) : (
                   <p className={styles.columnEmpty}>No patients here right now.</p>
                 )}

@@ -85,7 +85,7 @@ export function KioskWorkspace() {
               <StatusBadge state={ticket.readiness_state} />
               <dl>
                 <div><dt>Original check-in</dt><dd>Just now</dd></div>
-                <div><dt>Current route</dt><dd>{ticket.actual_counter}</dd></div>
+                <div><dt>Current route</dt><dd>{ticket.actual_room}</dd></div>
                 <div><dt>Next step</dt><dd>{ticket.clinical_escalation ? "Urgent-care pathway" : "Document processing"}</dd></div>
               </dl>
               <p>This number remains with the patient through processing, review and readiness.</p>

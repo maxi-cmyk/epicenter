@@ -238,6 +238,8 @@ Navigation and daily workflow:
 - [ ] Limit primary navigation to `Today`, `Review`, `Patients`, `Simulator`, and `Audit`; open upload, extraction correction, billing, notifications, and counter actions contextually from a visit instead of as competing top-level destinations.
 - [ ] Make Today the default route with date selection and Incoming, Ongoing, and Finished groups backed by one queue-entry lifecycle.
 - [ ] Prioritize the oldest actionable visit while respecting already-called patients, explicit clinic administrative priority, staff role/skill scope, and physical nurse-led clinical escalation.
+- [ ] Add a staff-set administrative urgency/priority marker that reorders the Incoming/Ongoing queue display (e.g. TPA deadline, corporate account priority) without displacing already-called patients or inferring clinical urgency automatically — this stays an administrative sort key, never a clinical triage signal, consistent with the PRD guardrail that the system never ranks clinical urgency itself.
+- [ ] Add a manual edit option on the kanban board so staff can move a ticket between columns/positions directly (not only through the normal state-machine actions), audited the same way counter reallocation is, and never silently bypassing readiness gates or clinical escalation.
 - [ ] Show one primary next action per visit; keep validated identity, coverage, questionnaire, allergy, billing, and queue facts compact and expand only exceptions, source evidence, or history.
 - [ ] Preserve selected date, filters, task state, and intended route across navigation, reverification, session expiry, retry, and back actions.
 
@@ -349,6 +351,19 @@ Validation and safety:
 - [ ] Verify initialization, `tools/list`, valid/invalid calls, authorization, timeouts, response bounds, and audit attribution with an independent MCP client before cloud deployment.
 - [ ] Keep the MCP inventory limited to the custom Operations and Insurance Format Registry servers; reject Microsoft-hosted, duplicate, or generic data-access MCPs.
 - [ ] Do not build Power BI during development. Keep the native Next.js dashboard as P0 and document Power BI/Fabric only as a future de-identified aggregate projection for enterprise scale.
+
+**Document classification pipeline (feeds the Insurance Format Registry MCP)**
+
+Before any field extraction runs, an uploaded/scanned document must first be classified into one of the `DocumentCategory` values (`form`, `authorisation_letter`, `benefit_structure`, `coding_scheme`) — extraction logic is category-specific and should never run generically across all document types. This applies to payer paperwork broadly (TPA, CHAS, corporate insurance), not TPA specifically. Proposed four-step triage, cheapest/most-certain checks first:
+
+- [ ] **Step 1 — structural triage** (cheap, no content understanding): single-page vs multi-page (multi-page → consent/disclosure form with sections); logo/letterhead present vs plain/handwritten (letterhead → authorisation letter or TPA chit; blank/handwritten → registration form or self-pay); table/grid of checkboxes vs free-flowing paragraphs (grid → benefit schedule or screening package list).
+- [ ] **Step 2 — keyword/anchor-phrase scan**: match a short list of "tell" phrases near the top of the document — "I hereby consent to.../declaration" → consent form; "guarantee of payment"/"authorises"/"please bill to" → authorisation letter; "CHAS" + a colour (Blue/Orange/Green) → CHAS card/chit; company name + "screening package"/"panel" → corporate screening chit; insurer/TPA name in the header (AIA, GE, IHP, MHC, ...) → TPA document, with the letterhead itself identifying which TPA.
+- [ ] **Step 3 — template fingerprint match**: once a document's payer type is known, match its layout (logo position, form ID/reference number format, field labels) against the known template schemas already modelled in the maker/checker Insurance Format Registry MCP (`backend/app/mcp/insurance_registry.py`) to identify the specific issuer/template.
+- [ ] **Step 4 — category-specific extraction**: only after classification, run the field-extraction logic relevant to that specific category/template (e.g. a GE authorisation letter's fields) rather than running one generic extractor against every document type.
+
+This governs what actually reaches `QueueTicket.documents`: the nurse and pharmacist screens only ever render documents that were present in the intake and successfully classified — there is no placeholder shown for a document category that wasn't detected for a given patient. The current demo repository fixture (Q-020) pre-assigns four already-classified `Document` records directly; it does not yet simulate steps 1–4 of this classification pipeline (no triage/keyword/fingerprint logic runs against the seeded documents — the category is just given). Building an actual classification simulation (or wiring it to the real extraction model) is future work under this task, not yet implemented.
+
+CHAS and corporate-insurance eligibility-to-package matching is a separate, already-implemented mechanism — see the note under Task 6/cross-panel workflow below; it does not go through this Document/DocumentCategory model at all.
 
 ### 10. Pass the backend release gate, then finalise visual design
 

@@ -9,26 +9,36 @@ from app.domain.models import (
     ActivityEvent,
     AllocationRecommendation,
     AuditRecord,
-    CounterAssignmentRequest,
+    BillingConfirmRequest,
+    ChecklistItem,
+    ChecklistStatus,
     DashboardSnapshot,
+    DocumentConfirmRequest,
     DocumentProcessingRequest,
     KioskCheckInRequest,
+    MedicationDispense,
+    MedicationDispenseRequest,
     Metric,
+    PackageConfirmRequest,
     PatientCreateRequest,
     PatientDeleteRequest,
     PatientList,
     PatientRecord,
     PatientSubmissionOutcome,
+    PatientSummary,
     PatientUpdateRequest,
     PreArrivalSubmissionRequest,
     PreArrivalSubmissionResult,
     QueueTicket,
     RecommendationDecisionRequest,
+    RecordChecklist,
     RegistrationValidationRequest,
     RegistrationValidationResult,
     ReviewCase,
     SimulatorSnapshot,
     TicketTransitionRequest,
+    TpaSubmission,
+    TpaSubmissionConfirmRequest,
 )
 
 
@@ -55,8 +65,6 @@ class OperationsRepository(Protocol):
         self, ticket_id: str, request: DocumentProcessingRequest, actor: str
     ) -> QueueTicket: ...
 
-    def assign_counter(self, ticket_id: str, request: CounterAssignmentRequest, actor: str) -> QueueTicket: ...
-
     def decide_recommendation(
         self,
         recommendation_id: str,
@@ -76,6 +84,24 @@ class OperationsRepository(Protocol):
 
     def list_audit(self, *, limit: int) -> list[AuditRecord]: ...
 
+    def record_medication_dispense(
+        self, ticket_id: str, request: MedicationDispenseRequest, actor: str
+    ) -> MedicationDispense: ...
+
+    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission: ...
+
+    def confirm_tpa_submission(
+        self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str
+    ) -> TpaSubmission: ...
+
+    def confirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
+    ) -> QueueTicket: ...
+
+    def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def confirm_billing(self, ticket_id: str, request: BillingConfirmRequest, actor: str) -> QueueTicket: ...
+
 
 def _ticket_from_row(row: dict[str, object]) -> QueueTicket:
     return QueueTicket(
@@ -90,13 +116,95 @@ def _ticket_from_row(row: dict[str, object]) -> QueueTicket:
         checked_in_at=row.get("checked_in_at"),
         original_ordering_at=row["original_ordering_at"],
         waiting_minutes=int(row.get("waiting_minutes") or 0),
-        expected_counter=row.get("expected_counter_number"),
-        actual_counter=row.get("counter_number"),
+        expected_room=row.get("expected_counter_number"),
+        actual_room=row.get("counter_number"),
         processing_stage=str(row["processing_stage"]),
         service_target=str(row.get("service_target") or "on_track"),
         staff_confirmed=bool(row.get("staff_confirmed")),
         clinical_escalation=bool(row.get("clinical_escalation")),
         version=int(row.get("version") or 1),
+    )
+
+
+def _checklist_status_from_bool(ok: bool) -> ChecklistStatus:
+    return ChecklistStatus.PASS if ok else ChecklistStatus.FAIL
+
+
+def _questionnaire_item(label: str, status_by_type: dict[str, str], questionnaire_type: str) -> ChecklistItem:
+    verification_status = status_by_type.get(questionnaire_type)
+    if verification_status is None:
+        return ChecklistItem(label=label, status=ChecklistStatus.NOT_REQUIRED)
+    if verification_status == "verified":
+        return ChecklistItem(label=label, status=ChecklistStatus.PASS, detail="Verified")
+    return ChecklistItem(label=label, status=ChecklistStatus.PENDING, detail=verification_status.replace("_", " "))
+
+
+def _build_checklist(
+    row: dict[str, object],
+    *,
+    patients_by_id: dict[int, dict[str, object]],
+    coverage_by_appointment: dict[str, dict[str, object]],
+    eligibility_by_appointment: dict[str, dict[str, object]],
+    rules_by_id: dict[str, dict[str, object]],
+    questionnaires_by_patient: dict[int, dict[str, str]],
+) -> RecordChecklist:
+    patient_id = row.get("patient_id")
+    appointment_id = row.get("appointment_id")
+
+    patient_row = patients_by_id.get(int(patient_id)) if patient_id is not None else None  # type: ignore[arg-type]
+    patient = (
+        PatientSummary(
+            full_name=str(patient_row["full_name"]),
+            identifier_masked=str(patient_row["identifier_masked"]),
+            date_of_birth=patient_row.get("date_of_birth"),
+            contact_mobile=patient_row.get("contact_mobile"),
+            address=patient_row.get("address"),
+        )
+        if patient_row
+        else None
+    )
+
+    coverage_row = coverage_by_appointment.get(str(appointment_id)) if appointment_id else None
+    documents_present = bool(row.get("all_required_documents_present"))
+    documents_valid = bool(row.get("all_documents_valid"))
+    extraction_pass = str(row.get("extraction_status") or "needs_review") == "pass"
+    coverage_detail = (
+        f"{coverage_row.get('issuer_name')} · {coverage_row.get('document_type')}"
+        if coverage_row and coverage_row.get("issuer_name")
+        else None
+    )
+
+    eligibility_row = eligibility_by_appointment.get(str(appointment_id)) if appointment_id else None
+    match_status = str(row.get("match_status") or "no_match")
+    eligibility_status = (
+        ChecklistStatus.PASS
+        if match_status == "clean"
+        else ChecklistStatus.PENDING
+        if match_status == "ambiguous"
+        else ChecklistStatus.FAIL
+    )
+    matched_rule = rules_by_id.get(str(eligibility_row.get("matched_rule_id"))) if eligibility_row else None
+    eligibility_detail = str(matched_rule["package_name"]) if matched_rule else None
+
+    status_by_type = questionnaires_by_patient.get(int(patient_id), {}) if patient_id is not None else {}  # type: ignore[arg-type]
+
+    return RecordChecklist(
+        patient=patient,
+        items=[
+            ChecklistItem(
+                label="Patient details",
+                status=ChecklistStatus.PASS if patient else ChecklistStatus.PENDING,
+                detail=patient.identifier_masked if patient else None,
+            ),
+            ChecklistItem(
+                label="Coverage document",
+                status=_checklist_status_from_bool(documents_present and documents_valid and extraction_pass),
+                detail=coverage_detail,
+            ),
+            ChecklistItem(label="Eligibility match", status=eligibility_status, detail=eligibility_detail),
+            _questionnaire_item("General health questionnaire", status_by_type, "general_health"),
+            _questionnaire_item("Occupational health questionnaire", status_by_type, "occupational_health"),
+        ],
     )
 
 
@@ -168,6 +276,87 @@ class SupabaseOperationsRepository:
 
         tickets = [_ticket_from_row(row) for row in ticket_rows]
         tickets_by_id = {ticket.id: ticket for ticket in tickets}
+
+        patient_ids = {int(row["patient_id"]) for row in ticket_rows if row.get("patient_id") is not None}
+        appointment_ids = {str(row["appointment_id"]) for row in ticket_rows if row.get("appointment_id") is not None}
+
+        patient_rows = (
+            self.api.select(
+                "patients",
+                "id,full_name,identifier_masked,date_of_birth,contact_mobile,address",
+                filters={"id": f"in.({','.join(str(pid) for pid in patient_ids)})"},
+            )
+            if patient_ids
+            else []
+        )
+        patients_by_id = {int(row["id"]): row for row in patient_rows}
+
+        coverage_rows = (
+            self.api.select(
+                "coverage_documents",
+                "id,appointment_id,issuer_name,document_type,updated_at",
+                filters={"appointment_id": f"in.({','.join(appointment_ids)})", "deleted_at": "is.null"},
+                order="updated_at.desc",
+            )
+            if appointment_ids
+            else []
+        )
+        coverage_by_appointment: dict[str, dict[str, object]] = {}
+        for row in coverage_rows:
+            coverage_by_appointment.setdefault(str(row["appointment_id"]), row)
+
+        eligibility_rows = (
+            self.api.select(
+                "eligibility_matches",
+                "appointment_id,matched_rule_id,match_status,updated_at",
+                filters={"appointment_id": f"in.({','.join(appointment_ids)})", "deleted_at": "is.null"},
+                order="updated_at.desc",
+            )
+            if appointment_ids
+            else []
+        )
+        eligibility_by_appointment: dict[str, dict[str, object]] = {}
+        for row in eligibility_rows:
+            eligibility_by_appointment.setdefault(str(row["appointment_id"]), row)
+
+        rule_ids = {str(row["matched_rule_id"]) for row in eligibility_rows if row.get("matched_rule_id")}
+        rule_rows = (
+            self.api.select("eligibility_rules", "id,package_name", filters={"id": f"in.({','.join(rule_ids)})"})
+            if rule_ids
+            else []
+        )
+        rules_by_id = {str(row["id"]): row for row in rule_rows}
+
+        questionnaire_rows = (
+            self.api.select(
+                "questionnaire_submissions",
+                "patient_id,questionnaire_type,verification_status",
+                filters={"patient_id": f"in.({','.join(str(pid) for pid in patient_ids)})"},
+            )
+            if patient_ids
+            else []
+        )
+        questionnaires_by_patient: dict[int, dict[str, str]] = {}
+        for row in questionnaire_rows:
+            if row.get("patient_id") is None:
+                continue
+            bucket = questionnaires_by_patient.setdefault(int(row["patient_id"]), {})
+            bucket[str(row["questionnaire_type"])] = str(row["verification_status"])
+
+        for row, ticket in zip(ticket_rows, tickets, strict=True):
+            ticket.record_checklist = _build_checklist(
+                row,
+                patients_by_id=patients_by_id,
+                coverage_by_appointment=coverage_by_appointment,
+                eligibility_by_appointment=eligibility_by_appointment,
+                rules_by_id=rules_by_id,
+                questionnaires_by_patient=questionnaires_by_patient,
+            )
+            appointment_id = row.get("appointment_id")
+            eligibility_row = eligibility_by_appointment.get(str(appointment_id)) if appointment_id else None
+            matched_rule = rules_by_id.get(str(eligibility_row.get("matched_rule_id"))) if eligibility_row else None
+            ticket.matched_package = str(matched_rule["package_name"]) if matched_rule else None
+
         review_cases = []
         for row in review_rows:
             ticket = tickets_by_id.get(str(row["queue_entry_id"]))
@@ -392,18 +581,47 @@ class SupabaseOperationsRepository:
         )
         return _ticket_from_row(row)
 
-    def assign_counter(self, ticket_id: str, request: CounterAssignmentRequest, actor: str) -> QueueTicket:
-        row = self.api.rpc(
-            "epicenter_assign_counter",
-            {
-                "p_ticket_id": ticket_id,
-                "p_expected_version": request.expected_version,
-                "p_counter_number": request.counter_number,
-                "p_actor_reference": actor,
-                "p_idempotency_key": request.idempotency_key,
-            },
+    def record_medication_dispense(
+        self, ticket_id: str, request: MedicationDispenseRequest, actor: str
+    ) -> MedicationDispense:
+        raise NotImplementedError(
+            "Pharmacist medication dispensing is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
         )
-        return _ticket_from_row(row)
+
+    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission:
+        raise NotImplementedError(
+            "TPA submission drafting is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_tpa_submission(
+        self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str
+    ) -> TpaSubmission:
+        raise NotImplementedError(
+            "TPA submission confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
+    ) -> QueueTicket:
+        raise NotImplementedError(
+            "Document confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket:
+        raise NotImplementedError(
+            "Package confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_billing(self, ticket_id: str, request: BillingConfirmRequest, actor: str) -> QueueTicket:
+        raise NotImplementedError(
+            "Billing/queue confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
 
     def decide_recommendation(
         self,

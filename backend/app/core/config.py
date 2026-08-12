@@ -10,10 +10,11 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     clinic_id: str = "clinic_harbourfront"
     patient_demo_source_record_key: str = "registration:0107"
-    # Comma-separated. Defaults cover both split-screen dev processes: the
-    # patient screen (port 3000) and the nurse/staff screen (port 3001).
+    # Comma-separated. Defaults cover the three split-screen dev processes: the
+    # patient screen (port 3000), the nurse/staff screen (port 3001), and the
+    # pharmacy screen (port 3002).
     frontend_origins: str = Field(
-        default="http://localhost:3000,http://localhost:3001",
+        default="http://localhost:3000,http://localhost:3001,http://localhost:3002",
         validation_alias=AliasChoices("EPICENTER_FRONTEND_ORIGINS", "EPICENTER_FRONTEND_ORIGIN"),
     )
     demo_mode: bool = True
