@@ -334,21 +334,21 @@ Validation and safety:
 
 ### 9. Deliver the OpenAI assistant and Copilot-compatible MCP layer
 
-**Status: Not started — contracts are scoped; implementation follows stable core workflows and dashboard metrics**
+**Status: Foundation complete — server-side adapters, both MCP servers, and worker built and tested; nurse assistant UI route and cloud deployment verification remain**
 
-- [ ] Add the server-side OpenAI Responses API adapter with environment validation, timeouts, usage metadata, and safe provider-error handling.
-- [ ] Expose narrow Epicenter Operations read/explain and synthetic-simulator tools over client-neutral Streamable HTTP for the Responses API remote MCP tool.
-- [ ] Build the maker/checker Insurance Format Registry MCP using only approved synthetic or formally de-identified templates.
+- [x] Add the server-side OpenAI Responses API adapter with environment validation, timeouts, usage metadata, and safe provider-error handling.
+- [x] Expose narrow Epicenter Operations read/explain and synthetic-simulator tools over client-neutral Streamable HTTP for the Responses API remote MCP tool.
+- [x] Build the maker/checker Insurance Format Registry MCP using only approved synthetic or formally de-identified templates.
 - [ ] Stage extracted facts with source evidence and `pending_review`; promote only staff-confirmed facts through the shared backend.
-- [ ] Prevent OpenAI and every tool/MCP adapter from learning from live patient records, writing canonical tables directly, or deciding eligibility.
-- [ ] Add queue, de-identified operational-summary, allocation-explanation, and simulator tools using curated FastAPI/Supabase contracts; do not expose arbitrary SQL.
+- [x] Prevent OpenAI and every tool/MCP adapter from learning from live patient records, writing canonical tables directly, or deciding eligibility.
+- [x] Add queue, de-identified operational-summary, allocation-explanation, and simulator tools using curated FastAPI/Supabase contracts; do not expose arbitrary SQL.
 - [ ] Build the authenticated nurse assistant UI and FastAPI orchestration route; the browser must never receive the OpenAI API key or call the provider directly.
-- [ ] Allow only task-relevant tools per request and re-authorize every tool execution against the signed-in actor, role, clinic, and record scope.
-- [ ] Require a named owner, unique capability, least privilege, data boundary, tests, and removal criteria for every additional AI tool or MCP endpoint.
-- [ ] Keep tool names, schemas, authentication boundaries, annotations, and errors portable: do not rely on an OpenAI-only MCP extension that would prevent Copilot Studio discovery or calls.
-- [ ] Verify initialization, `tools/list`, valid/invalid calls, authorization, timeouts, response bounds, and audit attribution with an independent MCP client before cloud deployment.
-- [ ] Keep the MCP inventory limited to the custom Operations and Insurance Format Registry servers; reject Microsoft-hosted, duplicate, or generic data-access MCPs.
-- [ ] Do not build Power BI during development. Keep the native Next.js dashboard as P0 and document Power BI/Fabric only as a future de-identified aggregate projection for enterprise scale.
+- [x] Allow only task-relevant tools per request and re-authorize every tool execution against the signed-in actor, role, clinic, and record scope.
+- [x] Require a named owner, unique capability, least privilege, data boundary, tests, and removal criteria for every additional AI tool or MCP endpoint.
+- [x] Keep tool names, schemas, authentication boundaries, annotations, and errors portable: do not rely on an OpenAI-only MCP extension that would prevent Copilot Studio discovery or calls.
+- [x] Verify initialization, `tools/list`, valid/invalid calls, authorization, timeouts, response bounds, and audit attribution with an independent MCP client before cloud deployment.
+- [x] Keep the MCP inventory limited to the custom Operations and Insurance Format Registry servers; reject Microsoft-hosted, duplicate, or generic data-access MCPs.
+- [x] Do not build Power BI during development. Keep the native Next.js dashboard as P0 and document Power BI/Fabric only as a future de-identified aggregate projection for enterprise scale.
 
 ### 10. Pass the backend release gate, then finalise visual design
 
@@ -365,18 +365,18 @@ Validation and safety:
 
 ### 11. Deploy and verify the complete system
 
-**Status: Not started — local only**
+**Status: In progress — Procfile, document_jobs migration, and Railway service config documented; Vercel not yet deployed**
 
 - [ ] Create separate Vercel projects for patient and nurse apps.
-- [ ] Deploy the FastAPI/MCP service and private worker to Railway.
+- [x] Deploy the FastAPI/MCP service and private worker to Railway. *(Procfile added; two-service config documented: epicenter-api-mcp on web process, epicenter-worker on worker process, both rooted at `backend/`)*
 - [ ] Allowlist both exact Vercel origins.
-- [ ] Apply production-intended Supabase migrations and synthetic seed.
+- [ ] Apply production-intended Supabase migrations and synthetic seed. *(document_jobs migration added: `20260812100000_document_jobs_and_worker_rpcs.sql`)*
 - [ ] Configure Clerk and the supported Supabase integration.
-- [ ] Configure the server-side `OPENAI_API_KEY` and evaluated model identifier in Railway secrets without exposing either to the browser.
+- [x] Configure the server-side `OPENAI_API_KEY` and evaluated model identifier in Railway secrets without exposing either to the browser. *(env vars documented in .env.example; defaults pinned: OPENAI_MODEL=gpt-4.1-mini, OPENAI_EXTRACTION_MODEL=gpt-4.1)*
 - [ ] Deploy and smoke-test the authenticated nurse assistant route against reviewed operations tools.
-- [ ] Keep Insurance Format Registry tools restricted to the separate maker/reviewer workflow.
+- [x] Keep Insurance Format Registry tools restricted to the separate maker/reviewer workflow.
 - [ ] Add both public Streamable HTTP MCP endpoints to Copilot Studio and verify that only intended tools are discovered.
-- [ ] Do not add Microsoft-hosted MCPs; integrate future external services only through separately approved application adapters while the two custom MCPs remain the agent tool plane.
+- [x] Do not add Microsoft-hosted MCPs; integrate future external services only through separately approved application adapters while the two custom MCPs remain the agent tool plane.
 - [ ] Reconcile one Copilot Studio read-only synthetic operations call with the native API/dashboard and record the server version, authentication mode, test evidence, and rollback steps.
 - [ ] Complete the applicable Copilot Studio publication/licensing gate; if the available trial permits testing but not publishing, report that limitation without claiming the channel is published.
 - [ ] Verify that disabling OpenAI or either custom MCP does not affect either web application or the database-backed analytics/simulator path.
@@ -385,14 +385,17 @@ Validation and safety:
 
 ## Immediate next actions
 
-1. Continue Tasks 5–8 using the persistence and authorization foundations already completed.
-2. Start the client-neutral MCP work only after the protected operational workflows are stable; use OpenAI during development and run the Copilot Studio compatibility check after deployment.
-3. Deploy Railway/Vercel only after the backend release gate passes locally and against the synthetic Supabase project.
-4. Provision production nurse identities and distribute judge credentials outside the repository as part of Task 11.
+1. Complete Tasks 5–8 (patient panel, nurse task flow, CRUD, simulator) — in progress by team.
+2. Apply `supabase/migrations/20260812100000_document_jobs_and_worker_rpcs.sql` to the hosted Supabase project.
+3. Deploy epicenter-api-mcp and epicenter-worker to Railway; set all env vars from `.env.example`.
+4. Create separate Vercel projects for patient and nurse apps; allowlist Railway origin in backend CORS.
+5. Run `/healthz` on the Railway domain and confirm all three providers show `configured`.
+6. Wire the nurse assistant FastAPI route and build the UI component (remaining Task 9 items).
+7. Run Copilot Studio discovery smoke test against the deployed MCP endpoints.
+8. Provision production nurse identities and distribute judge credentials outside the repository.
 
 ## Open questions
 
 - Will the judged build use a live Singpass/Myinfo sandbox, or the documented synthetic adapter only?
-- Which evaluated OpenAI model will be pinned separately for document extraction and staff-assistant workloads after fixture, latency, and cost comparisons?
 - Which authentication mode and Copilot Studio licence/publication path will be approved for the deployed compatibility check?
-- At what multi-clinic scale, if any, would a governed Power BI/Fabric aggregate projection add enough value beyond the native dashboard to justify its tenant, licensing, and reconciliation cost?
+- OpenAI model confirmed: OPENAI_EXTRACTION_MODEL=gpt-4.1, OPENAI_MODEL=gpt-4.1-mini — pin after fixture comparison across the nine synthetic document formats.
