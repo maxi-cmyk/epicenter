@@ -1,15 +1,25 @@
 "use client";
 
-import { AlertCircle, ArrowRight, CalendarDays, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  CalendarDays,
+  ClipboardList,
+  CreditCard,
+  FileText,
+  RefreshCw,
+  ShieldCheck,
+  Ticket,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { useMountedLoad } from "@/lib/useMountedLoad";
 
 import { Button } from "@epicenter/shared/ui/Button";
 import { PageHeader } from "@epicenter/shared/ui/PageHeader";
 import type { PatientHome } from "@epicenter/shared/contracts";
 
 import { getPatientHome } from "@/lib/api";
+import { useMountedLoad } from "@/lib/useMountedLoad";
 
 import styles from "./Journey.module.css";
 
@@ -19,6 +29,18 @@ function formatWhen(value: string) {
     timeStyle: "short",
     timeZone: "Asia/Singapore",
   }).format(new Date(value));
+}
+
+function firstName(fullName: string) {
+  const part = fullName.trim().split(/\s+/)[0];
+  return part || fullName;
+}
+
+function questionnaireLabel(status: PatientHome["questionnaire_status"]) {
+  if (status === "submitted") return "Submitted";
+  if (status === "draft") return "Draft saved";
+  if (status === "not_required") return "Not required";
+  return "Not started";
 }
 
 export function HomeWorkspace() {
@@ -60,27 +82,96 @@ export function HomeWorkspace() {
   if (!home?.appointment) {
     return (
       <div className={styles.page}>
-        <PageHeader
-          description="No appointment has been made yet. Complete onboarding if needed, then book with the clinic."
-          title={home ? `Hi ${home.patient_display_name}` : "No appointment has been made"}
-        />
+        <header className={styles.homeIntro}>
+          <p className={styles.homeEyebrow}>Patient home</p>
+          <h1>Hi {home ? firstName(home.patient_display_name) : "there"}</h1>
+          <p>
+            No appointment has been made yet. Your preparation progress stays here until the clinic books your
+            visit.
+          </p>
+        </header>
+
+        <section className={styles.emptyHero} aria-labelledby="empty-appointment-title">
+          <div className={styles.emptyHeroIcon}>
+            <CalendarDays aria-hidden="true" size={28} />
+          </div>
+          <div>
+            <h2 id="empty-appointment-title">No appointment has been made</h2>
+            <p>
+              When HarbourFront or another clinic books you in, the time, location, queue ticket, and payment
+              step will appear on this page.
+            </p>
+          </div>
+        </section>
+
         {home ? (
-          <section className={styles.panel}>
-            <p className={styles.muted}>Coverage: {home.coverage_summary}</p>
-            <p className={styles.muted}>Questionnaire: {home.questionnaire_status}</p>
-            <p className={styles.muted}>Queue: {home.queue_summary}</p>
+          <section className={styles.prepPanel} aria-label="Preparation status">
+            <div className={styles.prepHeading}>
+              <strong>Preparation</strong>
+              <span>Ready when you book</span>
+            </div>
+            <ul className={styles.prepList}>
+              <li>
+                <span className={styles.prepIcon}>
+                  <ShieldCheck aria-hidden="true" size={18} />
+                </span>
+                <div>
+                  <strong>Coverage</strong>
+                  <p>{home.coverage_summary}</p>
+                </div>
+              </li>
+              <li>
+                <span className={styles.prepIcon}>
+                  <ClipboardList aria-hidden="true" size={18} />
+                </span>
+                <div>
+                  <strong>Questionnaire</strong>
+                  <p>{questionnaireLabel(home.questionnaire_status)}</p>
+                </div>
+              </li>
+              <li>
+                <span className={styles.prepIcon}>
+                  <Ticket aria-hidden="true" size={18} />
+                </span>
+                <div>
+                  <strong>Queue</strong>
+                  <p>{home.queue_summary}</p>
+                </div>
+              </li>
+            </ul>
           </section>
         ) : null}
+
+        <nav aria-label="Other patient pages" className={styles.homeShortcuts}>
+          <Link href="/records">
+            <FileText aria-hidden="true" size={18} />
+            Records
+          </Link>
+          <Link href="/queue">
+            <Ticket aria-hidden="true" size={18} />
+            Queue
+          </Link>
+          <Link href="/payment">
+            <CreditCard aria-hidden="true" size={18} />
+            Payment
+          </Link>
+        </nav>
+
+        <button className={styles.refreshLink} onClick={() => void load()} type="button">
+          <RefreshCw aria-hidden="true" size={16} />
+          {loading ? "Refreshing…" : "Refresh status"}
+        </button>
       </div>
     );
   }
 
   return (
     <div className={styles.page}>
-      <PageHeader
-        description="One upcoming visit, one ticket, and only the next step you can complete now."
-        title={`Hi ${home.patient_display_name}`}
-      />
+      <header className={styles.homeIntro}>
+        <p className={styles.homeEyebrow}>Upcoming visit</p>
+        <h1>Hi {firstName(home.patient_display_name)}</h1>
+        <p>One appointment, one ticket, and only the next step you can complete now.</p>
+      </header>
 
       {home.notification ? (
         <div className={styles.banner} role="status">
@@ -95,7 +186,9 @@ export function HomeWorkspace() {
 
       <section className={styles.homeCard}>
         <div className={styles.homeMeta}>
-          <CalendarDays aria-hidden="true" size={22} />
+          <span className={styles.appointmentIcon}>
+            <CalendarDays aria-hidden="true" size={22} />
+          </span>
           <div>
             <strong>Upcoming appointment</strong>
             <p>{formatWhen(home.appointment.scheduled_at)}</p>
@@ -112,13 +205,7 @@ export function HomeWorkspace() {
           </div>
           <div>
             <dt>Questionnaire</dt>
-            <dd>
-              {home.questionnaire_status === "submitted"
-                ? "Submitted"
-                : home.questionnaire_status === "draft"
-                  ? "Draft saved"
-                  : "Not started"}
-            </dd>
+            <dd>{questionnaireLabel(home.questionnaire_status)}</dd>
           </div>
           <div>
             <dt>Queue</dt>
@@ -132,8 +219,7 @@ export function HomeWorkspace() {
             <div>
               <dt>Recent visit</dt>
               <dd>
-                {home.recent_visit_summary}{" "}
-                <Link href="/records">View</Link>
+                {home.recent_visit_summary} <Link href="/records">View</Link>
               </dd>
             </div>
           ) : null}
@@ -152,10 +238,12 @@ export function HomeWorkspace() {
           </div>
         ) : null}
 
-        <Link className={styles.primaryLink} href={home.primary_action_href}>
-          {home.primary_action_label}
-          <ArrowRight aria-hidden="true" size={18} />
-        </Link>
+        {home.primary_action !== "none" ? (
+          <Link className={styles.primaryLink} href={home.primary_action_href}>
+            {home.primary_action_label}
+            <ArrowRight aria-hidden="true" size={18} />
+          </Link>
+        ) : null}
 
         <button className={styles.refreshLink} onClick={() => void load()} type="button">
           <RefreshCw aria-hidden="true" size={16} />
