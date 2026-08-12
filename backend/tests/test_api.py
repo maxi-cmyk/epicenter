@@ -39,7 +39,10 @@ def test_healthcheck() -> None:
     response = client.get("/healthz")
     assert response.status_code == 200
     assert response.json()["demo_mode"] is True
-    assert response.json()["providers"] == {"database": "synthetic", "authentication": "demo"}
+    providers = response.json()["providers"]
+    assert providers["database"] == "synthetic"
+    assert providers["authentication"] == "demo"
+    assert "openai" in providers  # new field — present but unconfigured in demo
 
 
 def test_production_routes_fail_closed_without_clerk_configuration() -> None:

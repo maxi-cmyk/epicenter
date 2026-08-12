@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = None
     clerk_secret_key: str | None = Field(default=None, validation_alias="CLERK_SECRET_KEY")
     clerk_jwt_key: str | None = Field(default=None, validation_alias="CLERK_JWT_KEY")
+    # OpenAI — server/worker only, never exposed to the browser
+    openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
+    # Nurse assistant model (conversational grounding of tool results)
+    openai_model: str = Field(default="gpt-4.1-mini", validation_alias="OPENAI_MODEL")
+    # Document extraction model (multimodal, Structured Outputs)
+    openai_extraction_model: str = Field(
+        default="gpt-4.1",
+        validation_alias=AliasChoices("OPENAI_EXTRACTION_MODEL", "OPENAI_DOCUMENT_MODEL"),
+    )
+    # API key for MCP endpoint authentication (demo/synthetic environments)
+    mcp_api_key: str | None = Field(default=None, validation_alias="EPICENTER_MCP_API_KEY")
 
     @property
     def frontend_origin_list(self) -> list[str]:
@@ -50,6 +61,10 @@ class Settings(BaseSettings):
     @property
     def clerk_configured(self) -> bool:
         return bool(self.clerk_secret_key)
+
+    @property
+    def openai_configured(self) -> bool:
+        return bool(self.openai_api_key)
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="EPICENTER_", extra="ignore")
 
