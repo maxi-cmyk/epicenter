@@ -11,7 +11,6 @@ type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
 const NAVIGATION: NavItem[] = [
   { href: "/", label: "Readiness board", icon: LayoutDashboard },
   { href: "/review", label: "Assisted review", icon: ClipboardCheck },
-  { href: "/kiosk", label: "Walk-in kiosk", icon: ScanLine },
 ];
 
 export function SideNavigation() {
@@ -42,6 +41,9 @@ export function SideNavigation() {
           <strong>Nurse panel</strong>
           <small>No live patient data</small>
         </span>
+        <Link aria-label="Walk-in kiosk" className={styles.hiddenAccess} href="/kiosk" title="Walk-in kiosk">
+          <ScanLine aria-hidden="true" size={13} />
+        </Link>
       </div>
     </aside>
   );

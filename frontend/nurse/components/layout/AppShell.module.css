@@ -95,6 +95,23 @@
   padding: 12px;
 }
 
+.hiddenAccess {
+  align-items: center;
+  color: var(--green-800);
+  display: flex;
+  flex-shrink: 0;
+  height: 22px;
+  justify-content: center;
+  margin-left: auto;
+  opacity: 0.55;
+  width: 22px;
+}
+
+.hiddenAccess:hover,
+.hiddenAccess:focus-visible {
+  opacity: 1;
+}
+
 .liveDot {
   background: #8fd29f;
   border: 3px solid rgba(143, 210, 159, 0.25);

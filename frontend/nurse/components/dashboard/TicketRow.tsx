@@ -14,30 +14,35 @@ function timeLabel(ticket: QueueTicket) {
 
 export function TicketRow({ ticket }: { ticket: QueueTicket }) {
   return (
-    <article className={`${styles.ticketRow} ${styles[`ticket_${ticket.readiness_state}`]}`}>
-      <div className={styles.patientCell}>
-        <strong>{ticket.id}</strong>
-        <span>{ticket.patient_name}</span>
-        <small>{ticket.intake_type === "walk_in" ? "Walk-in" : `${timeLabel(ticket)} booked`}</small>
-      </div>
-      <div className={styles.routeCell}>
-        <span>{ticket.actual_counter ?? ticket.expected_counter ?? "Unassigned"}</span>
-        <small>{ticket.actual_counter ? "Actual route" : "Expected route"}</small>
-      </div>
-      <div className={styles.stageCell}>
-        <span>{ticket.processing_stage}</span>
-        <small>{ticket.staff_confirmed ? "Staff confirmed" : "Confirmation pending"}</small>
-      </div>
-      <div className={styles.waitCell}>
-        <Clock3 aria-hidden="true" size={15} />
-        <span>{ticket.waiting_minutes ? `${ticket.waiting_minutes} min` : "Not arrived"}</span>
-      </div>
-      <div className={styles.statusCell}>
+    <article className={`${styles.card} ${styles[`card_${ticket.readiness_state}`]}`}>
+      <header className={styles.cardHead}>
+        <span className={styles.cardId}>{ticket.id}</span>
         <StatusBadge state={ticket.readiness_state} />
+      </header>
+      <h3 className={styles.cardName}>{ticket.patient_name}</h3>
+      <p className={styles.cardMeta}>{ticket.intake_type === "walk_in" ? "Walk-in" : `${timeLabel(ticket)} booked`}</p>
+      <dl className={styles.cardStats}>
+        <div>
+          <dt>Route</dt>
+          <dd>{ticket.actual_counter ?? ticket.expected_counter ?? "Unassigned"}</dd>
+        </div>
+        <div>
+          <dt>Stage</dt>
+          <dd>{ticket.processing_stage}</dd>
+        </div>
+        <div>
+          <dt><Clock3 aria-hidden="true" size={12} /> Wait</dt>
+          <dd>{ticket.waiting_minutes ? `${ticket.waiting_minutes} min` : "Not arrived"}</dd>
+        </div>
+      </dl>
+      <footer className={styles.cardFoot}>
+        <span>{ticket.staff_confirmed ? "Staff confirmed" : "Confirmation pending"}</span>
         {ticket.readiness_state === "needs_review" ? (
-          <Link aria-label={`Open review for ${ticket.patient_name}`} href="/review"><ArrowRight aria-hidden="true" size={18} /></Link>
+          <Link aria-label={`Open review for ${ticket.patient_name}`} className={styles.cardReviewLink} href="/review">
+            Review <ArrowRight aria-hidden="true" size={14} />
+          </Link>
         ) : null}
-      </div>
+      </footer>
     </article>
   );
 }

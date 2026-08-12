@@ -197,164 +197,170 @@
 .reviewKey { background: var(--amber); }
 .processingKey { background: var(--ink-soft); }
 
-.columnLabels,
-.ticketRow {
+.columns {
   display: grid;
-  grid-template-columns: minmax(190px, 1.15fr) minmax(120px, 0.7fr) minmax(210px, 1.2fr) minmax(110px, 0.62fr) minmax(185px, 0.95fr);
+  gap: 1px;
+  background: var(--rule);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.columnLabels {
-  background: var(--green-950);
-  color: var(--green-100);
-  font-family: var(--font-display);
-  font-size: 0.78rem;
-  letter-spacing: 0.07em;
-  padding: 10px 20px 10px 174px;
-  text-transform: uppercase;
+.column {
+  background: var(--cream-50);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.columnLabels span {
-  padding: 0 12px;
-}
-
-.phaseSection {
-  border-bottom: 1px solid var(--rule);
-  display: grid;
-  grid-template-columns: 154px 1fr;
-}
-
-.phaseSection:last-child {
-  border-bottom: 0;
-}
-
-.phaseLabel {
-  align-content: start;
+.columnHead {
+  align-items: baseline;
   background: var(--green-100);
-  border-right: 1px solid var(--rule);
   display: grid;
+  gap: 2px 10px;
   grid-template-columns: 1fr auto;
-  padding: 18px;
+  padding: 16px 20px;
 }
 
-.phaseLabel strong {
+.columnHead strong {
   font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
 }
 
-.phaseLabel > span {
+.columnHead > span {
   align-items: center;
   background: var(--green-900);
   border-radius: 999px;
   color: var(--cream-50);
   display: flex;
   font-size: 0.74rem;
-  height: 26px;
+  height: 24px;
   justify-content: center;
-  width: 26px;
+  min-width: 24px;
+  padding: 0 7px;
 }
 
-.phaseLabel small {
+.columnHead small {
   color: var(--ink-soft);
+  font-size: 0.78rem;
   grid-column: 1 / -1;
-  margin-top: 6px;
 }
 
-.ticketList {
-  min-width: 0;
+.cardStack {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
 }
 
-.ticketRow {
-  min-height: 86px;
-  position: relative;
+.columnEmpty {
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  margin: 0;
+  padding: 18px;
+  text-align: center;
 }
 
-.ticketRow + .ticketRow {
-  border-top: 1px solid var(--rule);
+.card {
+  background: var(--cream-50);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  border-top: 3px solid var(--green-700);
+  padding: 14px 16px 12px;
+  transition: box-shadow 160ms ease-out, transform 160ms ease-out;
 }
 
-.ticketRow::before {
-  background: var(--green-700);
-  content: "";
-  height: 1px;
-  inset: 50% auto auto 0;
-  position: absolute;
-  width: 20px;
+.card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
 }
 
-.ticket_needs_review::before { background: var(--amber); }
-.ticket_processing::before { background: var(--ink-soft); }
+.card_needs_review { border-top-color: var(--amber); }
+.card_processing { border-top-color: var(--ink-soft); }
 
-.ticketRow > div {
-  align-content: center;
-  min-width: 0;
-  padding: 14px 12px;
+.cardHead {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
 
-.ticketRow > div + div {
-  border-left: 1px solid var(--rule);
+.cardId {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
 }
 
-.ticketRow span,
-.ticketRow strong,
-.ticketRow small {
-  display: block;
+.cardName {
+  color: var(--green-800);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: 0.01em;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.patientCell strong {
-  color: var(--green-800);
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  letter-spacing: 0.025em;
-}
-
-.patientCell > span,
-.stageCell > span {
-  font-weight: 650;
-}
-
-.ticketRow small {
+.cardMeta {
   color: var(--ink-soft);
+  font-size: 0.78rem;
+  margin: 2px 0 12px;
+}
+
+.cardStats {
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  padding-top: 10px;
+}
+
+.cardStats dt {
+  align-items: center;
+  color: var(--ink-soft);
+  display: flex;
+  font-size: 0.7rem;
+  gap: 3px;
+  text-transform: uppercase;
+}
+
+.cardStats dd {
+  font-weight: 650;
+  margin: 3px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardFoot {
+  align-items: center;
+  border-top: 1px solid var(--rule);
+  display: flex;
   font-size: 0.76rem;
-  margin-top: 2px;
-}
-
-.waitCell,
-.statusCell {
-  align-items: center;
-  display: flex;
-  gap: 7px;
-}
-
-.waitCell span {
-  font-variant-numeric: tabular-nums;
-  overflow: visible;
-  text-overflow: clip;
-}
-
-.statusCell {
   justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
 }
 
-.statusCell > span {
-  overflow: visible;
+.cardFoot > span {
+  color: var(--ink-soft);
 }
 
-.statusCell a {
+.cardReviewLink {
   align-items: center;
-  border-radius: 50%;
+  color: var(--amber);
   display: flex;
-  height: 34px;
-  justify-content: center;
+  font-weight: 700;
+  gap: 4px;
   text-decoration: none;
-  width: 34px;
 }
 
-.statusCell a:hover {
-  background: var(--green-100);
+.cardReviewLink:hover {
+  text-decoration: underline;
 }
 
 .lowerGrid {
@@ -580,17 +586,12 @@
     grid-column: span 2;
   }
 
-  .flowBoard {
-    overflow-x: auto;
+  .columns {
+    gap: 16px;
   }
 
-  .boardHeader {
-    min-width: 940px;
-  }
-
-  .columnLabels,
-  .phaseSection {
-    min-width: 940px;
+  .cardStats {
+    gap: 8px;
   }
 }
 
@@ -629,10 +630,6 @@
     grid-template-columns: 1fr;
   }
 
-  .flowBoard {
-    overflow: visible;
-  }
-
   .boardHeader {
     align-items: flex-start;
     flex-direction: column;
@@ -640,91 +637,25 @@
     padding: 24px 20px;
   }
 
-  .columnLabels {
-    display: none;
-  }
-
-  .phaseSection {
-    grid-template-columns: 1fr;
-    min-width: 0;
-  }
-
-  .phaseLabel {
-    align-items: center;
-    border-bottom: 1px solid var(--rule);
-    border-right: 0;
+  .columns {
+    background: none;
     display: flex;
-    gap: 10px;
-    padding: 12px 14px;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 12px;
+    scroll-padding-inline: 12px;
+    scroll-snap-type: x mandatory;
   }
 
-  .phaseLabel strong {
-    font-size: 1.15rem;
+  .column {
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    flex: 0 0 88%;
+    scroll-snap-align: start;
   }
 
-  .phaseLabel small {
-    font-size: 0.74rem;
-    grid-column: auto;
-    margin: 0 0 0 auto;
-  }
-
-  .ticketRow {
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-height: 126px;
-    padding: 8px 0;
-  }
-
-  .ticketRow::before {
-    width: 12px;
-  }
-
-  .ticketRow > div {
-    padding: 6px 12px;
-  }
-
-  .ticketRow > div + div {
-    border-left: 0;
-  }
-
-  .patientCell {
-    grid-column: 1;
-    grid-row: 1;
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .routeCell {
-    border-top: 1px solid var(--rule);
-    grid-column: 1 / -1;
-    grid-row: 3;
-  }
-
-  .stageCell {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .stageCell span,
-  .stageCell small {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
-
-  .waitCell {
-    align-self: stretch;
-    border-left: 1px solid var(--rule) !important;
-    border-top: 1px solid var(--rule);
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .statusCell {
-    align-self: stretch;
-    border-left: 1px solid var(--rule) !important;
-    border-bottom: 1px solid var(--rule);
-    grid-column: 2;
-    grid-row: 1;
-    min-width: 126px;
+  .columnHead {
+    border-radius: var(--radius) var(--radius) 0 0;
   }
 
   .allocationPanel {
