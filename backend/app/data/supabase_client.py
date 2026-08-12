@@ -85,8 +85,19 @@ class SupabaseDataApi:
             raise SupabaseDataError(f"Insert into {table} returned an invalid response.")
         return result[0]
 
-    def rpc(self, function_name: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    def patch(
+        self,
+        table: str,
+        payload: dict[str, Any],
+        *,
+        filters: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """PATCH (update) rows matching filters."""
+        params = dict(filters or {})
+        result = self._request("PATCH", table, params=params, payload=payload, prefer="return=representation")
+        return list(result or [])
+
+    def rpc(self, function_name: str, parameters: dict[str, Any]) -> Any:
+        """Call a Postgres function via PostgREST. Returns whatever the function returns."""
         result = self._request("POST", f"rpc/{function_name}", payload=parameters)
-        if not isinstance(result, dict):
-            raise SupabaseDataError(f"RPC {function_name} returned an invalid response.")
         return result
