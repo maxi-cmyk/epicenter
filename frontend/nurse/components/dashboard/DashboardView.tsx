@@ -1,32 +1,43 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { useReverification } from "@clerk/nextjs";
+import { useState } from "react";
 
 import { useDashboard } from "@/hooks/useDashboard";
-import { Button } from "@epicenter/shared/ui/Button";
+import { transitionTicket } from "@/lib/api";
+import type { QueueTicket } from "@epicenter/shared/contracts";
 import { LoadingBoard } from "@epicenter/shared/ui/LoadingBoard";
-import { PageHeader } from "@epicenter/shared/ui/PageHeader";
 
-import { ActivityRail } from "./ActivityRail";
-import { AllocationDecision } from "./AllocationDecision";
-import { MetricsRail } from "./MetricsRail";
 import { PatientFlowBoard } from "./PatientFlowBoard";
+import { TicketReviewModal } from "./TicketReviewModal";
 import styles from "./Dashboard.module.css";
 
 export function DashboardView() {
   const { data, source, loading, refresh } = useDashboard();
+  const [reviewTicketId, setReviewTicketId] = useState<string | null>(null);
+  const reverifiedTransition = useReverification(transitionTicket);
+
+  const reviewTicket = data?.tickets.find((ticket) => ticket.id === reviewTicketId);
+  const reviewCase = data?.review_cases.find((item) => item.ticket_id === reviewTicketId);
+
+  async function confirmReview(ticket: QueueTicket) {
+    await reverifiedTransition(ticket.id, ticket.version ?? 1, "ready", "all_prerequisites_passed", true);
+    setReviewTicketId(null);
+    await refresh();
+  }
 
   return (
     <div className={styles.dashboard}>
-      <PageHeader
-        actions={
-          <Button disabled={loading} icon={<RefreshCw aria-hidden="true" size={17} />} onClick={() => void refresh()} variant="secondary">
-            Refresh board
-          </Button>
-        }
-        description="One operational view for booked patients, walk-ins, assisted review and human-approved counter changes."
-        title="Today’s clinic flow"
-      />
+      {loading || !data ? (
+        <LoadingBoard />
+      ) : (
+        <PatientFlowBoard
+          loading={loading}
+          onOpenReview={(ticket) => setReviewTicketId(ticket.id)}
+          onRefresh={refresh}
+          tickets={data.tickets}
+        />
+      )}
 
       <div className={styles.contextBar}>
         <span>{data?.clinic_name ?? "Parkway Shenton · HarbourFront"}</span>
@@ -36,18 +47,13 @@ export function DashboardView() {
         </span>
       </div>
 
-      {loading || !data ? (
-        <LoadingBoard />
-      ) : (
-        <>
-          <MetricsRail metrics={data.metrics} recommendation={data.recommendation} />
-          <PatientFlowBoard tickets={data.tickets} />
-          <div className={styles.lowerGrid}>
-            <AllocationDecision initialRecommendation={data.recommendation} />
-            <ActivityRail activity={data.activity} />
-          </div>
-        </>
-      )}
+      {reviewCase && reviewTicket ? (
+        <TicketReviewModal
+          onClose={() => setReviewTicketId(null)}
+          onConfirm={() => void confirmReview(reviewTicket)}
+          reviewCase={reviewCase}
+        />
+      ) : null}
     </div>
   );
 }

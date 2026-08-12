@@ -1,10 +1,17 @@
 "use client";
 
-import { ClipboardCheck, LayoutDashboard, ScanLine } from "lucide-react";
+import { UserButton, useUser } from "@clerk/nextjs";
+import { ClipboardCheck, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useStaffRole } from "@/components/providers/AuthProvider";
+
 import styles from "./AppShell.module.css";
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
 
@@ -15,6 +22,10 @@ const NAVIGATION: NavItem[] = [
 
 export function SideNavigation() {
   const pathname = usePathname();
+  const { user } = useUser();
+  const role = useStaffRole();
+  const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || "Signed in";
+
   return (
     <aside className={styles.sidebar}>
       <Link aria-label="Epicenter nurse home" className={styles.brand} href="/">
@@ -36,14 +47,18 @@ export function SideNavigation() {
         })}
       </nav>
       <div className={styles.sidebarFoot}>
-        <span className={styles.liveDot} />
-        <span>
-          <strong>Nurse panel</strong>
-          <small>No live patient data</small>
-        </span>
-        <Link aria-label="Walk-in kiosk" className={styles.hiddenAccess} href="/kiosk" title="Walk-in kiosk">
-          <ScanLine aria-hidden="true" size={13} />
-        </Link>
+        <div className={styles.profileText}>
+          <strong>{displayName}</strong>
+          {role ? <small>{capitalize(role)}</small> : null}
+        </div>
+        <UserButton
+          appearance={{
+            elements: {
+              userButtonAvatarBox: styles.userButtonAvatar,
+              userButtonTrigger: styles.userButtonTrigger,
+            },
+          }}
+        />
       </div>
     </aside>
   );

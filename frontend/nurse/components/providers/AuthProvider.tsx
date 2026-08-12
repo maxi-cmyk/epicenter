@@ -1,7 +1,7 @@
 "use client";
 
 import { ClerkLoaded, ClerkLoading, ClerkProvider, Show, UserButton, useAuth } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import { ApiError, fetchStaffSession, setAccessTokenProvider } from "@/lib/api";
 
@@ -11,6 +11,12 @@ import styles from "./AuthProvider.module.css";
 type AuthProviderProps = {
   children: React.ReactNode;
 };
+
+const StaffRoleContext = createContext<string | null>(null);
+
+export function useStaffRole() {
+  return useContext(StaffRoleContext);
+}
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -56,12 +62,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           <StaffSignIn />
         </Show>
         <Show when="signed-in">
-          <ClerkTokenBridge>
-            <div className={styles.accountDock}>
-              <UserButton showName />
-            </div>
-            {children}
-          </ClerkTokenBridge>
+          <ClerkTokenBridge>{children}</ClerkTokenBridge>
         </Show>
       </ClerkLoaded>
     </ClerkProvider>
@@ -72,13 +73,16 @@ function ClerkTokenBridge({ children }: AuthProviderProps) {
   const { getToken } = useAuth();
   const [state, setState] = useState<"checking" | "authorized" | "denied" | "error">("checking");
   const [message, setMessage] = useState("Confirming your clinic role…");
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setAccessTokenProvider(getToken);
     void fetchStaffSession()
-      .then(() => {
-        if (active) setState("authorized");
+      .then((session) => {
+        if (!active) return;
+        setRole(session.role);
+        setState("authorized");
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -107,5 +111,5 @@ function ClerkTokenBridge({ children }: AuthProviderProps) {
     );
   }
 
-  return children;
+  return <StaffRoleContext.Provider value={role}>{children}</StaffRoleContext.Provider>;
 }

@@ -8,8 +8,13 @@ import type { ReviewCase } from "@epicenter/shared/contracts";
 
 import styles from "./Review.module.css";
 
+const RESOLUTION_METHODS = ["Replacement document provided", "Confirmed self-pay", "Other"];
+
 export function EvidencePanel({ reviewCase, onConfirm }: { reviewCase: ReviewCase; onConfirm: () => void }) {
   const [confirmed, setConfirmed] = useState(false);
+  const [resolutionMethod, setResolutionMethod] = useState("");
+  const [resolutionNote, setResolutionNote] = useState("");
+  const canConfirm = confirmed && resolutionMethod.length > 0;
 
   return (
     <section aria-labelledby="evidence-title" className={styles.evidencePanel}>
@@ -35,8 +40,27 @@ export function EvidencePanel({ reviewCase, onConfirm }: { reviewCase: ReviewCas
       </div>
 
       <div className={styles.resolutionBand}>
-        <h3>Resolution recorded by staff</h3>
-        <p>Patient supplied a replacement voucher valid until 31 December 2026. Current rules were re-run and produced one clean package match.</p>
+        <h3>Method of resolution</h3>
+        <div className={styles.resolutionOptions}>
+          {RESOLUTION_METHODS.map((method) => (
+            <label key={method}>
+              <input
+                checked={resolutionMethod === method}
+                name="resolution-method"
+                onChange={() => setResolutionMethod(method)}
+                type="radio"
+                value={method}
+              />
+              <span>{method}</span>
+            </label>
+          ))}
+        </div>
+        <textarea
+          className={styles.resolutionNote}
+          onChange={(event) => setResolutionNote(event.target.value)}
+          placeholder="Add resolution notes (optional)"
+          value={resolutionNote}
+        />
       </div>
 
       <label className={styles.confirmationCheck}>
@@ -46,7 +70,7 @@ export function EvidencePanel({ reviewCase, onConfirm }: { reviewCase: ReviewCas
 
       <div className={styles.evidenceActions}>
         <Button variant="secondary">Keep in review</Button>
-        <Button disabled={!confirmed} icon={<Check aria-hidden="true" size={17} />} onClick={onConfirm}>Confirm and mark ready</Button>
+        <Button disabled={!canConfirm} icon={<Check aria-hidden="true" size={17} />} onClick={onConfirm}>Confirm and mark ready</Button>
       </div>
     </section>
   );

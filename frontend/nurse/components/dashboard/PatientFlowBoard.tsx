@@ -1,26 +1,47 @@
+import { RefreshCw } from "lucide-react";
+
 import type { QueueTicket, VisitPhase } from "@epicenter/shared/contracts";
+import { Button } from "@epicenter/shared/ui/Button";
 
 import { TicketRow } from "./TicketRow";
 import styles from "./Dashboard.module.css";
 
-const columns: Array<{ phase: VisitPhase; label: string; detail: string }> = [
-  { phase: "incoming", label: "Incoming", detail: "Booked patients before check-in" },
-  { phase: "ongoing", label: "Ongoing", detail: "Checked in on one persistent ticket" },
-  { phase: "finished", label: "Finished", detail: "Completed, cancelled or no-show" },
+const columns: Array<{ phase: VisitPhase; label: string }> = [
+  { phase: "incoming", label: "Incoming" },
+  { phase: "ongoing", label: "Ongoing" },
+  { phase: "finished", label: "Finished" },
 ];
 
-export function PatientFlowBoard({ tickets }: { tickets: QueueTicket[] }) {
+export function PatientFlowBoard({
+  loading,
+  onOpenReview,
+  onRefresh,
+  tickets,
+}: {
+  loading: boolean;
+  onOpenReview: (ticket: QueueTicket) => void;
+  onRefresh: () => void;
+  tickets: QueueTicket[];
+}) {
   return (
     <section aria-labelledby="patient-flow-title" className={styles.flowBoard}>
       <header className={styles.boardHeader}>
-        <div>
-          <h2 id="patient-flow-title">Patient readiness board</h2>
-          <p>Readiness is administrative. Staff-led clinical escalation always takes precedence.</p>
-        </div>
-        <div className={styles.boardLegend}>
-          <span><i className={styles.readyKey} /> Ready</span>
-          <span><i className={styles.reviewKey} /> Review</span>
-          <span><i className={styles.processingKey} /> Processing</span>
+        <h2 id="patient-flow-title">Patient readiness board</h2>
+        <div className={styles.boardHeaderRight}>
+          <Button
+            className={styles.boardRefresh}
+            disabled={loading}
+            icon={<RefreshCw aria-hidden="true" size={13} />}
+            onClick={() => void onRefresh()}
+            variant="secondary"
+          >
+            Refresh
+          </Button>
+          <div className={styles.boardLegend}>
+            <span><i className={styles.readyKey} /> Ready</span>
+            <span><i className={styles.reviewKey} /> Review</span>
+            <span><i className={styles.processingKey} /> Processing</span>
+          </div>
         </div>
       </header>
       <div className={styles.columns}>
@@ -31,11 +52,10 @@ export function PatientFlowBoard({ tickets }: { tickets: QueueTicket[] }) {
               <div className={styles.columnHead}>
                 <strong>{column.label}</strong>
                 <span>{columnTickets.length}</span>
-                <small>{column.detail}</small>
               </div>
               <div className={styles.cardStack}>
                 {columnTickets.length > 0 ? (
-                  columnTickets.map((ticket) => <TicketRow key={ticket.id} ticket={ticket} />)
+                  columnTickets.map((ticket) => <TicketRow key={ticket.id} onOpenReview={onOpenReview} ticket={ticket} />)
                 ) : (
                   <p className={styles.columnEmpty}>No patients here right now.</p>
                 )}
