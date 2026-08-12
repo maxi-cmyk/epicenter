@@ -1,5 +1,6 @@
 "use client";
 
+import { useReverification } from "@clerk/nextjs";
 import { useMemo, useState } from "react";
 
 import { useDashboard } from "@/hooks/useDashboard";
@@ -16,16 +17,22 @@ export function ReviewWorkspace() {
   const { data, loading } = useDashboard();
   const [selectedId, setSelectedId] = useState("R-018");
   const [resolvedIds, setResolvedIds] = useState<string[]>([]);
+  const reverifiedTransition = useReverification(transitionTicket);
 
   const cases = useMemo(() => data?.review_cases.filter((item) => !resolvedIds.includes(item.id)) ?? [], [data, resolvedIds]);
   const selected = cases.find((item) => item.id === selectedId) ?? cases[0];
 
   async function confirmReview(reviewCase: ReviewCase) {
-    try {
-      await transitionTicket(reviewCase.ticket_id, "ready", "all_prerequisites_passed", true);
-    } finally {
-      setResolvedIds((current) => [...current, reviewCase.id]);
-    }
+    const ticket = data?.tickets.find((item) => item.id === reviewCase.ticket_id);
+    if (!ticket) return;
+    await reverifiedTransition(
+      reviewCase.ticket_id,
+      ticket.version ?? 1,
+      "ready",
+      "all_prerequisites_passed",
+      true,
+    );
+    setResolvedIds((current) => [...current, reviewCase.id]);
   }
 
   return (

@@ -1,21 +1,64 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from clerk_backend_api import AuthenticateRequestOptions, authenticate_request
 from fastapi import Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.core.config import Settings, get_settings
+from app.data.supabase_client import SupabaseDataApi, SupabaseDataError
 
 
-class StaffPrincipal(BaseModel):
+class ClerkIdentity(BaseModel):
     subject: str
     source: str
+    factor_verification_age: tuple[int, int] | None = None
+
+
+class StaffPrincipal(ClerkIdentity):
+    role: str
+    clinic_id: str
+
+
+class PatientPrincipal(ClerkIdentity):
+    patient_id: int | None
+    source_record_key: str
+
+
+class ReverificationRequired(Exception):
+    """Signal Clerk's standard client-side reverification flow."""
+
+    def __init__(self, configuration: str = "strict") -> None:
+        self.configuration = configuration
+        super().__init__("Fresh credential verification is required.")
+
+
+def _parse_factor_verification_age(payload: dict[str, Any]) -> tuple[int, int] | None:
+    raw_age = payload.get("fva")
+    if (
+        not isinstance(raw_age, (list, tuple))
+        or len(raw_age) != 2
+        or any(not isinstance(value, int) or value < -1 for value in raw_age)
+    ):
+        return None
+    return int(raw_age[0]), int(raw_age[1])
+
+
+def _has_fresh_verification(identity: ClerkIdentity, *, after_minutes: int = 10) -> bool:
+    """Match Clerk's strict graceful downgrade when no second factor exists."""
+    if identity.source == "demo":
+        return True
+    if identity.factor_verification_age is None:
+        return False
+    first_factor_age, second_factor_age = identity.factor_verification_age
+    if second_factor_age != -1:
+        return second_factor_age < after_minutes
+    return first_factor_age != -1 and first_factor_age < after_minutes
 
 
 def require_synthetic_patient_flow(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
-    """Keep the unauthenticated patient fixture endpoint out of production."""
+    """Keep fixture-only unauthenticated adapters out of production."""
     if not settings.demo_mode:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -23,14 +66,12 @@ def require_synthetic_patient_flow(
         )
 
 
-def require_staff(
+def require_clerk_identity(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
-) -> StaffPrincipal:
-    """Verify Clerk JWTs in production while keeping the synthetic demo runnable."""
+) -> ClerkIdentity:
     if settings.demo_mode:
-        return StaffPrincipal(subject="synthetic-staff", source="demo")
-
+        return ClerkIdentity(subject="synthetic-user", source="demo")
     if not settings.clerk_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -52,5 +93,208 @@ def require_staff(
 
     if not request_state.is_signed_in or not request_state.payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid Clerk session required.")
+    return ClerkIdentity(
+        subject=str(request_state.payload["sub"]),
+        source="clerk",
+        factor_verification_age=_parse_factor_verification_age(request_state.payload),
+    )
 
-    return StaffPrincipal(subject=request_state.payload["sub"], source="clerk")
+
+def require_staff(
+    identity: Annotated[ClerkIdentity, Depends(require_clerk_identity)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StaffPrincipal:
+    """Authorize a verified Clerk identity through the active clinic staff mapping."""
+    if settings.demo_mode:
+        return StaffPrincipal(
+            subject="synthetic-staff",
+            source="demo",
+            factor_verification_age=(0, -1),
+            role="operations_admin",
+            clinic_id=settings.clinic_id,
+        )
+    if not settings.supabase_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Staff authorization storage is not configured.",
+        )
+
+    api = SupabaseDataApi(settings.supabase_url, settings.supabase_secret_key)
+    try:
+        rows = api.select(
+            "staff_accounts",
+            "id,clerk_user_id,clinic_id,role,active",
+            filters={
+                "clerk_user_id": f"eq.{identity.subject}",
+                "active": "eq.true",
+                "deleted_at": "is.null",
+            },
+            limit=2,
+        )
+    except SupabaseDataError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Staff authorization could not be verified.",
+        ) from exc
+    finally:
+        api.close()
+
+    if (
+        len(rows) != 1
+        or rows[0]["clinic_id"] != settings.clinic_id
+        or rows[0].get("active") is not True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nurse access required for this clinic.",
+        )
+    return StaffPrincipal(
+        subject=identity.subject,
+        source=identity.source,
+        factor_verification_age=identity.factor_verification_age,
+        role=str(rows[0]["role"]),
+        clinic_id=str(rows[0]["clinic_id"]),
+    )
+
+
+def require_reverified_staff(
+    principal: Annotated[StaffPrincipal, Depends(require_staff)],
+) -> StaffPrincipal:
+    """Require a first/strongest available factor verified within ten minutes."""
+    if not _has_fresh_verification(principal):
+        raise ReverificationRequired("strict")
+    return principal
+
+
+def require_patient(
+    identity: Annotated[ClerkIdentity, Depends(require_clerk_identity)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PatientPrincipal:
+    """Authorize a verified Clerk identity through exactly one active patient mapping."""
+    if settings.demo_mode:
+        return PatientPrincipal(
+            subject="synthetic-patient",
+            source="demo",
+            patient_id=None,
+            source_record_key=settings.patient_demo_source_record_key,
+        )
+    if not settings.supabase_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Patient authorization storage is not configured.",
+        )
+
+    api = SupabaseDataApi(settings.supabase_url, settings.supabase_secret_key)
+    try:
+        accounts = api.select(
+            "patient_accounts",
+            "patient_id",
+            filters={"clerk_user_id": f"eq.{identity.subject}", "active": "eq.true"},
+            limit=2,
+        )
+        if len(accounts) != 1:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Patient account activation required.",
+            )
+        patients = api.select(
+            "patients",
+            "id,source_record_key",
+            filters={"id": f"eq.{accounts[0]['patient_id']}", "deleted_at": "is.null"},
+            limit=2,
+        )
+    except SupabaseDataError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Patient authorization could not be verified.",
+        ) from exc
+    finally:
+        api.close()
+
+    if len(patients) != 1:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Patient access is unavailable.")
+    return PatientPrincipal(
+        subject=identity.subject,
+        source=identity.source,
+        patient_id=int(patients[0]["id"]),
+        source_record_key=str(patients[0]["source_record_key"]),
+    )
+
+
+def activate_patient_mapping(identity: ClerkIdentity, settings: Settings) -> PatientPrincipal:
+    """Idempotently attach a verified demo patient identity to one synthetic scenario."""
+    if settings.demo_mode:
+        return PatientPrincipal(
+            subject="synthetic-patient",
+            source="demo",
+            patient_id=1,
+            source_record_key=settings.patient_demo_source_record_key,
+        )
+    if not settings.supabase_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Patient authorization storage is not configured.",
+        )
+
+    api = SupabaseDataApi(settings.supabase_url, settings.supabase_secret_key)
+    try:
+        existing = api.select(
+            "patient_accounts",
+            "patient_id",
+            filters={"clerk_user_id": f"eq.{identity.subject}", "active": "eq.true"},
+            limit=2,
+        )
+        if len(existing) > 1:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Multiple patient mappings found.")
+        patient_filters = (
+            {"id": f"eq.{existing[0]['patient_id']}", "deleted_at": "is.null"}
+            if existing
+            else {
+                "source_record_key": f"eq.{settings.patient_demo_source_record_key}",
+                "deleted_at": "is.null",
+            }
+        )
+        patients = api.select("patients", "id,source_record_key", filters=patient_filters, limit=2)
+        if len(patients) != 1:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Demo patient scenario is unavailable.",
+            )
+        if not existing:
+            try:
+                api.insert(
+                    "patient_accounts",
+                    {
+                        "clerk_user_id": identity.subject,
+                        "patient_id": patients[0]["id"],
+                        "active": True,
+                    },
+                )
+            except SupabaseDataError as exc:
+                if exc.code != "23505":
+                    raise
+                replay = api.select(
+                    "patient_accounts",
+                    "patient_id",
+                    filters={"clerk_user_id": f"eq.{identity.subject}", "active": "eq.true"},
+                    limit=2,
+                )
+                if len(replay) != 1 or int(replay[0]["patient_id"]) != int(patients[0]["id"]):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Patient activation conflicted.",
+                    ) from exc
+    except SupabaseDataError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Patient activation could not be completed.",
+        ) from exc
+    finally:
+        api.close()
+
+    return PatientPrincipal(
+        subject=identity.subject,
+        source=identity.source,
+        patient_id=int(patients[0]["id"]),
+        source_record_key=str(patients[0]["source_record_key"]),
+    )

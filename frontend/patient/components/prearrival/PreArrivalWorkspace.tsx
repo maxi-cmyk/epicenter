@@ -36,9 +36,11 @@ export function PreArrivalWorkspace() {
     setResult(null);
     try {
       const submission = await submitPreArrival({
-        appointment_id: "APT-DEMO-001",
+        appointment_id: "APT-DEMO-014",
         coverage_action: choice,
         file_name: selectedFile?.name,
+        expected_ticket_version: 1,
+        idempotency_key: crypto.randomUUID(),
       });
       setResult(submission);
     } catch (submissionError) {

@@ -1,9 +1,38 @@
+import pytest
 from fastapi.testclient import TestClient
 
+from app.core.auth import StaffPrincipal, require_staff
 from app.core.config import Settings, get_settings
+from app.data.demo_repository import DemoRepository
+from app.data.dependencies import get_operations_repository
 from app.main import app
 
 client = TestClient(app)
+
+
+def staff_principal(role: str, *, factor_age: tuple[int, int] | None = (0, -1)) -> StaffPrincipal:
+    return StaffPrincipal(
+        subject=f"test-{role}",
+        source="test",
+        factor_verification_age=factor_age,
+        role=role,
+        clinic_id="clinic_harbourfront",
+    )
+
+
+@pytest.fixture(autouse=True)
+def isolated_demo_dependencies():
+    repository = DemoRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        demo_mode=True,
+        persistence_mode="demo",
+        _env_file=None,
+    )
+    app.dependency_overrides[get_operations_repository] = lambda: repository
+    try:
+        yield
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_healthcheck() -> None:
@@ -14,7 +43,11 @@ def test_healthcheck() -> None:
 
 
 def test_production_routes_fail_closed_without_clerk_configuration() -> None:
-    app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False, _env_file=None)
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        demo_mode=False,
+        persistence_mode="demo",
+        _env_file=None,
+    )
     try:
         response = client.get("/api/v1/dashboard")
     finally:
@@ -32,6 +65,29 @@ def test_dashboard_contract() -> None:
     assert any(ticket["id"] == "Q-018" for ticket in body["tickets"])
 
 
+@pytest.mark.parametrize("role", ["registration", "operations_admin", "auditor"])
+def test_staff_session_returns_the_authorized_database_role(role: str) -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal(role)
+
+    response = client.get("/api/v1/staff/session")
+
+    assert response.status_code == 200
+    assert response.json() == {"role": role, "clinic_id": "clinic_harbourfront"}
+
+
+def test_simulator_snapshots_are_versioned_and_synthetic() -> None:
+    response = client.get("/api/v1/simulator/snapshots")
+
+    assert response.status_code == 200
+    snapshots = response.json()
+    assert {snapshot["scenario_id"] for snapshot in snapshots} == {
+        "dynamic_allocation",
+        "serial_baseline",
+        "single_ticket",
+    }
+    assert all(snapshot["synthetic"] and snapshot["snapshot_hash"] for snapshot in snapshots)
+
+
 def test_patient_pre_arrival_submission_stays_under_review() -> None:
     response = client.post(
         "/api/v1/patient/pre-arrival/submit",
@@ -44,6 +100,35 @@ def test_patient_pre_arrival_submission_stays_under_review() -> None:
     assert body["processing_reference"].startswith("PRE-")
 
 
+def test_patient_account_activation_returns_only_the_configured_synthetic_scenario() -> None:
+    response = client.post("/api/v1/patient/account/activate")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "patient_id": 1,
+        "source_record_key": "registration:0107",
+        "synthetic": True,
+    }
+
+
+def test_registration_validation_returns_patient_safe_outcome() -> None:
+    response = client.post(
+        "/api/v1/patient/registration/validate",
+        json={
+            "appointment_reference": "APT-DEMO-014",
+            "identifier_hash": "5f5deb21ad3e0acb62567fa6e14f67db32c094351c3058ca784641d240ec8f59",
+            "full_name": "Tan Kai Xuan",
+            "date_of_birth": "1993-12-18",
+            "email": "kai.tan78@gmail.com",
+            "idempotency_key": "registration-validation-test",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "accepted"
+    assert "internal_reason" not in response.json()
+
+
 def test_patient_replacement_requires_a_document_name() -> None:
     response = client.post(
         "/api/v1/patient/pre-arrival/submit",
@@ -53,7 +138,11 @@ def test_patient_replacement_requires_a_document_name() -> None:
 
 
 def test_patient_fixture_endpoint_fails_closed_outside_demo_mode() -> None:
-    app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False, _env_file=None)
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        demo_mode=False,
+        persistence_mode="demo",
+        _env_file=None,
+    )
     try:
         response = client.post(
             "/api/v1/patient/pre-arrival/submit",
@@ -73,6 +162,20 @@ def test_ready_transition_rejects_missing_confirmation() -> None:
     assert response.status_code == 409
 
 
+def test_ticket_transition_rejects_stale_version() -> None:
+    response = client.post(
+        "/api/v1/tickets/Q-017/transition",
+        json={
+            "readiness_state": "needs_review",
+            "reason": "ambiguous_match",
+            "staff_confirmed": False,
+            "expected_version": 2,
+            "idempotency_key": "stale-version-test",
+        },
+    )
+    assert response.status_code == 409
+
+
 def test_supervised_kiosk_creates_one_processing_ticket() -> None:
     response = client.post(
         "/api/v1/kiosk/check-in",
@@ -85,6 +188,198 @@ def test_supervised_kiosk_creates_one_processing_ticket() -> None:
     assert ticket["id"].startswith("Q-")
 
 
+def test_replayed_kiosk_check_in_returns_the_same_ticket() -> None:
+    payload = {
+        "patient_name": "Jamie Tan",
+        "nurse_supervisor": "Nurse Noor",
+        "clinical_escalation": False,
+        "idempotency_key": "walk-in-retry-test",
+    }
+    first = client.post("/api/v1/kiosk/check-in", json=payload)
+    replay = client.post("/api/v1/kiosk/check-in", json=payload)
+
+    assert first.status_code == replay.status_code == 201
+    assert first.json()["ticket"]["id"] == replay.json()["ticket"]["id"]
+
+
+def test_replayed_transition_returns_the_committed_version() -> None:
+    payload = {
+        "readiness_state": "needs_review",
+        "reason": "ambiguous_match",
+        "staff_confirmed": False,
+        "expected_version": 1,
+        "idempotency_key": "transition-retry-test",
+    }
+    first = client.post("/api/v1/tickets/Q-017/transition", json=payload)
+    replay = client.post("/api/v1/tickets/Q-017/transition", json=payload)
+
+    assert first.status_code == replay.status_code == 200
+    assert first.json()["ticket"]["version"] == replay.json()["ticket"]["version"] == 2
+
+
 def test_recommendation_requires_explicit_decision() -> None:
     response = client.post("/api/v1/recommendations/A-009/decision", json={"decision": "later"})
     assert response.status_code == 422
+
+
+def test_counter_assignment_preserves_ticket_and_increments_version() -> None:
+    response = client.post(
+        "/api/v1/tickets/Q-017/counter",
+        json={
+            "counter_number": "Counter 4",
+            "expected_version": 1,
+            "idempotency_key": "counter-assignment-test",
+        },
+    )
+
+    assert response.status_code == 200
+    ticket = response.json()["ticket"]
+    assert ticket["id"] == "Q-017"
+    assert ticket["original_ordering_at"] == "2026-08-12T09:34:00Z"
+    assert ticket["actual_counter"] == "Counter 4"
+    assert ticket["version"] == 2
+
+
+def test_patient_crud_uses_versioned_soft_delete() -> None:
+    created = client.post(
+        "/api/v1/patients",
+        json={
+            "source_record_key": "api-test:patient",
+            "identifier_hash": "b" * 64,
+            "identifier_masked": "*****123A",
+            "full_name": "API Test Patient",
+            "date_of_birth": "1990-01-01",
+            "email": "api-test@example.test",
+            "contact_mobile": "80000000",
+            "reason": "API contract test",
+            "idempotency_key": "patient-create-test",
+        },
+    )
+    assert created.status_code == 201
+    patient = created.json()
+
+    updated = client.patch(
+        f"/api/v1/patients/{patient['id']}",
+        json={
+            "expected_version": patient["version"],
+            "full_name": "Updated API Patient",
+            "reason": "Correct synthetic name",
+            "idempotency_key": "patient-update-test",
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["version"] == 2
+
+    stale = client.patch(
+        f"/api/v1/patients/{patient['id']}",
+        json={
+            "expected_version": 1,
+            "full_name": "Must Not Commit",
+            "reason": "Stale test",
+            "idempotency_key": "patient-stale-test",
+        },
+    )
+    assert stale.status_code == 409
+
+    deleted = client.request(
+        "DELETE",
+        f"/api/v1/patients/{patient['id']}",
+        json={
+            "expected_version": 2,
+            "reason": "Remove synthetic test fixture",
+            "idempotency_key": "patient-delete-test",
+        },
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted_at"] is not None
+    assert client.get(f"/api/v1/patients/{patient['id']}").status_code == 404
+
+
+def test_auditor_role_cannot_mutate_patients() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("auditor")
+
+    response = client.post(
+        "/api/v1/patients",
+        json={
+            "source_record_key": "api-test:denied",
+            "identifier_hash": "c" * 64,
+            "identifier_masked": "*****999Z",
+            "full_name": "Denied Patient",
+            "reason": "Permission test",
+            "idempotency_key": "auditor-denied-test",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Staff role is not permitted for this action."
+
+
+def test_registration_role_cannot_decide_operations_recommendations() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
+
+    response = client.post(
+        "/api/v1/recommendations/A-009/decision",
+        json={
+            "decision": "approved",
+            "expected_version": 1,
+            "idempotency_key": "registration-role-denied",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Staff role is not permitted for this action."
+
+
+def test_registration_role_cannot_read_audit_or_simulator() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
+
+    assert client.get("/api/v1/audit").status_code == 403
+    assert client.get("/api/v1/simulator/snapshots").status_code == 403
+
+
+def test_operations_admin_can_read_audit_and_simulator() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("operations_admin")
+
+    assert client.get("/api/v1/audit").status_code == 200
+    assert client.get("/api/v1/simulator/snapshots").status_code == 200
+
+
+def test_stale_factor_returns_clerk_reverification_hint_before_mutation() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration", factor_age=(10, -1))
+
+    response = client.post(
+        "/api/v1/tickets/Q-017/transition",
+        json={
+            "readiness_state": "needs_review",
+            "reason": "reverification-test",
+            "staff_confirmed": False,
+            "expected_version": 1,
+            "idempotency_key": "stale-reverification-test",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "clerk_error": {
+            "type": "forbidden",
+            "reason": "reverification-error",
+            "metadata": {"reverification": "strict"},
+        }
+    }
+
+
+def test_fresh_factor_allows_registration_mutation() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration", factor_age=(0, -1))
+
+    response = client.post(
+        "/api/v1/tickets/Q-017/transition",
+        json={
+            "readiness_state": "needs_review",
+            "reason": "fresh-reverification-test",
+            "staff_confirmed": False,
+            "expected_version": 1,
+            "idempotency_key": "fresh-reverification-test",
+        },
+    )
+
+    assert response.status_code == 200

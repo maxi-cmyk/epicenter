@@ -71,6 +71,48 @@ Epicenter is not only a queue-speed intervention. It shifts administrative work 
 | Stronger governance | Evidence, rule versions, corrections, attestations, and counter changes remain reviewable through an immutable audit history. |
 | Continuous operational learning | Reason-coded exceptions and stage timestamps show which document types, payers, rules, and workflow stages repeatedly create friction. |
 
+### 1.6 Workflow Simplification Target
+
+The quantified problem is cumulative, not a claim that one staff member works an 18-hour shift. At the official planning assumption of 40 patients in a morning and approximately 27 minutes of administrative work per patient, the clinic performs about 1,080 minutes—or 18 staff-hours—of cumulative administrative work. The product therefore targets repeated interpretation and re-entry across the visit, not merely a faster registration screen.
+
+Epicenter's simplification rule is: **capture once, interpret once, confirm exceptions, and reuse the confirmed result.** For scheduled appointments, corporate forms, authorization letters, TPA details, screening packages, and billing arrangements should be retrieved and processed before the patient reaches the front desk. For walk-ins, the same interpretation and matching happen once at supervised intake. In both paths, staff retain the mandatory in-person identity/e-card checks and final confirmation authority.
+
+| Current repeated work | Simplified target state |
+| --- | --- |
+| Staff reads the corporate form or authorization letter after arrival | Patient submits before arrival; the extraction layer structures the document and retains source evidence |
+| Staff separately determines corporate/issuer code, TPA, package, and billing arrangement | One deterministic rules evaluation produces a reviewable appointment-scoped result or one explicit exception |
+| The same identity, coverage, package, questionnaire, allergy, and billing facts are re-entered or re-checked across the visit | Confirmed facts are reused from one source-aware record; mandatory clinical and identity checks remain human-performed |
+| TPA information is typed at registration and again after the visit | One structured record supports clinic billing and a conceptual TPA payload; live TPA submission remains deferred |
+| One unusual document blocks the serial registration line | Ready visits continue while the unresolved visit remains on the same ticket in the assisted-review worklist |
+
+The simplified scheduled-patient flow is:
+
+```text
+Appointment/link
+  → confirm prior coverage or upload one document
+  → extract corporate/issuer/TPA/package/billing facts once
+  → run deterministic eligibility and readiness gates
+  → complete only the appointment-required questionnaire
+  → patient resolves one safe pre-arrival issue, or staff receives one exception
+  → patient arrives
+  → staff performs identity/e-card checks and confirms the prepared record
+  → same Q-* ticket continues through service, billing, and completion
+```
+
+The simplified nurse flow is:
+
+```text
+Today
+  → open the oldest actionable visit
+  → inspect the compact prepared record
+  → expand only the exception and its source evidence
+  → perform and attest mandatory physical checks
+  → commit one outcome: accept, reject with reason, or keep under review
+  → route the same ticket and proceed to the next visit
+```
+
+Simplification does not mean hiding unresolved work, bypassing deterministic readiness gates, removing staff confirmation, automating clinical decisions, or claiming that external TPA submission is live. It means reducing repeated collection and interpretation while making the remaining human action explicit, short, and auditable.
+
 ## 2. Constraints (from Official Brief — Non-Negotiable)
 
 - **Copilot Studio portability required.** The solution does not need to be built entirely in Copilot Studio during the hackathon, but must demonstrably be portable/integrable into it.

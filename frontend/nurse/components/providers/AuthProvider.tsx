@@ -1,9 +1,9 @@
 "use client";
 
 import { ClerkLoaded, ClerkLoading, ClerkProvider, Show, UserButton, useAuth } from "@clerk/nextjs";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import { setAccessTokenProvider } from "@/lib/api";
+import { ApiError, fetchStaffSession, setAccessTokenProvider } from "@/lib/api";
 
 import { StaffSignIn } from "./StaffSignIn";
 import styles from "./AuthProvider.module.css";
@@ -70,11 +70,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 function ClerkTokenBridge({ children }: AuthProviderProps) {
   const { getToken } = useAuth();
+  const [state, setState] = useState<"checking" | "authorized" | "denied" | "error">("checking");
+  const [message, setMessage] = useState("Confirming your clinic role…");
 
   useEffect(() => {
+    let active = true;
     setAccessTokenProvider(getToken);
-    return () => setAccessTokenProvider(null);
+    void fetchStaffSession()
+      .then(() => {
+        if (active) setState("authorized");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        if (error instanceof ApiError && error.status === 403) {
+          setMessage("This Clerk account is not mapped to an active staff role for this clinic.");
+          setState("denied");
+          return;
+        }
+        setMessage(error instanceof Error ? error.message : "Staff authorization could not be verified.");
+        setState("error");
+      });
+    return () => {
+      active = false;
+      setAccessTokenProvider(null);
+    };
   }, [getToken]);
+
+  if (state !== "authorized") {
+    return (
+      <main className={styles.staffAccessState} role={state === "checking" ? "status" : "alert"}>
+        <span>{state === "checking" ? "Staff authorization" : "Access denied"}</span>
+        <h1>{state === "checking" ? "Checking clinic access" : "Nurse access required"}</h1>
+        <p>{message}</p>
+        <UserButton showName />
+      </main>
+    );
+  }
 
   return children;
 }

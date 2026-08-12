@@ -4,7 +4,7 @@ Epicenter is a synthetic outpatient administrative-readiness demo. It turns vari
 
 ## Repository
 
-- `frontend/patient/` — independently built Next.js patient registration and pre-arrival experience.
+- `frontend/patient/` — independently built Next.js patient registration and pre-arrival experience with public patient-only Clerk enrollment.
 - `frontend/nurse/` — independently built Next.js staff operations, assisted review and supervised kiosk experience with Clerk authentication.
 - `frontend/shared/` — generated data contracts, design tokens and safe presentation primitives shared by both apps.
 - `backend/` — FastAPI domain services and Clerk JWT-protected HTTP API for readiness, kiosk check-in and allocation decisions.
@@ -28,6 +28,12 @@ python3 -m venv .venv
 .venv/bin/uvicorn app.main:app --reload
 ```
 
+With `EPICENTER_SUPABASE_URL` and `EPICENTER_SUPABASE_SECRET_KEY` present,
+`EPICENTER_PERSISTENCE_MODE=auto` makes the local FastAPI process use the
+hosted Supabase project. Set `EPICENTER_PERSISTENCE_MODE=demo` when you want an
+isolated in-memory run. Set it to `supabase` to fail closed if the server
+credentials are missing.
+
 Terminal 2 — patient screen (port 3000, Patient Pre-check only):
 
 ```bash
@@ -47,6 +53,94 @@ Open `http://localhost:3000` for the patient screen and `http://localhost:3001` 
 
 The two commands are independent: either app can run by itself, and starting one does not start or require the other frontend process.
 
+## Sign-in and account roles
+
+Clerk proves who is signed in; FastAPI and Supabase decide what that identity may access. Patient and nurse accounts use separate enrollment paths even when both panels use the same Clerk application.
+
+| Flow | Where | How access is granted |
+| --- | --- | --- |
+| Patient | `http://localhost:3000` | The patient may create an account or sign in. FastAPI verifies the Clerk session and maps its immutable `sub` to one configured synthetic `patient_accounts` record. There is no role selector. |
+| Nurse/staff | `http://localhost:3001` | Sign-in only. A clinic administrator creates the Clerk user and attaches its Clerk User ID to one active `staff_accounts` record with the required clinic and role. Public nurse enrollment is never enabled. |
+| Local demo bypass | FastAPI with `EPICENTER_DEMO_MODE=true` | Uses synthetic principals so local fixture workflows and automated tests can run without provider sessions. This does not prove real patient/nurse isolation. |
+| Clerk CLI developer | Terminal | `clerk auth login` authenticates a developer to manage Clerk applications. It does not sign a patient or nurse into Epicenter. |
+
+### Patient sign-up and sign-in
+
+1. Open the patient panel and choose **Create patient account** or **Sign in**.
+2. The frontend sends the Clerk session token to `POST /api/v1/patient/account/activate`.
+3. FastAPI creates or resolves exactly one mapping to `EPICENTER_PATIENT_DEMO_SOURCE_RECORD_KEY`.
+4. Registration and pre-arrival requests are restricted to appointments belonging to that mapped patient.
+
+Email verifies the Clerk identity but never grants a staff role. Browser metadata, URL parameters, and editable Clerk metadata are not authorization sources.
+
+### Nurse sign-in
+
+The nurse panel never offers public sign-up. The hosted development environment has two directly provisioned test nurses:
+
+| Staff fixture | Clerk development email | Role |
+| --- | --- | --- |
+| Nurse Noor (`staff_noor`) | `nurse.noor+clerk_test@example.com` | Registration nurse |
+| Nur Aisyah (`staff_aisyah`) | `nurse.aisyah+clerk_test@example.com` | Operations administrator |
+
+To sign in locally:
+
+1. Open `http://localhost:3001` and enter one of the test emails above.
+2. Request the email verification code. Clerk does not send mail for a `+clerk_test` address.
+3. Enter the development test code `424242`.
+4. Clerk issues the browser session; FastAPI then resolves the Clerk User ID to the mapped staff row and applies its clinic and role.
+
+These addresses and the fixed code work only with Clerk test mode and are for local/development use. They are fake inboxes, so do not use an invitation flow that depends on receiving mail. The users were created directly with generated initial passwords; normal local sign-in uses the email-code flow above. Use real, administrator-controlled addresses and separately delivered credentials for production or judging.
+
+For another staff user, create the user through the Clerk Dashboard or CLI, then copy its Clerk User ID (`user_...`) into the intended staff record:
+
+```sql
+update public.staff_accounts
+set clerk_user_id = 'user_REPLACE_ME',
+    active = true
+where id = 'staff_noor';
+```
+
+Keep provider-specific Clerk User IDs out of the seed SQL and repository. Re-running `supabase/operational_seed.sql` preserves existing mappings because its staff upsert does not overwrite `clerk_user_id`.
+
+On every protected request, FastAPI requires a valid Clerk session and exactly one active staff mapping for `EPICENTER_CLINIC_ID`. Patient, unmapped, disabled, and wrong-clinic identities receive `403` instead of staff access. An email address alone never grants a nurse role.
+
+Every currently implemented staff mutation also requires a recent Clerk verification. If the strongest configured factor is older than ten minutes, Clerk opens its verification prompt and automatically retries the action after verification succeeds. In the development instance, choose **Use another method → Email code** when needed and enter `424242` for a `+clerk_test` account.
+
+### Switching from demo to real local sessions
+
+Use `EPICENTER_DEMO_MODE=true` only for fixture-only flows and automated tests that intentionally bypass provider sessions. The ignored local `backend/.env` now uses `EPICENTER_DEMO_MODE=false` because the development nurse mappings exist. In real-session mode:
+
+1. Keep both local frontend origins in `EPICENTER_FRONTEND_ORIGINS`.
+2. Start all three processes again after changing authentication settings.
+3. A patient signs up publicly and is attached to the configured synthetic patient only after FastAPI verifies the Clerk session.
+4. A nurse signs in with a pre-provisioned identity and receives only the clinic-scoped role stored in `staff_accounts`.
+5. Test patient-to-nurse denial, nurse sign-in, unmapped/disabled staff denial, and audit attribution before deployment.
+
+The repeatable development-provider check covers those paths, the Clerk verification prompt, and a real audited Supabase mutation:
+
+```bash
+cd frontend
+npm run test:auth-live
+```
+
+It creates and removes a temporary patient, temporarily disables and restores a nurse mapping, and restores the ticket used for its mutation check. It requires the ignored local Clerk and backend environment files and must not be run against production.
+
+The browser receives only `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`. `CLERK_SECRET_KEY`, the optional `CLERK_JWT_KEY`, and the Supabase secret remain backend-only.
+
+### Clerk CLI login
+
+The Clerk CLI is optional developer tooling:
+
+```bash
+clerk --version
+clerk doctor --json
+clerk users list --instance dev --email-address nurse.noor+clerk_test@example.com --json
+```
+
+`clerk doctor --json` verifies the developer login and linked Clerk application. CLI login is separate from both application sign-in flows: it authorizes account administration, not access to either Epicenter panel. Preview user mutations with `--dry-run`, target `--instance dev` explicitly, and do not commit CLI sessions, patient credentials, nurse credentials, Clerk User IDs, generated passwords, or provider secrets.
+
+See [`docs/auth.md`](docs/auth.md) for provisioning, judge-flow, and authorization test requirements.
+
 FastAPI is the contract authority for both apps. After changing backend request or response models, regenerate and verify the checked-in TypeScript contracts:
 
 ```bash
@@ -57,9 +151,9 @@ npm run contracts:check
 
 ## Provider and deployment boundaries
 
-- **Database:** Supabase is the production persistence target. The initial migration and an idempotent seed now cover 300 synthetic registrations, 60 questionnaire submissions, and 9 synthetic medical documents. The current API still serves its deterministic in-memory workflow until the Supabase repository adapter is enabled.
-- **Authentication:** Clerk wraps the frontend when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, FastAPI verifies Clerk session tokens with the official Python SDK and `CLERK_SECRET_KEY`; `CLERK_JWT_KEY` is an optional networkless-verification optimization.
-- **Patient demo boundary:** the synthetic pre-arrival action posts to the same FastAPI service and returns `under_review` pending staff confirmation. Its unauthenticated fixture endpoint is available only in demo mode and fails closed until a production patient-token adapter is configured.
+- **Database:** Supabase is the shared persistence target. The migrations and idempotent seeds cover the raw fixtures plus clinics, appointments, the one-ticket queue, review cases, counters, staff availability, human-approved allocation, operational/audit events, configuration releases, and simulator snapshots. The local FastAPI process automatically selects the server-only Supabase adapter when its URL and secret key are configured; Railway is not required for local use.
+- **Authentication:** Clerk wraps both frontends when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, FastAPI verifies Clerk session tokens with the official Python SDK, maps patients through `patient_accounts`, and maps staff through active clinic-scoped `staff_accounts`. `CLERK_JWT_KEY` is an optional networkless-verification optimization.
+- **Patient demo boundary:** each verified patient account is attached only to the configured synthetic scenario. Pre-arrival submissions return a patient-safe outcome pending any required staff confirmation; privileged operational data remains behind FastAPI.
 - **Frontend deployment:** create one Vercel project rooted at `frontend/patient/` and another rooted at `frontend/nurse/`. Set each app's browser-safe environment variables independently; both use the same Railway API URL.
 - **Backend deployment:** create a Railway service with `backend/` as its root directory. `backend/railway.toml` defines the start command and health check; set `EPICENTER_DEMO_MODE=false`, provider credentials and the deployed `EPICENTER_FRONTEND_ORIGINS` (comma-separated; both the patient and nurse deployment URLs) in Railway.
 

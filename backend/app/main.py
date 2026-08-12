@@ -1,9 +1,13 @@
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.patient_routes import router as patient_router
 from app.api.routes import router
-from app.core.config import get_settings
+from app.core.auth import ReverificationRequired
+from app.core.config import Settings, get_settings
 
 settings = get_settings()
 
@@ -22,23 +26,45 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(ReverificationRequired)
+def reverification_required_handler(
+    _request: Request,
+    exc: ReverificationRequired,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
+        content={
+            "clerk_error": {
+                "type": "forbidden",
+                "reason": "reverification-error",
+                "metadata": {"reverification": exc.configuration},
+            }
+        },
+    )
+
+
 @app.get("/healthz")
-def healthcheck() -> dict[str, object]:
+def healthcheck(current_settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
     return {
         "status": "ok",
-        "environment": settings.environment,
-        "demo_mode": settings.demo_mode,
+        "environment": current_settings.environment,
+        "demo_mode": current_settings.demo_mode,
         "providers": {
             "database": (
-                "synthetic" if settings.demo_mode else ("supabase" if settings.supabase_configured else "unconfigured")
+                "supabase"
+                if current_settings.use_supabase_persistence
+                else ("unconfigured" if current_settings.persistence_mode == "supabase" else "synthetic")
             ),
             "authentication": (
-                "demo" if settings.demo_mode else ("clerk" if settings.clerk_configured else "unconfigured")
+                "demo"
+                if current_settings.demo_mode
+                else ("clerk" if current_settings.clerk_configured else "unconfigured")
             ),
         },
         "provider_configuration": {
-            "supabase": settings.supabase_configured,
-            "clerk": settings.clerk_configured,
+            "supabase": current_settings.supabase_configured,
+            "clerk": current_settings.clerk_configured,
+            "persistence_mode": current_settings.persistence_mode,
         },
     }
 

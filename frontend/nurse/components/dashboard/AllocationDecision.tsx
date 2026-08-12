@@ -1,5 +1,6 @@
 "use client";
 
+import { useReverification } from "@clerk/nextjs";
 import { Check, ShieldCheck, X } from "lucide-react";
 import { useState } from "react";
 
@@ -14,17 +15,17 @@ export function AllocationDecision({ initialRecommendation }: { initialRecommend
   const [recommendation, setRecommendation] = useState(initialRecommendation);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const reverifiedDecision = useReverification(decideRecommendation);
 
   async function decide(decision: "approved" | "rejected") {
     setPending(true);
     setMessage("");
     try {
-      const result = await decideRecommendation(recommendation.id, decision);
+      const result = await reverifiedDecision(recommendation.id, recommendation.version ?? 1, decision);
       setRecommendation(result.recommendation ?? { ...recommendation, status: decision });
       setMessage(result.message);
-    } catch {
-      setRecommendation((current) => ({ ...current, status: decision }));
-      setMessage(`Demo fallback: recommendation ${decision}; no change was applied silently.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The decision could not be committed.");
     } finally {
       setPending(false);
     }

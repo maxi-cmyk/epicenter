@@ -11,6 +11,8 @@ The supplied sample files are checked into `data/raw/` unchanged so the demo dat
 | Occupational health questionnaire CSV | 30 | `questionnaire_submissions` |
 | Sample medical chit DOCX | 9 documents | `medical_document_samples` |
 | Questionnaire field-reference DOCX | Schema reference | Generator and validation rules |
+| Deterministic clinic workflow | 1 clinic, 3 appointments, 6 tickets, 2 review cases | Operational tables |
+| Deterministic simulator fixtures | 3 scenario snapshots | `simulator_snapshots` |
 
 Government identifiers are normalized only long enough to calculate a SHA-256 match key. Supabase stores the hash and a masked display value, not the raw identifier. The unmodified raw fixtures remain development-only source material.
 
@@ -45,10 +47,15 @@ npx supabase db push --include-seed
 
 `db push --include-seed` applies pending migrations and the idempotent seed without resetting the linked database. Always inspect the project reference and the CLI dry run before applying it to a shared environment.
 
+The Supabase URL and API keys used by the running FastAPI service cannot apply
+DDL. A linked CLI session (or the SQL Editor) must apply the migration before
+the local API can select `EPICENTER_PERSISTENCE_MODE=supabase`. Railway is a
+later deployment step and is not involved in this local verification path.
+
 The browser publishable key cannot create tables or perform this privileged import. Keep `EPICENTER_SUPABASE_SECRET_KEY`, the CLI access token, and the database password out of both `frontend/patient/.env.local` and `frontend/nurse/.env.local`, and out of Git.
 
 ## Access boundary
 
-All three tables have row-level security enabled and grant no direct access to `anon` or `authenticated`. The FastAPI backend uses the server-only Supabase secret. A Clerk-aware browser client is prepared for future narrowly scoped Realtime/RLS use, but no patient-data policy is opened by this seed.
+All raw and operational tables have row-level security enabled and grant no direct access to `anon` or `authenticated`. Transactional mutation functions are executable only by `service_role`. The FastAPI backend uses the server-only Supabase secret; neither frontend receives it. A Clerk-aware browser client is prepared for future narrowly scoped Realtime/RLS use, but no patient-data policy is opened by this seed.
 
 Before enabling that browser path, connect Clerk under Supabase **Authentication → Third-Party Auth** and add restrictive role/clinic policies. The current browser client passes the active Clerk session token through Supabase's supported `accessToken` callback; it does not use the deprecated shared-JWT-secret integration.

@@ -49,6 +49,40 @@
   color: var(--cream-50);
 }
 
+.staffAccessState {
+  align-items: flex-start;
+  background: var(--green-950);
+  color: var(--cream-50);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  padding: clamp(32px, 8vw, 112px);
+}
+
+.staffAccessState > span {
+  color: var(--green-200);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.staffAccessState h1 {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 8vw, 6rem);
+  line-height: 0.92;
+  margin: 20px 0;
+  max-width: 11ch;
+  text-transform: uppercase;
+}
+
+.staffAccessState p {
+  color: var(--green-100);
+  margin: 0 0 28px;
+  max-width: 58ch;
+}
+
 .signInPage {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);

@@ -18,6 +18,8 @@ node_modules/
 .next-nurse/
 out/
 coverage/
+test-results/
+playwright-report/
 *.tsbuildinfo
 
 # Backend

@@ -9,7 +9,7 @@ Both panels may use the same Clerk instance and FastAPI backend, but they have d
 | Account | Enrollment | Epicenter authorization |
 | --- | --- | --- |
 | Patient | Public Clerk sign-up from the patient panel | The verified Clerk `sub` is mapped to one `patient_accounts` record |
-| Nurse | Created manually or invited by an authorized clinic administrator | The verified Clerk `sub` must match an active `staff_accounts` record with the required clinic and role scope |
+| Nurse | Created manually or invited by an authorized clinic administrator; fake development inboxes must be created directly | The verified Clerk `sub` must match an active `staff_accounts` record with the required clinic and role scope |
 
 ## Patient Sign-Up
 
@@ -43,6 +43,8 @@ A signed-in patient who opens the nurse panel must receive `403 Nurse access req
 
 For the hackathon, `staff_accounts` is the primary authorization source. Clerk Organizations and custom permissions may later represent clinic membership and coarse roles, but organization membership alone must never grant access to patient records.
 
+The current Clerk development instance contains two directly created test users mapped in hosted Supabase: `nurse.noor+clerk_test@example.com` maps to `staff_noor`, and `nurse.aisyah+clerk_test@example.com` maps to `staff_aisyah`. Request an email code and use `424242`; Clerk suppresses delivery for these fake test inboxes. This flow is development-only and does not replace separately delivered production or judge credentials.
+
 ## Submission and Judge Flow
 
 ### Nurse Demonstration
@@ -75,11 +77,28 @@ Before submission, verify all of the following against the deployed applications
 6. A disabled staff record or wrong-clinic role receives `403`.
 7. Sensitive nurse mutations require fresh reverification and create an attributable audit event.
 
-## Current Implementation Gap
+## Current Implementation Status
 
-The nurse frontend already renders Clerk sign-in with sign-up disabled. However, the current backend `require_staff` dependency verifies a valid Clerk session but does not yet look up an active `staff_accounts` role and clinic scope. Therefore, sign-in-only presentation must not be described as complete nurse authorization until this server-side check is implemented and tested.
+Implemented and verified locally against the development Clerk and hosted Supabase projects:
 
-The patient panel also does not yet implement the Clerk sign-up and `patient_accounts` mapping flow described above. These are required before using the proposed judge instructions.
+- The patient panel exposes Clerk patient sign-up and sign-in without a role selector.
+- After sign-up, the patient session token is sent to FastAPI and idempotently mapped to the configured synthetic demo scenario through `patient_accounts`.
+- Patient registration and pre-arrival requests require the verified mapping in production mode and reject appointments owned by another patient.
+- The nurse panel remains sign-in-only.
+- FastAPI verifies Clerk session tokens, explicitly allowlists authorized frontend origins, and resolves one active `staff_accounts` role and clinic mapping for every staff request.
+- Two administrator-created Clerk development nurse users are mapped to the active `staff_noor` and `staff_aisyah` rows without committing their provider IDs.
+- Unit and API tests cover patient, registration nurse, operations administrator, auditor, disabled, unmapped, duplicate, and wrong-clinic authorization cases.
+- Every currently implemented staff mutation requires Clerk strict reverification within ten minutes. The backend returns Clerk's standard reverification hint and the frontend retries through `useReverification` after the strongest configured factor succeeds.
+- The live Playwright suite verifies patient signup, patient-to-nurse denial, nurse email-code sign-in, real Supabase-backed dashboard access, disabled-mapping denial, the Clerk verification prompt, and authenticated audit attribution. Temporary users and modified fixtures are restored during cleanup.
+
+Repeat the local development-provider gate with:
+
+```bash
+cd frontend
+npm run test:auth-live
+```
+
+The suite uses ignored local development keys, Clerk test identities, and hosted synthetic data. Do not point it at a production instance. Production nurse provisioning, credential handoff outside the repository, and a final deployed-flow rerun remain release gates under Task 11.
 
 ## Clerk References
 
@@ -87,3 +106,5 @@ The patient panel also does not yet implement the Clerk sign-up and `patient_acc
 - [Inviting application users](https://clerk.com/docs/guides/users/inviting)
 - [Organization roles and permissions](https://clerk.com/docs/guides/organizations/control-access/roles-and-permissions)
 - [Test emails and verification codes](https://clerk.com/docs/guides/development/testing/test-emails-and-phones)
+- [Reverification](https://clerk.com/docs/guides/secure/reverification)
+- [Playwright testing](https://clerk.com/docs/guides/development/testing/playwright/overview)

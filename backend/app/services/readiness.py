@@ -8,6 +8,8 @@ class InvalidTransition(ValueError):
 
 
 def transition_ticket(ticket: QueueTicket, request: TicketTransitionRequest) -> QueueTicket:
+    if request.expected_version != ticket.version:
+        raise InvalidTransition("The ticket changed since it was loaded. Refresh and try again.")
     if request.readiness_state is ReadinessState.READY and not request.staff_confirmed:
         raise InvalidTransition("A ticket cannot become ready without staff confirmation.")
 

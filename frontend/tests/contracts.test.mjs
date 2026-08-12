@@ -48,10 +48,41 @@ test("each deployable app validates its own environment", () => {
 });
 
 test("the visual QA auth bypass is development-only", () => {
-  const authProvider = read("nurse/components/providers/AuthProvider.tsx");
-  assert.match(authProvider, /NODE_ENV === "development"/);
-  assert.match(authProvider, /NEXT_PUBLIC_E2E_BYPASS_AUTH/);
+  const nurseAuth = read("nurse/components/providers/AuthProvider.tsx");
+  const patientAuth = read("patient/components/providers/PatientAuthProvider.tsx");
+  assert.match(nurseAuth, /NODE_ENV === "development"/);
+  assert.match(nurseAuth, /NEXT_PUBLIC_E2E_BYPASS_AUTH/);
+  assert.match(patientAuth, /NODE_ENV === "development"/);
+  assert.match(patientAuth, /NEXT_PUBLIC_E2E_BYPASS_AUTH/);
   assert.doesNotMatch(read("nurse\/.env.example"), /E2E_BYPASS/);
+});
+
+test("patient signup and nurse provisioning stay separate", () => {
+  const patientAuth = read("patient/components/providers/PatientAuthProvider.tsx");
+  const nurseSignIn = read("nurse/components/providers/StaffSignIn.tsx");
+  assert.match(patientAuth, /Create patient account/);
+  assert.match(patientAuth, /<SignUp/);
+  assert.match(patientAuth, /activatePatientAccount/);
+  assert.doesNotMatch(patientAuth, /role selector/i);
+  assert.match(nurseSignIn, /withSignUp=\{false\}/);
+  assert.doesNotMatch(nurseSignIn, /<SignUp/);
+});
+
+test("staff authorization and mutation reverification fail closed", () => {
+  const provider = read("nurse/components/providers/AuthProvider.tsx");
+  const api = read("nurse/lib/api.ts");
+  const review = read("nurse/components/review/ReviewWorkspace.tsx");
+  const allocation = read("nurse/components/dashboard/AllocationDecision.tsx");
+  const kiosk = read("nurse/components/kiosk/KioskWorkspace.tsx");
+
+  assert.match(provider, /fetchStaffSession/);
+  assert.match(provider, /Nurse access required/);
+  assert.match(api, /reverification-error/);
+  assert.match(api, /error\.status === 401 \|\| error\.status === 403/);
+  assert.match(review, /useReverification\(transitionTicket\)/);
+  assert.match(allocation, /useReverification\(decideRecommendation\)/);
+  assert.match(kiosk, /useReverification\(checkInWalkIn\)/);
+  assert.doesNotMatch(allocation, /Demo fallback: recommendation/);
 });
 
 test("the shared workspace contains contracts and presentation primitives only", () => {

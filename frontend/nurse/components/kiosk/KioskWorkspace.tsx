@@ -1,5 +1,6 @@
 "use client";
 
+import { useReverification } from "@clerk/nextjs";
 import { ArrowRight, ShieldAlert } from "lucide-react";
 import { FormEvent, useState } from "react";
 
@@ -19,17 +20,17 @@ export function KioskWorkspace() {
   const [ticket, setTicket] = useState<QueueTicket | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const reverifiedCheckIn = useReverification(checkInWalkIn);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     setError("");
     try {
-      const result = await checkInWalkIn(patientName, nurseSupervisor, clinicalEscalation);
+      const result = await reverifiedCheckIn(patientName, nurseSupervisor, clinicalEscalation);
       setTicket(result.ticket ?? null);
-    } catch {
-      const now = new Date().toISOString();
-      setTicket({ id: "Q-020", patient_id: "P-020", patient_name: patientName, intake_type: "walk_in", visit_phase: "ongoing", readiness_state: "processing", readiness_reason: "processing", checked_in_at: now, original_ordering_at: now, waiting_minutes: 0, actual_counter: "Kiosk intake", processing_stage: "Nurse-supervised registration", service_target: "on_track", staff_confirmed: false, clinical_escalation: clinicalEscalation });
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : "The walk-in could not be registered.");
     } finally {
       setPending(false);
     }

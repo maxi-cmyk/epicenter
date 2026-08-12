@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -33,7 +33,15 @@ class CoverageAction(StrEnum):
 
 
 class PatientSubmissionOutcome(StrEnum):
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
     UNDER_REVIEW = "under_review"
+
+
+class PatientAccountSession(BaseModel):
+    patient_id: int
+    source_record_key: str
+    synthetic: bool = True
 
 
 class QueueTicket(BaseModel):
@@ -54,6 +62,7 @@ class QueueTicket(BaseModel):
     service_target: ServiceTarget = ServiceTarget.ON_TRACK
     staff_confirmed: bool = False
     clinical_escalation: bool = False
+    version: int = Field(default=1, ge=1)
 
 
 class ReviewCase(BaseModel):
@@ -79,6 +88,7 @@ class AllocationRecommendation(BaseModel):
     expected_wait_minutes: int
     expires_at: datetime
     constraints_checked: list[str]
+    version: int = Field(default=1, ge=1)
 
 
 class Metric(BaseModel):
@@ -107,15 +117,35 @@ class DashboardSnapshot(BaseModel):
     activity: list[ActivityEvent]
 
 
+class SimulatorSnapshot(BaseModel):
+    id: str
+    scenario_id: str
+    scenario_version: str
+    seed: int
+    assumptions_version: str
+    snapshot_hash: str
+    snapshot_payload: dict[str, object]
+    synthetic: bool = True
+
+
+class StaffSession(BaseModel):
+    role: str
+    clinic_id: str
+
+
 class TicketTransitionRequest(BaseModel):
     readiness_state: ReadinessState
     reason: str
     staff_confirmed: bool = False
+    expected_version: int = Field(default=1, ge=1)
+    idempotency_key: str = Field(default="demo-transition", min_length=8, max_length=128)
 
 
 class RecommendationDecisionRequest(BaseModel):
     decision: str
     decided_by: str = "Demo operations lead"
+    expected_version: int = Field(default=1, ge=1)
+    idempotency_key: str = Field(default="demo-allocation", min_length=8, max_length=128)
 
 
 class KioskCheckInRequest(BaseModel):
@@ -123,12 +153,15 @@ class KioskCheckInRequest(BaseModel):
     registration_source: str = "supervised_kiosk"
     nurse_supervisor: str = Field(min_length=2, max_length=80)
     clinical_escalation: bool = False
+    idempotency_key: str = Field(default="demo-kiosk-check-in", min_length=8, max_length=128)
 
 
 class PreArrivalSubmissionRequest(BaseModel):
     appointment_id: str = Field(min_length=2, max_length=80)
     coverage_action: CoverageAction
     file_name: str | None = Field(default=None, max_length=255)
+    expected_ticket_version: int = Field(default=1, ge=1)
+    idempotency_key: str = Field(default="demo-prearrival", min_length=8, max_length=128)
 
 
 class PreArrivalSubmissionResult(BaseModel):
@@ -138,6 +171,97 @@ class PreArrivalSubmissionResult(BaseModel):
     processing_reference: str
     message: str
     next_action: str
+
+
+class RegistrationValidationRequest(BaseModel):
+    appointment_reference: str = Field(min_length=2, max_length=80)
+    identifier_hash: str = Field(pattern="^[0-9a-f]{64}$")
+    full_name: str = Field(min_length=2, max_length=120)
+    date_of_birth: date
+    email: str = Field(min_length=3, max_length=255)
+    idempotency_key: str = Field(default="demo-registration-validation", min_length=8, max_length=128)
+
+
+class RegistrationValidationResult(BaseModel):
+    id: str
+    outcome: PatientSubmissionOutcome
+    field_results: dict[str, str]
+    patient_reason_code: str
+    patient_next_action: str
+    version: int = Field(ge=1)
+
+
+class DocumentProcessingRequest(BaseModel):
+    document_id: str = Field(min_length=2, max_length=80)
+    expected_version: int = Field(ge=1)
+    readiness_status: str = Field(pattern="^(pass|needs_review)$")
+    match_status: str = Field(pattern="^(clean|ambiguous|no_match)$")
+    all_required_documents_present: bool
+    all_documents_valid: bool
+    staff_confirmed: bool
+    reason: str = Field(min_length=2, max_length=120)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class CounterAssignmentRequest(BaseModel):
+    counter_number: str = Field(min_length=2, max_length=40)
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class PatientRecord(BaseModel):
+    id: int
+    source_record_key: str
+    identifier_masked: str
+    full_name: str
+    date_of_birth: date | None = None
+    email: str | None = None
+    contact_mobile: str | None = None
+    version: int = Field(ge=1)
+    deleted_at: datetime | None = None
+
+
+class PatientList(BaseModel):
+    records: list[PatientRecord]
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1)
+
+
+class PatientCreateRequest(BaseModel):
+    source_record_key: str = Field(min_length=2, max_length=120)
+    identifier_hash: str = Field(pattern="^[0-9a-f]{64}$")
+    identifier_masked: str = Field(min_length=4, max_length=32)
+    full_name: str = Field(min_length=2, max_length=120)
+    date_of_birth: date | None = None
+    email: str | None = Field(default=None, max_length=255)
+    contact_mobile: str | None = Field(default=None, max_length=40)
+    reason: str = Field(min_length=3, max_length=500)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class PatientUpdateRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    email: str | None = Field(default=None, max_length=255)
+    contact_mobile: str | None = Field(default=None, max_length=40)
+    reason: str = Field(min_length=3, max_length=500)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class PatientDeleteRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=3, max_length=500)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class AuditRecord(BaseModel):
+    id: int
+    actor_reference: str
+    action_type: str
+    target_table: str
+    target_id: str
+    details: dict[str, object]
+    occurred_at: datetime
 
 
 class ActionResult(BaseModel):

@@ -8,6 +8,7 @@ import "@epicenter/shared/styles/globals.css";
 import type { Metadata } from "next";
 
 import { PatientShell } from "@/components/layout/PatientShell";
+import { PatientAuthProvider } from "@/components/providers/PatientAuthProvider";
 import { validatePatientEnvironment } from "@/lib/env";
 
 export const metadata: Metadata = {
@@ -21,7 +22,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <PatientShell>{children}</PatientShell>
+        <PatientAuthProvider>
+          <PatientShell>{children}</PatientShell>
+        </PatientAuthProvider>
       </body>
     </html>
   );
