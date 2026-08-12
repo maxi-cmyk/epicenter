@@ -42,6 +42,44 @@ class PatientAccountSession(BaseModel):
     patient_id: int
     source_record_key: str
     synthetic: bool = True
+    onboarding_completed: bool = False
+    onboarding_step: str = "singpass"
+
+
+class OnboardingStep(StrEnum):
+    SINGPASS = "singpass"
+    INSURANCE = "insurance"
+    QUESTIONNAIRE = "questionnaire"
+    COMPLETE = "complete"
+
+
+class SingpassProfileField(BaseModel):
+    field_id: str
+    label: str
+    value: str
+    source: str = "Singpass / Myinfo (synthetic)"
+    editable: bool = False
+
+
+class PatientOnboardingState(BaseModel):
+    synthetic: bool = True
+    completed: bool = False
+    current_step: OnboardingStep = OnboardingStep.SINGPASS
+    appointment_id: str
+    singpass_authenticated: bool = False
+    singpass_fields: list[SingpassProfileField]
+    insurance_completed: bool = False
+    questionnaire_completed: bool = False
+    next_href: str = "/onboarding"
+
+
+class OnboardingAdvanceRequest(BaseModel):
+    step: OnboardingStep
+    singpass_authenticated: bool | None = None
+    insurance_completed: bool | None = None
+    questionnaire_completed: bool | None = None
+    singpass_fields: list[SingpassProfileField] | None = None
+    idempotency_key: str = Field(default="demo-onboarding", min_length=8, max_length=128)
 
 
 class QueueTicket(BaseModel):
@@ -164,6 +202,11 @@ class PreArrivalSubmissionRequest(BaseModel):
     idempotency_key: str = Field(default="demo-prearrival", min_length=8, max_length=128)
 
 
+class OnboardingCoverageRequest(BaseModel):
+    file_name: str = Field(min_length=1, max_length=255)
+    idempotency_key: str = Field(default="demo-onboarding-coverage", min_length=8, max_length=128)
+
+
 class PreArrivalSubmissionResult(BaseModel):
     success: bool = True
     synthetic: bool = True
@@ -269,3 +312,185 @@ class ActionResult(BaseModel):
     message: str
     ticket: QueueTicket | None = None
     recommendation: AllocationRecommendation | None = None
+
+
+class PatientNextAction(StrEnum):
+    CONFIRM_COVERAGE = "confirm_coverage"
+    UPLOAD_COVERAGE = "upload_coverage"
+    COMPLETE_QUESTIONNAIRE = "complete_questionnaire"
+    WAIT_FOR_REVIEW = "wait_for_review"
+    VIEW_QUEUE = "view_queue"
+    PAY = "pay"
+    NONE = "none"
+
+
+class PatientCoverageStatus(StrEnum):
+    NOT_STARTED = "not_started"
+    CHECK_FIRST = "check_first"
+    SUBMITTED = "submitted"
+    ACTION_REQUIRED = "action_required"
+
+
+class PatientQuestionnaireStatus(StrEnum):
+    NOT_REQUIRED = "not_required"
+    NOT_STARTED = "not_started"
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+
+
+class PatientPaymentStatus(StrEnum):
+    NOT_READY = "not_ready"
+    READY = "ready"
+    MOCK_PROCESSING = "mock_processing"
+    MOCKED_PAID = "mocked_paid"
+    MOCK_FAILED = "mock_failed"
+
+
+class PatientNotificationBanner(BaseModel):
+    category: str
+    message: str
+    next_action: str
+
+
+class PatientAppointmentSummary(BaseModel):
+    appointment_id: str
+    scheduled_at: datetime
+    clinic_name: str
+    location: str
+    appointment_type: str
+    questionnaire_type: str
+
+
+class PatientHome(BaseModel):
+    synthetic: bool = True
+    patient_display_name: str
+    appointment: PatientAppointmentSummary | None = None
+    coverage_status: PatientCoverageStatus
+    coverage_summary: str
+    questionnaire_status: PatientQuestionnaireStatus
+    queue_summary: str
+    payment_status: PatientPaymentStatus
+    payment_summary: str
+    primary_action: PatientNextAction
+    primary_action_label: str
+    primary_action_href: str
+    outcome: PatientSubmissionOutcome | None = None
+    outcome_message: str | None = None
+    notification: PatientNotificationBanner | None = None
+    recent_visit_summary: str | None = None
+
+
+class PriorCoverageSummary(BaseModel):
+    synthetic: bool = True
+    appointment_id: str
+    has_prior_coverage: bool
+    issuer_name: str | None = None
+    document_date: date | None = None
+    prompt: str
+    force_upload: bool = False
+    notification: PatientNotificationBanner | None = None
+
+
+class PatientQueueStatus(BaseModel):
+    synthetic: bool = True
+    available: bool
+    ticket_id: str | None = None
+    visit_phase: VisitPhase | None = None
+    status_label: str
+    status_detail: str
+    counter_label: str | None = None
+    patients_ahead: int | None = None
+    updated_at: datetime
+    stale: bool = False
+    payment_ready: bool = False
+
+
+class PatientPaymentSummary(BaseModel):
+    synthetic: bool = True
+    mocked: bool = True
+    appointment_id: str | None = None
+    package_label: str
+    amount_covered: str
+    amount_patient_payable: str
+    status: PatientPaymentStatus
+    status_detail: str
+    receipt_reference: str | None = None
+    paid_at: datetime | None = None
+    failure_reason: str | None = None
+    version: int = Field(default=1, ge=1)
+
+
+class MockPaymentRequest(BaseModel):
+    appointment_id: str = Field(min_length=2, max_length=80)
+    expected_version: int = Field(default=1, ge=1)
+    idempotency_key: str = Field(default="demo-mock-payment", min_length=8, max_length=128)
+
+
+class PatientVisitRecord(BaseModel):
+    appointment_id: str
+    visited_on: date
+    visit_label: str
+    package_label: str | None = None
+    coverage_label: str | None = None
+    questionnaire_summary: str | None = None
+    outcome: PatientSubmissionOutcome | None = None
+
+
+class PatientVisitHistory(BaseModel):
+    synthetic: bool = True
+    visits: list[PatientVisitRecord]
+
+
+class QuestionnairePrefillField(BaseModel):
+    field_id: str
+    label: str
+    value: str
+    source: str
+    editable: bool = False
+
+
+class QuestionnaireInputField(BaseModel):
+    field_id: str
+    label: str
+    field_type: str
+    required: bool = True
+    help_text: str | None = None
+    options: list[str] = Field(default_factory=list)
+    value: str | None = None
+    section: str | None = None
+    show_if_field: str | None = None
+    show_if_value: str | None = None
+    show_if_mode: str = Field(default="equals", pattern="^(equals|contains|any_of|not_empty)$")
+    show_if_field_2: str | None = None
+    show_if_value_2: str | None = None
+    show_if_mode_2: str = Field(default="equals", pattern="^(equals|contains|any_of|not_empty)$")
+
+
+class PatientQuestionnaire(BaseModel):
+    synthetic: bool = True
+    appointment_id: str
+    questionnaire_type: str
+    title: str
+    status: PatientQuestionnaireStatus
+    prefill: list[QuestionnairePrefillField]
+    fields: list[QuestionnaireInputField]
+    declaration_acknowledged: bool = False
+    version: int = Field(default=1, ge=1)
+
+
+class QuestionnaireSaveRequest(BaseModel):
+    appointment_id: str = Field(min_length=2, max_length=80)
+    answers: dict[str, str | None] = Field(default_factory=dict)
+    declaration_acknowledged: bool = False
+    submit: bool = False
+    expected_version: int = Field(default=1, ge=1)
+    idempotency_key: str = Field(default="demo-questionnaire", min_length=8, max_length=128)
+
+
+class UploadLinkSession(BaseModel):
+    synthetic: bool = True
+    valid: bool
+    appointment_id: str | None = None
+    scheduled_at: datetime | None = None
+    message: str
+    next_action: str

@@ -4,9 +4,9 @@ import styles from "./PreArrival.module.css";
 
 const fields = [
   { label: "Full name", booking: "Loh Wei Ming", source: "Myinfo", state: "validated" },
-  { label: "Date of birth", booking: "14 May 1988", source: "Myinfo", state: "validated" },
-  { label: "Mobile number", booking: "+65 •••• 8124", source: "Myinfo", state: "validated" },
-  { label: "Email", booking: "wei.ming@example.sg", source: "Patient entry", state: "not_compared" },
+  { label: "Date of birth", booking: "26 Jul 1952", source: "Myinfo", state: "validated" },
+  { label: "Mobile number", booking: "+65 •••• 0206", source: "Myinfo", state: "validated" },
+  { label: "Email", booking: "wei.loh43@hotmail.com", source: "Patient entry", state: "not_compared" },
 ];
 
 export function RegistrationValidation() {

@@ -1,5 +1,5 @@
-import { PreArrivalWorkspace } from "@/components/prearrival/PreArrivalWorkspace";
+import { HomeWorkspace } from "@/components/home/HomeWorkspace";
 
-export default function PreArrivalPage() {
-  return <PreArrivalWorkspace />;
+export default function HomePage() {
+  return <HomeWorkspace />;
 }
