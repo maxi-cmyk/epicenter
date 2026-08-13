@@ -25,5 +25,8 @@ def transition_ticket(ticket: QueueTicket, request: TicketTransitionRequest) -> 
     else:
         updated.processing_stage = "First-pass processing"
 
+    if request.visit_phase is not None:
+        updated.visit_phase = request.visit_phase
+
     # The ticket ID and original ordering time are deliberately untouched.
     return updated

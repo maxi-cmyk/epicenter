@@ -138,6 +138,19 @@ class QueueTicket(BaseModel):
     billing_confirmed: bool = False
     billing_confirmed_by: str | None = None
     billing_confirmed_at: datetime | None = None
+    identity_confirmed: bool = False
+    identity_confirmed_by: str | None = None
+    identity_confirmed_at: datetime | None = None
+    ecard_verified: bool = False
+    ecard_not_applicable: bool = False
+    ecard_na_reason: str | None = None
+    is_checkup: bool = False
+    forms_confirmed: bool = False
+    forms_confirmed_by: str | None = None
+    forms_confirmed_at: datetime | None = None
+    physical_forms_received: bool = False
+    physical_forms_received_by: str | None = None
+    physical_forms_received_at: datetime | None = None
 
 
 class ReviewCase(BaseModel):
@@ -212,6 +225,7 @@ class TicketTransitionRequest(BaseModel):
     readiness_state: ReadinessState
     reason: str
     staff_confirmed: bool = False
+    visit_phase: VisitPhase | None = None
     expected_version: int = Field(default=1, ge=1)
     idempotency_key: str = Field(default="demo-transition", min_length=8, max_length=128)
 
@@ -228,6 +242,7 @@ class KioskCheckInRequest(BaseModel):
     registration_source: str = "supervised_kiosk"
     nurse_supervisor: str = Field(min_length=2, max_length=80)
     clinical_escalation: bool = False
+    is_checkup: bool = False
     idempotency_key: str = Field(default="demo-kiosk-check-in", min_length=8, max_length=128)
 
 
@@ -336,6 +351,23 @@ class BillingConfirmRequest(BaseModel):
     corrected_billing_code: str | None = Field(default=None, max_length=80)
     corrected_uncovered_cost: float | None = Field(default=None, ge=0)
     corrected_queue_number: str | None = Field(default=None, max_length=40)
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class IdentityConfirmRequest(BaseModel):
+    ecard_not_applicable: bool = False
+    ecard_na_reason: str | None = Field(default=None, max_length=200)
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class FormsConfirmRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class PhysicalFormsReceivedRequest(BaseModel):
     expected_version: int = Field(ge=1)
     idempotency_key: str = Field(min_length=8, max_length=128)
 

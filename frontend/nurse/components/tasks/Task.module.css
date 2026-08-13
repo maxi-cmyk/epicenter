@@ -29,9 +29,87 @@
   text-transform: uppercase;
 }
 
+.notice {
+  background: var(--cream-100);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+}
+
 .notice p {
   color: var(--ink-soft);
   margin: 0 0 12px;
+}
+
+.notice p:last-child {
+  margin-bottom: 0;
+}
+
+.steps {
+  background: var(--green-950);
+  color: var(--green-200);
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(6, 1fr);
+  padding: 16px clamp(20px, 4vw, 40px);
+}
+
+.steps li {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.steps li > a,
+.steps li > .lockedStep {
+  align-items: center;
+  color: inherit;
+  display: flex;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.steps li > .lockedStep {
+  opacity: 0.5;
+}
+
+.steps li > a > span,
+.steps li > .lockedStep > span {
+  align-items: center;
+  border: 1px solid var(--green-500);
+  border-radius: 50%;
+  display: flex;
+  flex-shrink: 0;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.steps strong {
+  font-size: 0.8rem;
+}
+
+.steps .currentStep {
+  background: var(--cream-50);
+  border-radius: 8px;
+  color: var(--green-950);
+}
+
+.steps .currentStep > a > span,
+.steps .completeStep > a > span {
+  background: var(--green-700);
+  border-color: var(--green-700);
+  color: var(--cream-50);
+}
+
+.inlineCheckLabel {
+  align-items: center;
+  color: var(--ink-soft);
+  display: flex;
+  font-size: 0.82rem;
+  gap: 8px;
+  margin: 16px 0;
 }
 
 .checklist {

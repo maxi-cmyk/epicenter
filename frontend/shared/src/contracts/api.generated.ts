@@ -260,6 +260,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tickets/{ticket_id}/forms/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Forms */
+        post: operations["confirm_forms_api_v1_tickets__ticket_id__forms_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/identity/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Identity */
+        post: operations["confirm_identity_api_v1_tickets__ticket_id__identity_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tickets/{ticket_id}/medication": {
         parameters: {
             query?: never;
@@ -288,6 +322,23 @@ export interface paths {
         put?: never;
         /** Confirm Package */
         post: operations["confirm_package_api_v1_tickets__ticket_id__package_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tickets/{ticket_id}/physical-forms/received": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Physical Forms Received */
+        post: operations["mark_physical_forms_received_api_v1_tickets__ticket_id__physical_forms_received_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -743,10 +794,31 @@ export interface components {
             /** Staff Confirmed */
             staff_confirmed: boolean;
         };
+        /** FormsConfirmRequest */
+        FormsConfirmRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IdentityConfirmRequest */
+        IdentityConfirmRequest: {
+            /** Ecard Na Reason */
+            ecard_na_reason?: string | null;
+            /**
+             * Ecard Not Applicable
+             * @default false
+             */
+            ecard_not_applicable: boolean;
+            /** Expected Version */
+            expected_version: number;
+            /** Idempotency Key */
+            idempotency_key: string;
         };
         /**
          * IntakeType
@@ -765,6 +837,11 @@ export interface components {
              * @default demo-kiosk-check-in
              */
             idempotency_key: string;
+            /**
+             * Is Checkup
+             * @default false
+             */
+            is_checkup: boolean;
             /** Nurse Supervisor */
             nurse_supervisor: string;
             /** Patient Name */
@@ -939,6 +1016,13 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** PhysicalFormsReceivedRequest */
+        PhysicalFormsReceivedRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
         /** PreArrivalSubmissionRequest */
         PreArrivalSubmissionRequest: {
             /** Appointment Id */
@@ -1005,11 +1089,46 @@ export interface components {
              * @default []
              */
             documents: components["schemas"]["Document"][];
+            /** Ecard Na Reason */
+            ecard_na_reason?: string | null;
+            /**
+             * Ecard Not Applicable
+             * @default false
+             */
+            ecard_not_applicable: boolean;
+            /**
+             * Ecard Verified
+             * @default false
+             */
+            ecard_verified: boolean;
             /** Expected Room */
             expected_room?: string | null;
+            /**
+             * Forms Confirmed
+             * @default false
+             */
+            forms_confirmed: boolean;
+            /** Forms Confirmed At */
+            forms_confirmed_at?: string | null;
+            /** Forms Confirmed By */
+            forms_confirmed_by?: string | null;
             /** Id */
             id: string;
+            /**
+             * Identity Confirmed
+             * @default false
+             */
+            identity_confirmed: boolean;
+            /** Identity Confirmed At */
+            identity_confirmed_at?: string | null;
+            /** Identity Confirmed By */
+            identity_confirmed_by?: string | null;
             intake_type: components["schemas"]["IntakeType"];
+            /**
+             * Is Checkup
+             * @default false
+             */
+            is_checkup: boolean;
             /** Matched Package */
             matched_package?: string | null;
             /**
@@ -1030,6 +1149,15 @@ export interface components {
             patient_id: string;
             /** Patient Name */
             patient_name: string;
+            /**
+             * Physical Forms Received
+             * @default false
+             */
+            physical_forms_received: boolean;
+            /** Physical Forms Received At */
+            physical_forms_received_at?: string | null;
+            /** Physical Forms Received By */
+            physical_forms_received_by?: string | null;
             /** Processing Stage */
             processing_stage: string;
             /** Queue Number */
@@ -1207,6 +1335,7 @@ export interface components {
              * @default false
              */
             staff_confirmed: boolean;
+            visit_phase?: components["schemas"]["VisitPhase"] | null;
         };
         /** TpaSubmission */
         TpaSubmission: {
@@ -1809,6 +1938,76 @@ export interface operations {
             };
         };
     };
+    confirm_forms_api_v1_tickets__ticket_id__forms_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormsConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_identity_api_v1_tickets__ticket_id__identity_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     record_medication_dispense_api_v1_tickets__ticket_id__medication_post: {
         parameters: {
             query?: never;
@@ -1856,6 +2055,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PackageConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_physical_forms_received_api_v1_tickets__ticket_id__physical_forms_received_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhysicalFormsReceivedRequest"];
             };
         };
         responses: {

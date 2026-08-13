@@ -15,6 +15,8 @@ from app.domain.models import (
     DocumentCategory,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
+    FormsConfirmRequest,
+    IdentityConfirmRequest,
     IntakeType,
     KioskCheckInRequest,
     MedicationDispense,
@@ -28,6 +30,7 @@ from app.domain.models import (
     PatientRecord,
     PatientSummary,
     PatientUpdateRequest,
+    PhysicalFormsReceivedRequest,
     PreArrivalSubmissionRequest,
     PreArrivalSubmissionResult,
     QueueTicket,
@@ -106,6 +109,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 expected_room="Room 2 · Dr Farah",
                 processing_stage="Ready before arrival",
                 staff_confirmed=True,
+                is_checkup=True,
                 matched_package="WELL2 — Comprehensive Screen",
                 billing_code="WELL2-STD",
                 uncovered_cost=0.0,
@@ -735,6 +739,86 @@ class DemoRepository:
                     "billing_confirmed": True,
                     "billing_confirmed_by": actor,
                     "billing_confirmed_at": datetime.now(UTC),
+                    "version": current.version + 1,
+                }
+            )
+            self._snapshot.tickets[index] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
+
+    def confirm_identity(
+        self, ticket_id: str, request: IdentityConfirmRequest, actor: str = "synthetic-staff"
+    ) -> QueueTicket:
+        with self._lock:
+            key = ("identity_confirm", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, QueueTicket):
+                return deepcopy(existing)
+            index = next(index for index, ticket in enumerate(self._snapshot.tickets) if ticket.id == ticket_id)
+            current = self._snapshot.tickets[index]
+            if current.version != request.expected_version:
+                raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
+            updated = current.model_copy(
+                update={
+                    "identity_confirmed": True,
+                    "identity_confirmed_by": actor,
+                    "identity_confirmed_at": datetime.now(UTC),
+                    "ecard_verified": not request.ecard_not_applicable,
+                    "ecard_not_applicable": request.ecard_not_applicable,
+                    "ecard_na_reason": request.ecard_na_reason if request.ecard_not_applicable else None,
+                    "version": current.version + 1,
+                }
+            )
+            self._snapshot.tickets[index] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
+
+    def confirm_forms(
+        self, ticket_id: str, request: FormsConfirmRequest, actor: str = "synthetic-staff"
+    ) -> QueueTicket:
+        with self._lock:
+            key = ("forms_confirm", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, QueueTicket):
+                return deepcopy(existing)
+            index = next(index for index, ticket in enumerate(self._snapshot.tickets) if ticket.id == ticket_id)
+            current = self._snapshot.tickets[index]
+            if current.version != request.expected_version:
+                raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
+            unconfirmed_electronic = [
+                doc for doc in current.documents if doc.category != DocumentCategory.FORM and not doc.confirmed
+            ]
+            if unconfirmed_electronic:
+                raise ValueError("All electronic forms must be confirmed before approving.")
+            updated = current.model_copy(
+                update={
+                    "forms_confirmed": True,
+                    "forms_confirmed_by": actor,
+                    "forms_confirmed_at": datetime.now(UTC),
+                    "version": current.version + 1,
+                }
+            )
+            self._snapshot.tickets[index] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
+
+    def mark_physical_forms_received(
+        self, ticket_id: str, request: PhysicalFormsReceivedRequest, actor: str = "synthetic-staff"
+    ) -> QueueTicket:
+        with self._lock:
+            key = ("physical_forms_received", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, QueueTicket):
+                return deepcopy(existing)
+            index = next(index for index, ticket in enumerate(self._snapshot.tickets) if ticket.id == ticket_id)
+            current = self._snapshot.tickets[index]
+            if current.version != request.expected_version:
+                raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
+            updated = current.model_copy(
+                update={
+                    "physical_forms_received": True,
+                    "physical_forms_received_by": actor,
+                    "physical_forms_received_at": datetime.now(UTC),
                     "version": current.version + 1,
                 }
             )

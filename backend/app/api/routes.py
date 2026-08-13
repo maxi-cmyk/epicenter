@@ -14,6 +14,8 @@ from app.domain.models import (
     DashboardSnapshot,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
+    FormsConfirmRequest,
+    IdentityConfirmRequest,
     KioskCheckInRequest,
     MedicationDispenseRequest,
     PackageConfirmRequest,
@@ -22,6 +24,7 @@ from app.domain.models import (
     PatientList,
     PatientRecord,
     PatientUpdateRequest,
+    PhysicalFormsReceivedRequest,
     QueueTicket,
     RecommendationDecisionRequest,
     SimulatorSnapshot,
@@ -163,6 +166,63 @@ def confirm_billing(
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
     return ActionResult(success=True, message="Billing and queue number rechecked and confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/identity/confirm", response_model=ActionResult)
+def confirm_identity(
+    ticket_id: str,
+    request: IdentityConfirmRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_identity(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Identity and e-card verification confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/forms/confirm", response_model=ActionResult)
+def confirm_forms(
+    ticket_id: str,
+    request: FormsConfirmRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_forms(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Electronic forms confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/physical-forms/received", response_model=ActionResult)
+def mark_physical_forms_received(
+    ticket_id: str,
+    request: PhysicalFormsReceivedRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.mark_physical_forms_received(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Physical forms received from patient.", ticket=ticket)
 
 
 @router.post("/tickets/{ticket_id}/transition", response_model=ActionResult)

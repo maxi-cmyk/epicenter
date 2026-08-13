@@ -15,6 +15,8 @@ from app.domain.models import (
     DashboardSnapshot,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
+    FormsConfirmRequest,
+    IdentityConfirmRequest,
     KioskCheckInRequest,
     MedicationDispense,
     MedicationDispenseRequest,
@@ -27,6 +29,7 @@ from app.domain.models import (
     PatientSubmissionOutcome,
     PatientSummary,
     PatientUpdateRequest,
+    PhysicalFormsReceivedRequest,
     PreArrivalSubmissionRequest,
     PreArrivalSubmissionResult,
     QueueTicket,
@@ -101,6 +104,14 @@ class OperationsRepository(Protocol):
     def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket: ...
 
     def confirm_billing(self, ticket_id: str, request: BillingConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def confirm_identity(self, ticket_id: str, request: IdentityConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def confirm_forms(self, ticket_id: str, request: FormsConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def mark_physical_forms_received(
+        self, ticket_id: str, request: PhysicalFormsReceivedRequest, actor: str
+    ) -> QueueTicket: ...
 
 
 def _ticket_from_row(row: dict[str, object]) -> QueueTicket:
@@ -620,6 +631,26 @@ class SupabaseOperationsRepository:
     def confirm_billing(self, ticket_id: str, request: BillingConfirmRequest, actor: str) -> QueueTicket:
         raise NotImplementedError(
             "Billing/queue confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_identity(self, ticket_id: str, request: IdentityConfirmRequest, actor: str) -> QueueTicket:
+        raise NotImplementedError(
+            "Identity confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_forms(self, ticket_id: str, request: FormsConfirmRequest, actor: str) -> QueueTicket:
+        raise NotImplementedError(
+            "Forms confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def mark_physical_forms_received(
+        self, ticket_id: str, request: PhysicalFormsReceivedRequest, actor: str
+    ) -> QueueTicket:
+        raise NotImplementedError(
+            "Physical forms receipt is only available in the demo repository "
             "pending the deferred production migration (task #13)."
         )
 

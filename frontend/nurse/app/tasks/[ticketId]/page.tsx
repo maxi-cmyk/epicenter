@@ -1,6 +1,6 @@
-import { TaskWorkspace } from "@/components/tasks/TaskWorkspace";
+import { TaskRedirect } from "@/components/tasks/TaskRedirect";
 
 export default async function TaskPage({ params }: { params: Promise<{ ticketId: string }> }) {
   const { ticketId } = await params;
-  return <TaskWorkspace ticketId={ticketId} />;
+  return <TaskRedirect ticketId={ticketId} />;
 }

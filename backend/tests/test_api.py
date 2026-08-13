@@ -368,6 +368,140 @@ def test_nurse_can_correct_wrong_billing_uncovered_cost_or_queue_number() -> Non
     assert confirmed["billing_code"] == "EXEC-STD"
 
 
+def test_nurse_confirms_identity_and_ecard() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["identity_confirmed"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-014/identity/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "identity-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["identity_confirmed"] is True
+    assert confirmed["ecard_verified"] is True
+    assert confirmed["ecard_not_applicable"] is False
+    assert confirmed["version"] == ticket["version"] + 1
+
+
+def test_nurse_confirms_identity_with_ecard_not_applicable() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-015")
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-015/identity/confirm",
+        json={
+            "ecard_not_applicable": True,
+            "ecard_na_reason": "Patient forgot e-card, verified via passport instead.",
+            "expected_version": ticket["version"],
+            "idempotency_key": "identity-confirm-na-test",
+        },
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["identity_confirmed"] is True
+    assert confirmed["ecard_verified"] is False
+    assert confirmed["ecard_not_applicable"] is True
+    assert confirmed["ecard_na_reason"] == "Patient forgot e-card, verified via passport instead."
+
+
+def test_nurse_confirms_forms_when_no_documents_present() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["documents"] == []
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-014/forms/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "forms-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["forms_confirmed"] is True
+
+
+def test_forms_confirm_rejects_unconfirmed_electronic_documents() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-020")
+    assert any(doc["confirmed"] is False for doc in ticket["documents"])
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-020/forms/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "forms-confirm-blocked-test"},
+    )
+    assert confirm_response.status_code == 409
+
+
+def test_forms_confirm_succeeds_once_all_electronic_documents_confirmed() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-020")
+
+    version = ticket["version"]
+    for index, doc in enumerate(ticket["documents"]):
+        confirm_response = client.post(
+            f"/api/v1/tickets/Q-020/documents/{doc['id']}/confirm",
+            json={"expected_version": version, "idempotency_key": f"forms-confirm-doc-{index}"},
+        )
+        assert confirm_response.status_code == 200
+        version = confirm_response.json()["ticket"]["version"]
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-020/forms/confirm",
+        json={"expected_version": version, "idempotency_key": "forms-confirm-success-test"},
+    )
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["ticket"]["forms_confirmed"] is True
+
+
+def test_nurse_marks_physical_forms_received() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["physical_forms_received"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-014/physical-forms/received",
+        json={"expected_version": ticket["version"], "idempotency_key": "physical-forms-received-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["physical_forms_received"] is True
+    assert confirmed["physical_forms_received_by"]
+
+
+def test_kiosk_check_in_can_flag_a_walk_in_as_a_checkup() -> None:
+    response = client.post(
+        "/api/v1/kiosk/check-in",
+        json={
+            "patient_name": "Checkup Walk-in",
+            "nurse_supervisor": "Test Nurse",
+            "is_checkup": True,
+            "idempotency_key": "kiosk-checkup-test",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["ticket"]["is_checkup"] is True
+
+
+def test_transition_can_move_visit_phase_to_ongoing() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["visit_phase"] == "incoming"
+
+    response = client.post(
+        "/api/v1/tickets/Q-014/transition",
+        json={
+            "readiness_state": ticket["readiness_state"],
+            "reason": ticket["readiness_reason"],
+            "staff_confirmed": True,
+            "visit_phase": "ongoing",
+            "expected_version": ticket["version"],
+            "idempotency_key": "visit-phase-transition-test",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["ticket"]["visit_phase"] == "ongoing"
+
+
 def test_patient_crud_uses_versioned_soft_delete() -> None:
     created = client.post(
         "/api/v1/patients",

@@ -1,5 +1,5 @@
 import { demoSnapshot } from "./demo-data";
-import type { ActionResult, DashboardSnapshot, ReadinessState } from "@epicenter/shared/contracts";
+import type { ActionResult, DashboardSnapshot, ReadinessState, VisitPhase } from "@epicenter/shared/contracts";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 type AccessTokenProvider = () => Promise<string | null>;
@@ -62,10 +62,24 @@ export function fetchStaffSession() {
   return request<{ role: string; clinic_id: string }>("/staff/session");
 }
 
-export function transitionTicket(ticketId: string, expectedVersion: number, readinessState: ReadinessState, reason: string, staffConfirmed: boolean) {
+export function transitionTicket(
+  ticketId: string,
+  expectedVersion: number,
+  readinessState: ReadinessState,
+  reason: string,
+  staffConfirmed: boolean,
+  visitPhase?: VisitPhase,
+) {
   return request<ActionResult>(`/tickets/${ticketId}/transition`, {
     method: "POST",
-    body: JSON.stringify({ readiness_state: readinessState, reason, staff_confirmed: staffConfirmed, expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
+    body: JSON.stringify({
+      readiness_state: readinessState,
+      reason,
+      staff_confirmed: staffConfirmed,
+      visit_phase: visitPhase ?? null,
+      expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+    }),
   });
 }
 
@@ -76,10 +90,16 @@ export function decideRecommendation(recommendationId: string, expectedVersion: 
   });
 }
 
-export function checkInWalkIn(patientName: string, nurseSupervisor: string, clinicalEscalation: boolean) {
+export function checkInWalkIn(patientName: string, nurseSupervisor: string, clinicalEscalation: boolean, isCheckup = false) {
   return request<ActionResult>("/kiosk/check-in", {
     method: "POST",
-    body: JSON.stringify({ patient_name: patientName, nurse_supervisor: nurseSupervisor, clinical_escalation: clinicalEscalation, idempotency_key: crypto.randomUUID() }),
+    body: JSON.stringify({
+      patient_name: patientName,
+      nurse_supervisor: nurseSupervisor,
+      clinical_escalation: clinicalEscalation,
+      is_checkup: isCheckup,
+      idempotency_key: crypto.randomUUID(),
+    }),
   });
 }
 
@@ -125,5 +145,31 @@ export function confirmBilling(
       expected_version: expectedVersion,
       idempotency_key: crypto.randomUUID(),
     }),
+  });
+}
+
+export function confirmIdentity(ticketId: string, expectedVersion: number, ecardNotApplicable = false, ecardNaReason?: string) {
+  return request<ActionResult>(`/tickets/${ticketId}/identity/confirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      ecard_not_applicable: ecardNotApplicable,
+      ecard_na_reason: ecardNotApplicable ? ecardNaReason || null : null,
+      expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+    }),
+  });
+}
+
+export function confirmForms(ticketId: string, expectedVersion: number) {
+  return request<ActionResult>(`/tickets/${ticketId}/forms/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
+  });
+}
+
+export function markPhysicalFormsReceived(ticketId: string, expectedVersion: number) {
+  return request<ActionResult>(`/tickets/${ticketId}/physical-forms/received`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
   });
 }

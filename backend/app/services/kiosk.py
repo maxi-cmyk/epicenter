@@ -19,4 +19,5 @@ def create_walk_in_ticket(ticket_id: str, request: KioskCheckInRequest) -> Queue
         actual_room="Kiosk intake",
         processing_stage="Nurse-supervised registration",
         clinical_escalation=request.clinical_escalation,
+        is_checkup=request.is_checkup,
     )
