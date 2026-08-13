@@ -82,10 +82,10 @@ function cloneConfig(id: ScenarioId, options: RunOptions | undefined): ScenarioC
 
 function buildResources(config: ScenarioConfig): Resource[] {
   const resources: Resource[] = [];
-  const push = (count: number, kind: Resource["kind"], workstream: Workstream, prefix: string) => {
+  const push = (count: number, kind: Resource["kind"], workstream: Workstream, prefix: string, compact = false) => {
     for (let index = 0; index < count; index += 1) {
       resources.push({
-        id: `${prefix}-${index + 1}`,
+        id: compact ? `${prefix}${index + 1}` : `${prefix}-${index + 1}`,
         kind,
         workstream,
         state: "idle",
@@ -97,8 +97,8 @@ function buildResources(config: ScenarioConfig): Resource[] {
       });
     }
   };
-  push(config.resources.fastCounters, "fast_counter", "fast_registration", "FAST");
-  push(config.resources.slowCounters, "slow_counter", "slow_registration", "SLOW");
+  push(config.resources.fastCounters, "fast_counter", "fast_registration", "F", true);
+  push(config.resources.slowCounters, "slow_counter", "slow_registration", "S", true);
   push(config.resources.reviewCounters, "review", "review", "REV");
   push(config.resources.flexibleCounters, "flexible", "registration", "FLEX");
   push(config.resources.doctors, "doctor", "consult", "DOC");

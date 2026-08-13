@@ -565,6 +565,7 @@ class PatientQueueStatus(BaseModel):
     visit_phase: VisitPhase | None = None
     status_label: str
     status_detail: str
+    queue_number: str | None = None
     counter_label: str | None = None
     patients_ahead: int | None = None
     updated_at: datetime

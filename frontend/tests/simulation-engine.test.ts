@@ -59,6 +59,14 @@ test("baseline and epicenter reuse identical arrivals and tickets", () => {
   for (const run of [baseline, epicenter, runSimulation("dynamic_allocation", { cohort })]) {
     assert.equal(run.resources.filter((resource) => resource.kind === "fast_counter").length, 2);
     assert.equal(run.resources.filter((resource) => resource.kind === "slow_counter").length, 4);
+    assert.deepEqual(
+      run.resources.filter((resource) => resource.kind === "fast_counter").map((resource) => resource.id),
+      ["F1", "F2"],
+    );
+    assert.deepEqual(
+      run.resources.filter((resource) => resource.kind === "slow_counter").map((resource) => resource.id),
+      ["S1", "S2", "S3", "S4"],
+    );
   }
   assert.equal(assertRunInvariants(baseline).length, 0);
 });
@@ -71,7 +79,7 @@ test("complete pre-registration starts at a fast counter", () => {
     const start = run.events.find(
       (event) => event.type === "service_started" && event.patientId === patient.id && event.stage === "fast_registration",
     );
-    assert.ok(start?.resourceId?.startsWith("FAST-"), `${patient.ticketId} should start at a fast counter`);
+    assert.ok(/^F\d+$/.test(start?.resourceId ?? ""), `${patient.ticketId} should start at a fast counter`);
     assert.equal(start?.durationMinutes, patient.fastCheckInMinutes);
   }
   assert.equal(run.metrics.fastCounterPatients, eligible.length);
@@ -90,7 +98,7 @@ test("strict lanes keep incomplete registrations on slow counters", () => {
         event.patientId === patient.id &&
         (event.stage === "fast_registration" || event.stage === "slow_registration"),
     );
-    assert.ok(start?.resourceId?.startsWith("SLOW-"), `${patient.ticketId} should stay on a slow counter`);
+    assert.ok(/^S\d+$/.test(start?.resourceId ?? ""), `${patient.ticketId} should stay on a slow counter`);
     assert.equal(start?.stage, "slow_registration");
   }
   assert.equal(
@@ -104,7 +112,7 @@ test("idle fast counters take slow-queue patients at slow duration", () => {
   const run = runSimulation("dynamic_allocation");
   const overflow = run.events.find((event) => event.type === "fast_overflow_started");
   assert.ok(overflow, "dynamic allocation should overflow onto an idle fast counter");
-  assert.ok(overflow.resourceId?.startsWith("FAST-"));
+  assert.ok(/^F\d+$/.test(overflow.resourceId ?? ""));
   const start = run.events.find(
     (event) =>
       event.type === "service_started" &&
@@ -145,7 +153,7 @@ test("a waiting fast-lane patient takes the next freed fast counter", () => {
     (event) => event.type === "service_started" && event.patientId === "P-FAST" && event.stage === "fast_registration",
   );
   assert.ok(fastQueued);
-  assert.equal(nextFastStart?.resourceId?.startsWith("FAST-"), true);
+  assert.equal(/^F\d+$/.test(nextFastStart?.resourceId ?? ""), true);
   assert.equal(nextFastStart?.durationMinutes, 2);
   assert.equal(
     run.events.some(

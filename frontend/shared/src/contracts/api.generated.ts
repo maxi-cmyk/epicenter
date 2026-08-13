@@ -1523,6 +1523,8 @@ export interface components {
              * @default false
              */
             payment_ready: boolean;
+            /** Queue Number */
+            queue_number?: string | null;
             /**
              * Stale
              * @default false

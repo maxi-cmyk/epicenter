@@ -55,6 +55,13 @@ test("the dashboard labels all demo data honestly", () => {
   assert.match(read("nurse/lib/api.ts"), /Reconnect to live clinic data before recording a confirmation/);
 });
 
+test("the patient queue shows the assigned queue number and counter", () => {
+  const queue = read("patient/components/queue/QueueWorkspace.tsx");
+  assert.match(queue, /Queue number/);
+  assert.match(queue, /queue\.queue_number/);
+  assert.match(queue, /queue\.counter_label/);
+});
+
 test("the desktop board elevates exceptions without removing the three visit phases", () => {
   const board = read("nurse/components/dashboard/PatientFlowBoard.tsx");
   const ticket = read("nurse/components/dashboard/TicketRow.tsx");
@@ -66,6 +73,10 @@ test("the desktop board elevates exceptions without removing the three visit pha
   assert.doesNotMatch(board, /aria-keyshortcuts/);
   assert.match(ticket, /Needs confirmation/);
   assert.match(ticket, /card_finished/);
+  assert.match(ticket, /<dt>Queue<\/dt>/);
+  assert.match(ticket, /<dt>Counter<\/dt>/);
+  assert.match(ticket, /isFastLane/);
+  assert.match(ticket, /intake_type === "booked"/);
   assert.doesNotMatch(ticket, />Docs</);
 });
 

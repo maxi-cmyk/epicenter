@@ -5,14 +5,29 @@ import type { QueueTicket, ReviewCase } from "@epicenter/shared/contracts";
 
 import styles from "./Dashboard.module.css";
 
-function roomValue(room: string | null | undefined) {
-  if (!room) return room;
-  const match = /^(?:Room|Counter|Review)\s+(\d+)/i.exec(room);
-  return match ? match[1] : room;
+function isFastLane(ticket: QueueTicket) {
+  return ticket.intake_type === "booked" && ticket.readiness_state === "ready";
+}
+
+function assignedCounter(ticket: QueueTicket) {
+  const raw = ticket.actual_room ?? ticket.expected_room;
+  if (raw && /^[FS]\d+$/i.test(raw)) return raw.toUpperCase();
+
+  const fast = isFastLane(ticket);
+  const numbered = raw ? /(?:Room|Counter|Review)\s+(\d+)/i.exec(raw) : null;
+  if (numbered) {
+    const index = Number(numbered[1]);
+    return fast ? `F${Math.min(Math.max(index, 1), 2)}` : `S${Math.min(Math.max(index, 1), 4)}`;
+  }
+  if (raw && /kiosk/i.test(raw)) return "S1";
+
+  const serial = Number(ticket.id.replace(/\D/g, "")) || 1;
+  return fast ? `F${((serial - 1) % 2) + 1}` : `S${((serial - 1) % 4) + 1}`;
 }
 
 export function TicketRow({ reviewCase, ticket }: { reviewCase?: ReviewCase; ticket: QueueTicket }) {
-  const room = roomValue(ticket.actual_room ?? ticket.expected_room);
+  const counter = assignedCounter(ticket);
+  const queueNumber = ticket.queue_number || ticket.id;
   const needsAttention = ticket.readiness_state === "needs_review";
   const stateClass = needsAttention
     ? styles.card_flagged
@@ -54,12 +69,18 @@ export function TicketRow({ reviewCase, ticket }: { reviewCase?: ReviewCase; tic
           <span>{reviewCase.next_action}</span>
         </div>
       ) : null}
-      {room || secondStat ? (
+      {queueNumber || counter || secondStat ? (
         <dl className={styles.cardStats}>
-          {room ? (
+          {queueNumber ? (
             <div>
-              <dt>Room</dt>
-              <dd>{room}</dd>
+              <dt>Queue</dt>
+              <dd>{queueNumber}</dd>
+            </div>
+          ) : null}
+          {counter ? (
+            <div>
+              <dt>Counter</dt>
+              <dd>{counter}</dd>
             </div>
           ) : null}
           {secondStat ? (
