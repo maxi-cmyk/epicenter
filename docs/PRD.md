@@ -2,9 +2,10 @@
 
 ## AI-Assisted Pre-Registration & Eligibility Verification for Parkway Shenton
 
-- **Status:** Draft v2 (delivery-aligned)
+- **Status:** Current demo (patient + nurse panels against one FastAPI/Supabase backend)
 - **Track:** Hack4Health 2026, Technical Track
 - **AI integration:** OpenAI Responses API during development, consuming two client-neutral Epicenter MCP servers that remain Copilot Studio-compatible for deployment/publication
+- **Workflow:** [workflow.md](./workflow.md) · **Stack:** [techStack.md](./techStack.md) · **Product:** [PRODUCT.md](./PRODUCT.md)
 
 ## 1. Problem Statement
 How might we automate pre-registration and eligibility verification for both scheduled appointments and walk-in patients, so the necessary information is retrieved and processed before they reach the front desk, eliminating the need for staff to manually determine coverage, benefits, and screening packages while ensuring identity verification is still completed securely in person?
@@ -102,13 +103,14 @@ Appointment/link
 The simplified nurse flow is:
 
 ```text
-Today
+Today (Incoming / Ongoing / Finished)
   → open the oldest actionable visit
-  → inspect the compact prepared record
-  → expand only the exception and its source evidence
-  → perform and attest mandatory physical checks
-  → commit one outcome: accept, reject with reason, or keep under review
-  → route the same ticket and proceed to the next visit
+  → Identity & e-card attestation
+  → Forms guidance
+  → Forms review
+  → Confirm package (when documents are on file)
+  → Billing & queue
+  → Summary (same Q-* ticket, assigned counter)
 ```
 
 Simplification does not mean hiding unresolved work, bypassing deterministic readiness gates, removing staff confirmation, automating clinical decisions, or claiming that external TPA submission is live. It means reducing repeated collection and interpretation while making the remaining human action explicit, short, and auditable.
@@ -131,9 +133,9 @@ Simplification does not mean hiding unresolved work, bypassing deterministic rea
 
 Epicenter is delivered as two separate frontend applications backed by one shared FastAPI service and one Supabase source of truth:
 
-- **Patient panel:** mobile-first registration, Singpass/Myinfo booking pre-check, document submission, patient-safe accepted/rejected outcomes, and the patient's one queue ticket and assigned counter.
-- **Nurse panel:** authenticated daily worklist, assisted review, manual identity/e-card attestation, intentional data administration, allocation controls, operational analytics, and the synthetic simulator.
-- **Shared backend:** owns authorization, validation, deterministic readiness/eligibility rules, queue lifecycle, database transactions, auditing, simulation snapshots, and MCP tools. Neither frontend contains a second copy of business rules.
+- **Patient panel:** signed-in Home, coverage upload/reuse, questionnaire, queue (number + assigned counter), mocked payment, and records.
+- **Nurse panel:** Today board (Incoming / Ongoing / Finished), gated per-ticket task flow, walk-in kiosk, Database, Audit, and Simulator.
+- **Shared backend:** owns authorization, validation, deterministic readiness/eligibility rules, queue lifecycle, counter assignment, database transactions, auditing, and MCP tools. Neither frontend contains a second copy of business rules.
 
 The target repository structure keeps the deployable panels separate while retaining shared contracts:
 
@@ -144,7 +146,7 @@ frontend/
 └── shared/              # generated API types and safe UI primitives only
 backend/                 # one FastAPI/Railway service used by both panels
 supabase/                # migrations, seed, and database tests
-docs/                    # product, design, delivery, and integration documents
+docs/                    # PRODUCT, PRD, techStack, workflow
 ```
 
 The physical split is implemented as independent npm workspaces and Next.js route trees. Production uses separate patient and nurse Vercel roots and origins, both allowlisted by the same Railway backend. Generated database/API types and safe presentation primitives may be shared; routes, navigation, authentication wrappers, workflow components, and business behavior remain app-specific or backend-owned.
@@ -208,7 +210,12 @@ IF every required document is present, valid, and readiness_status = pass
    AND every eligibility/package match is clean
    AND required staff confirmation is complete
 THEN → READY SERVICE (same ticket)
-IF any gate fails → ASSISTED REVIEW (same ticket, waiting age retained)
+IF any gate fails → NEEDS_REVIEW (same ticket, waiting age retained)
+
+Counter assignment (independent of ticket identity):
+  walk-in                                  → slow S1–S4
+  booked AND readiness_state = ready       → fast F1–F2
+  booked AND any outstanding issue         → slow S1–S4
 ```
 
 **Why this is a core feature, not merely an optimisation:** The brief's numbers describe a structural failure, not only an average-speed problem. Making each document faster still allows the slowest case to block everyone behind it. Decoupling ready work from exception work removes that operational dependency, while the persistent ticket avoids replacing one bottleneck with multiple patient queues. The distinction is between internal work routing and the patient's place in line: staff may resolve different kinds of work in parallel, but the patient checks in only once.
@@ -231,9 +238,9 @@ IF any gate fails → ASSISTED REVIEW (same ticket, waiting age retained)
   - **Finished:** completed visits. Shows appointment date, completion time, final queue/counter, and completion status for operational review.
 - Expected queue and counter numbers are generated once a booked patient's pre-registration route is known. They are planning assignments, not guarantees; the actual counter may change at check-in or when staff rebalance capacity, and the change is logged.
 - Check-in records staff confirmation that identity verification and, where applicable, e-card validation were completed manually using the approved in-person process. The system does not perform, assist with, scan for, or decide either check; it stores only the staff attestation, timestamp, and allowed not-applicable reason.
-- The Review workspace is a staff worklist, not another patient queue. It lists every unresolved case with its original appointment/check-in time, review reason, document state, total waiting age, counter, and next action. It has explicit empty, loading, permission, and recoverable error states.
+- The Review path is not a separate navigation destination. Unresolved exceptions stay on the same ticket; the nurse resolves them inside the gated task flow. `/review` redirects to Today.
 - Appointment lifecycle also records rescheduled, cancelled, and no-show outcomes. A rescheduled booking keeps an audit link to its prior slot; cancelled/no-show visits appear under Finished with their outcome.
-- Counter-allocation controls may rebalance expected or actual counters but cannot mark a patient `ready` unless every readiness prerequisite passes.
+- Counter-allocation controls may rebalance expected or actual counters but cannot mark a patient `ready` unless every readiness prerequisite passes. Walk-ins never occupy a fast counter.
 
 ### 4.3 Core Add-On Feature — Unified Patient Record Across All Touchpoints
 
@@ -244,12 +251,12 @@ IF any gate fails → ASSISTED REVIEW (same ticket, waiting age retained)
 | TPA form re-entry (step 4) | Identity pulled from the registration record, not re-keyed onto a second paper form |
 | Eligibility/package re-checking (steps 5–6) | Reuses the structured extraction from §4.1 rather than staff re-reading the source document |
 | On-site consent/disclosure forms (step 6) | Name, NRIC, DOB, contact, and address pre-filled from the registration record; patient/staff only complete genuinely new fields (medical history, lifestyle) |
-| Allergy re-ask at medication dispensing (step 11) | Drug allergy information already captured at registration and/or questionnaire is surfaced to the pharmacist directly, rather than re-asked verbally from scratch |
+| Allergy re-ask at medication dispensing (step 11) | Drug allergy information already captured at registration and/or questionnaire is reused rather than re-asked verbally from scratch |
 | Payment / TPA portal re-entry (step 12) | The same structured coverage and visit record feeds billing determination and (conceptually) TPA portal submission, rather than staff re-checking the original document a third time |
 
 **Why this is scoped as a core feature, not a stretch:** Treating this as "reduce duplicate entry" and stopping at the questionnaire step (as an earlier draft of this PRD did) understates the actual pattern in the brief. The allergy re-ask at step 11 in particular is a patient-safety-relevant instance of the same redundancy that is easy to miss because it doesn't look like a paperwork problem on the surface — but it is the identical mechanism (data already known, re-derived anyway) as the more visible form-filling redundancy.
 
-**Design requirement:** The pharmacist-facing allergy surface (step 11) is display-only in this system's scope — it presents already-recorded allergy information to support the pharmacist's own verbal check, it does not replace or automate the clinical safety check itself.
+**Design requirement:** Allergy information captured at registration and/or questionnaire is reused later in the visit. Epicenter does not replace or automate the clinical safety check itself.
 
 The questionnaire/consent surface visibly separates read-only prefilled identity/contact data from genuinely new answers, autosaves long-form drafts, and records the approved consent event without inventing consent. The billing/TPA surface shows the confirmed source, package, covered/patient amounts, correction reason, and demo payload preview; it requires staff confirmation and never claims a live TPA submission.
 
@@ -278,11 +285,11 @@ The patient flow includes checking/loading, no-prior-match, ambiguous-match-with
 
 The product has two deliberately separate frontend applications. They share backend contracts and data, not routes, sessions, navigation, or deployment origins.
 
-**Nurse panel:** authenticated operational views for queue lifecycle, appointment prerequisites, manual check-in attestations, review worklists, document extraction/correction, records search and controlled CRUD, questionnaires/consent prefill, pharmacy allergy attestation, billing/TPA confirmation, audit history, counter allocation, operational intelligence, and the simulator. Staff may see operational reasons and source-document evidence appropriate to their role.
+**Nurse panel:** authenticated operational views for the Today board, gated registration tasks, walk-in kiosk, document extraction/correction, Database (controlled patient CRUD), Audit, counter allocation, and the Simulator. Staff may see operational reasons and source-document evidence appropriate to their role.
 
-**Patient panel:** a minimal token-scoped upload flow plus a small seeded demo account with Registration, Queue, Payment, and Records. Patients register through the Singpass/Myinfo pre-check contract, see only their own appointment and submission outcome, and receive a clear `accepted`, `rejected`, or `under_review` administrative result. A rejection shows a curated patient-safe reason and next action; it never exposes internal rules, confidence, identifier conflicts, audit data, or another patient. Once checked in, the same panel shows the patient's one persistent `Q-*` ticket and assigned counter.
+**Patient panel:** signed-in Home, coverage upload/reuse, questionnaire, Queue, mocked Payment, and Records, plus a token-scoped upload link for appointment-bound submission. Patients see only their own appointment and a clear `accepted`, `rejected`, or `under_review` administrative result. A rejection shows a curated patient-safe reason and next action; it never exposes internal rules, confidence, identifier conflicts, audit data, or another patient. The Queue screen shows the patient's one persistent `Q-*` ticket and assigned counter once they have been assigned, including before physical check-in when a planning assignment exists.
 
-Both surfaces require explicit loading, empty, validation, failure, retry, and success states. Status is communicated through text and accessible semantics, not color alone; staff tables remain keyboard-operable and patient views are mobile-first. Interactive controls use large, generously-spaced touch/click targets, color pairings meet WCAG AA contrast minimums, and the palette is checked against common color-vision deficiencies (protanopia, deuteranopia, tritanopia) so no state depends on red/green discrimination alone — this matters here specifically because registration, review, and pharmacy staff are working under time pressure and older or vision-impaired patients are a routine part of clinic traffic, not an edge case.
+Both surfaces require explicit loading, empty, validation, failure, retry, and success states. Status is communicated through text and accessible semantics, not color alone; staff tables remain keyboard-operable and patient views are mobile-first. Interactive controls use large, generously-spaced touch/click targets, color pairings meet WCAG AA contrast minimums, and the palette is checked against common color-vision deficiencies (protanopia, deuteranopia, tritanopia) so no state depends on red/green discrimination alone.
 
 ### 4.6 Demo-Scoped Feature — Patient Account (Small, Fixed Demo Pool)
 
@@ -293,12 +300,12 @@ Both surfaces require explicit loading, empty, validation, failure, retry, and s
 - Clerk provides sign-in and session management for the seeded demo accounts. Each Clerk user is mapped to one local patient record; this does not turn the separate single-use upload link into a user account.
 - Upload reuses the same extraction pipeline as §4.1/§4.4 — no separate logic, just an authenticated entry point instead of a tokenized one.
 - The authenticated upload screen uses the same check-first coverage-reuse step as the tokenized link. The account's patient record is used for the lookup; the patient can reuse the prior document or upload a replacement.
-- Queue number/station is a read view onto the same queue assignment staff already see (§4.2) — the patient sees their own queue position, not a parallel system.
+- Queue number/station is a read view onto the same queue assignment staff already see (§4.2) — the patient sees their own queue number and assigned counter, not a parallel system. Assignment is shown once a counter has been planned or issued, including before physical check-in.
 - The demo account has a small Home/Queue/Payment/Records shell. Queue states cover skeletal initial loading, manual refresh, before check-in, processing, ready, additional review needed, called, counter changed, delayed, finished, stale/load failure, and retry without exposing internal review reasons. The Queue screen has a labelled Refresh control at the top right.
 - Payment is mocked, not a live gateway integration — consistent with the mocked-delivery approach used elsewhere in this project's design (SMS/email). Shows a realistic confirmation flow with no real transaction, and is built so a real gateway (e.g. PayNow, Stripe) could be substituted behind the same interface later, without being a live dependency risk during judging.
 - Mocked payment covers not-ready, processing, success/receipt, failure/retry, and already-paid states; duplicate submission cannot create a second receipt.
 - Medical records view is read-only — the patient sees their own coverage/package history and past questionnaire responses, including visit detail and empty/loading/error states; nothing here allows editing clinical or coverage data, which remains a staff-confirmed action per §7.
-- Explicitly not production-scoped. This is not a claim that a full self-service patient identity/authentication system has been designed or secured to production standard — it is a demo-scale illustration of the pattern, clearly distinguished from that larger undertaking in the pitch.
+- Explicitly not production-scoped. This is not a claim that a full self-service patient identity/authentication system has been designed or secured to production standard — it is a demo-scale illustration of the pattern, clearly distinguished from that larger undertaking.
 
 ### 4.7 Product Extension — Operational Intelligence and Dynamic Resource Allocation
 
@@ -345,11 +352,11 @@ Pre-registration / check-in
 
 Recommendations show the observed pressure, constraints checked, expected effect, and expiry time. An authorised operations lead can accept, modify, reject, or later reverse the change. The system records the decision and subsequent waiting-time effect so recommendation quality can be evaluated.
 
-**Guardrails:** Analytics use aggregate or appropriately masked operational data, not raw document content or direct identifiers. Staff are not assumed to be interchangeable: recommendations may use only people whose role, training, availability, and current responsibilities permit the task. For clinical service stages, the advisor may recommend activating or rescheduling aggregate capacity only within the same qualified role—for example, opening another doctor room or bringing an available pharmacist onto dispensing—and may never assign clinical work to administrative staff. Minimum coverage, planned breaks, maximum reassignment frequency, and a configurable stability window prevent unsafe or disruptive reshuffling. The feature never ranks clinical urgency, recommends care, scores individual staff performance, or makes a staffing change without human approval. Small cohorts are suppressed where necessary. P0 may demonstrate the extension with seeded events, a small dashboard, and explainable rule-based recommendations rather than a predictive model.
+**Guardrails:** Analytics use aggregate or appropriately masked operational data, not raw document content or direct identifiers. Staff are not assumed to be interchangeable: recommendations may use only people whose role, training, availability, and current responsibilities permit the task. For clinical service stages, the advisor may recommend activating or rescheduling aggregate capacity only within the same qualified role and may never assign clinical work to administrative staff. Minimum coverage, planned breaks, maximum reassignment frequency, and a configurable stability window prevent unsafe or disruptive reshuffling. The feature never ranks clinical urgency, recommends care, scores individual staff performance, or makes a staffing change without human approval. Small cohorts are suppressed where necessary. P0 may demonstrate the extension with seeded events, a small dashboard, and explainable rule-based recommendations rather than a predictive model.
 
-The judged operational impact is demonstrated through the deterministic, synthetic [Clinic Operations Simulator](./simulator.md), which compares identical patient arrivals under the serial baseline, Epicenter routing, and human-approved dynamic allocation. Simulation assumptions are always visible and are not presented as observed clinic outcomes.
+The judged operational impact is demonstrated through the deterministic, synthetic clinic operations simulator in the nurse panel, which compares identical patient arrivals under the serial baseline, Epicenter routing, and human-approved dynamic allocation. Simulation assumptions are always visible and are not presented as observed clinic outcomes.
 
-The simulator lives only in the nurse panel. It loads a versioned, de-identified snapshot or approved seed from Supabase into an isolated simulation run and must never mutate operational patient, queue, or staffing records. Its required scenarios cover dynamic allocation, a known administrative-urgency appointment, pending/completed manual identity verification, and database-backed patient/appointment/resource inputs. Administrative urgency is an explicit appointment attribute supplied by the clinic; the simulator never infers clinical urgency. Physical red-flag triage remains nurse-led and outside the simulation algorithm.
+The simulator lives only in the nurse panel at `/simulator`. The engine is `frontend/nurse/lib/simulation/` and must never mutate operational patient, queue, or staffing records. Seeded scenarios are `serial_baseline`, `single_ticket`, and `dynamic_allocation` (seed `20260809`). Administrative urgency is an explicit appointment attribute supplied by the clinic; the simulator never infers clinical urgency. Physical red-flag triage remains nurse-led and outside the simulation algorithm.
 
 ### 4.8 Simplified Nurse Workflow and Intentional Data Administration
 
@@ -357,17 +364,19 @@ The nurse panel is optimized around one primary question: **what is the next saf
 
 The default workflow is:
 
-1. **Select the next task:** scan/search a ticket or choose the oldest actionable item from Today's Work.
-2. **Review only exceptions:** show validated facts as a compact summary and expand only missing, conflicting, expired, or unusual fields with their source evidence.
-3. **Complete physical checks:** the nurse performs the clinic's existing identity/e-card and red-flag process, then records an attestation; Epicenter does not decide the result.
-4. **Commit one outcome:** accept, reject, or keep under review. Reject requires a reason and maps eligible cases to a curated patient-safe explanation and next step.
-5. **Route automatically:** the same visit ticket and original waiting age are retained while the backend updates readiness and the expected/actual counter.
+1. **Select the next task:** choose a ticket from Today's Incoming / Ongoing / Finished board.
+2. **Identity & e-card:** the nurse performs the clinic's existing identity/e-card and red-flag process, then records an attestation; Epicenter does not decide the result.
+3. **Forms guidance:** the system shows which forms apply (including TPA paper forms when documents are on file).
+4. **Forms review:** the nurse confirms the electronic forms.
+5. **Confirm package:** when documents exist, the nurse confirms the matched CHAS/corporate package.
+6. **Billing & queue:** the nurse confirms billing code, uncovered cost, queue number, and counter.
+7. **Summary:** the same visit ticket and original waiting age are retained.
 
-The nurse primary navigation keeps routine work separate from **Database** and **Audit**. Pharmacy also exposes Database and Audit as separate destinations. Dynamic allocation appears as a single recommendation card in Today and Simulator, not as a separate command-centre workflow. Patient data administration is isolated under Database so routine queue and dispensing work is not mixed with generic record maintenance.
+The nurse primary navigation keeps routine work separate from **Database**, **Audit**, and **Simulator**. Dynamic allocation appears in Simulator (and as a recommendation card where seeded), not as a separate command-centre workflow. Patient data administration is isolated under Database so routine queue work is not mixed with generic record maintenance.
 
 The Database area provides an allowlisted patient-record interface with search, filter, sort, pagination, record detail, and role-scoped create/read/update/recoverable-delete capability. It is not a raw SQL console. All access goes through the shared backend, which applies field validation, role/clinic scope, RLS-compatible authorization, optimistic concurrency, idempotency, and immutable audit logging.
 
-- Database reads require an authenticated, clinic-scoped staff session. Nurse/administrator accounts may create patient records without a second password prompt; pharmacists may view the allowlisted patient reference/contact surface but cannot alter patient records.
+- Database reads require an authenticated, clinic-scoped staff session. Nurse/administrator accounts may create patient records without a second password prompt.
 - Database Update and Delete require a fresh Clerk password verification immediately before the backend commit. Draft edits do not mutate data, and cancelling or failing verification preserves the draft and deletion reason.
 - Clicking a row exposes View, Update, and Delete where the role permits them. Update and Delete open a centered password dialog at commit; Delete defaults to a recoverable soft delete and hard delete is unavailable in the demo.
 - The backend independently validates the fresh reverification state. A frontend modal alone is never treated as authorization.
@@ -396,8 +405,8 @@ The Database area provides an allowlisted patient-record interface with search, 
 - As a clinic operations lead, I want aggregate readiness, waiting-time, exception, and correction trends, so that I can improve rules, reminders, and staffing without inspecting individual patient documents.
 - As a clinic operations lead, I want explainable suggestions for temporarily reallocating qualified staff or counters, with operational constraints checked before I approve them, so that demand spikes can be handled without constant manual monitoring or disruptive reshuffling.
 - As billing staff, I want to confirm or correct the reused coverage/billing record and preview the demo TPA payload from one screen.
-- As a nurse, I want Today's Work to show one next safe action per patient and expand only exceptions, so that I do not repeatedly review fields the system already validated.
-- As a nurse, I want to accept, reject with a reason, or retain a case under review from one task screen, so that the patient receives a clear outcome while the same queue ticket is preserved.
+- As a nurse, I want Today's Work to show one next safe action per patient through the gated task steps, so that I do not repeatedly review fields the system already validated.
+- As a nurse, I want identity, forms, package, and billing confirmations to stay on one ticket, so that the patient receives a clear outcome without queueing twice.
 - As an authorised nurse or administrator, I want to browse and maintain approved patient records through a controlled interface, with password reverification for updates and deletions, so that consequential changes are deliberate and attributable without adding friction to viewing or creating a record.
 - As a nurse running the demo, I want the simulator inside my panel to load an approved Supabase seed or snapshot and replay dynamic allocation, known administrative urgency, and manual identity-check states without touching live operational records.
 
@@ -405,7 +414,6 @@ The Database area provides an allowlisted patient-record interface with search, 
 
 - As a GP, I want confirmed patient and coverage information available before or at the start of the consultation, so that administrative delay upstream doesn't cut into consultation time or delay care for other patients.
 - As a GP, I want to trust that identity has been properly verified in person regardless of how much of the paperwork was automated, so that clinical safety isn't compromised for administrative speed.
-- As a pharmacist, I want the recorded allergy surfaced while I perform the verbal check myself, then record that the manual check occurred.
 
 ### Patient
 
@@ -458,7 +466,7 @@ Patient's coverage document (chit/voucher/referral letter)
 | Layer | Function | Notes |
 | --- | --- | --- |
 | Patient Panel | Singpass/Myinfo registration contract, submission outcome, one ticket/counter, mocked payment, and read-only records | Separate Next.js/Vercel application; patient-scoped data only |
-| Nurse Panel | Today's Work, assisted review, manual attestations, Patients CRUD, allocation, audit, and simulator | Separate Next.js/Vercel application; Clerk-authenticated and role-scoped |
+| Nurse Panel | Today board, gated tasks, kiosk, Database, Audit, allocation, and Simulator | Separate Next.js/Vercel application; Clerk-authenticated and role-scoped |
 | Shared FastAPI Backend | Owns all business rules, transactions, authorization, audit events, simulator snapshot creation, and MCP adapters | One Railway service serves both panels; privileged Supabase credentials remain backend-only |
 | Singpass/Myinfo Booking Pre-Check | Authenticates the booking patient and compares consented government-sourced claims with registration-level identity/contact fields | Conceptual production adapter; mismatches route to field-level staff review, never silently overwrite the clinic record, and never replace in-person verification |
 | Document Extraction Layer | Schema-constrained parsing of PDFs/images into typed facts, selected options, and page/source-excerpt evidence | Handles the nine supplied document variants without assuming every field exists |
@@ -471,12 +479,12 @@ Patient's coverage document (chit/voucher/referral letter)
 | Queue Operations Board | Tracks scheduled/check-in time, Incoming/Ongoing/Finished status, readiness state, waiting age, and expected vs. actual queue/counter numbers | Gives staff one date-aware operational view while preserving one ticket per visit |
 | Manual Check Attestation | Records which staff member confirmed completion of the approved manual identity/e-card process and when | Stores no automated verification decision; check-in fails safely if the attestation cannot be saved |
 | Review and Exception Workspace | Lists unresolved cases as an internal worklist and supports reasoned, re-authenticated corrections with source evidence | Keeps the patient's original ticket/time plus original/corrected values and immutable audit history |
-| Questionnaire, Pharmacy, and Billing Surfaces | Reuse confirmed patient/coverage data while recording approved consent, manual allergy-check attestation, and staff billing confirmation | Demonstrates the remaining repeated-data touchpoints without automating clinical checks or live TPA submission |
-| Counter Allocation and Audit | Assigns counters to ready/review workstreams, records rebalancing, and exposes a read-only event log | Counter changes cannot bypass readiness prerequisites or create a second patient ticket |
+| Questionnaire and Billing Surfaces | Reuse confirmed patient/coverage data while recording approved consent and staff billing confirmation | Demonstrates remaining repeated-data touchpoints without automating clinical checks or live TPA submission |
+| Counter Allocation and Audit | Assigns counters to fast/slow workstreams, records rebalancing, and exposes a read-only event log | Counter changes cannot bypass readiness prerequisites, send a walk-in to a fast counter, or create a second patient ticket |
 | Patient Notification & Audit Log | Sends the curated issue-category/reminder message to the patient (§4.4) and immutably logs every send | Log entry captures visit ticket ID, category shown (never the raw internal reason), channel, timestamp, delivery outcome, and whether it led to a resubmission, token reuse, or no action; entries are append-only and staff-readable but not patient-editable |
 | Operational Intelligence and Allocation Advisor | Aggregates flow events, estimates near-term stage demand, and proposes qualified staff/station changes with constraints, rationale, expiry, and expected effect | Supports continuous improvement and human-approved load balancing without crossing role boundaries, using raw documents, ranking staff, or changing clinical priority |
-| Nurse Simulator | Replays versioned synthetic Supabase snapshots for allocation, administrative-urgency, and manual identity-check scenarios | Nurse-panel only; isolated simulation tables/types; never mutates operational state |
-| Controlled Data Administration | Separate allowlisted Database tabs for nurse and pharmacy panels | Reads and creates use role/clinic authorization; patient updates and deletions require backend-verified fresh reverification and immutable audit |
+| Nurse Simulator | Replays `serial_baseline`, `single_ticket`, and `dynamic_allocation` in the nurse panel | Isolated TypeScript engine; never mutates operational state |
+| Controlled Data Administration | Separate allowlisted Database tab on the nurse panel | Reads and creates use role/clinic authorization; patient updates and deletions require backend-verified fresh reverification and immutable audit |
 
 ### 6.3 Data Sources (Demo)
 
@@ -516,7 +524,7 @@ The idempotent seed must be applied to the designated synthetic Supabase project
 - The native Next.js dashboard remains the authoritative P0 analytics presentation and fallback. Power BI/Fabric is retained only as a future, governed, de-identified aggregate projection for enterprise/multi-clinic scale; it cannot become the source of truth or a prerequisite for the simulator or queue view.
 - Additional MCPs are added only when a named capability is not already owned by FastAPI or an approved service, with least-privilege tools, a defined data boundary, explicit owner, threat review, and removal criteria. MCP is never a generic database console.
 - Submission includes a diagram mapping the OpenAI Responses API, Copilot-compatible reviewed MCP tools, deterministic service layer, native analytics dashboard, optional future Power BI/Fabric projection, and conceptual Clinic Assist/NEHR integration points.
-- Detailed tool boundaries, authentication, dashboard replacement, OpenAI orchestration, and acceptance tests are defined in [openai_integration.md](./openai_integration.md).
+- Tool boundaries, authentication, and acceptance tests are defined in [techStack.md](./techStack.md).
 
 ## 7. Guardrails & Human-in-the-Loop Requirements
 
@@ -537,7 +545,7 @@ The idempotent seed must be applied to the designated synthetic Supabase project
 
 ### 7.1 EHR Failure-Pattern Controls
 
-The [Epic and large-scale EHR implementation audit](./epic_lessons.md) adds the following release controls:
+The following release controls apply:
 
 - **Shadow before authority:** new extraction models, prompts, schemas, readiness gates, and eligibility-rule versions run without affecting patient state until segmented fixture/local validation passes with zero false-ready cases.
 - **Phased rollout:** introduce one bounded workflow, role group, counter/shift, and approved fixture/rule set before expanding. Name superusers, stabilization support, pause criteria, rollback ownership, and the retained manual fallback.
@@ -548,7 +556,7 @@ The [Epic and large-scale EHR implementation audit](./epic_lessons.md) adds the 
 - **Configuration safety:** safety-, billing-, and routing-relevant configuration uses maker/checker approval, effective dates, fixture/regression tests, atomic activation, version attribution, and rollback.
 - **Channel parity:** token links and accounts remain optional. Staff-assisted and walk-in paths can reach the same readiness outcome, and aggregate wait/access differences are reviewed without exposing small cohorts.
 
-For the hackathon, these controls are demonstrated through the nine-fixture validation report, three fail-safe exception cases, one deduplicated allocation card, short role-task testing, and synthetic simulator injections. Production offline storage, live external reconciliation, enterprise rollout administration, and full alert-governance tooling remain explicitly deferred; their contracts are documented without being presented as implemented.
+For the hackathon, these controls are demonstrated through fixture validation, fail-safe exception cases, the nurse Simulator, and synthetic injections. Production offline storage, live external reconciliation, enterprise rollout administration, and full alert-governance tooling remain explicitly deferred; their contracts are documented without being presented as implemented.
 
 ## 8. Regulatory & Compliance Posture (Singapore Context)
 
@@ -573,7 +581,7 @@ For the hackathon, these controls are demonstrated through the nine-fixture vali
 | Allocation stability | No recommendation violates role permissions, minimum coverage, planned breaks, or maximum reassignment frequency; short-lived spikes inside the stability window produce no move |
 | Readiness safety | Zero false-ready admissions: only cases passing every deterministic gate and required staff confirmation reach `ready` |
 | Shadow-release safety | A new model/prompt/schema/rule version cannot affect readiness until segmented validation passes; activation and rollback are demonstrated with the governing version retained on every result |
-| Workflow burden | Representative users for registration, review, pharmacy, billing, and operations complete defined tasks without unresolved critical usability errors; task time, touches, corrections, and perceived workload are reported rather than assumed |
+| Workflow burden | Representative users for registration, review, billing, and operations complete defined tasks without unresolved critical usability errors; task time, touches, corrections, and perceived workload are reported rather than assumed |
 | Alert burden | Interruptive alerts have owner/action/severity/expiry/deduplication metadata; repeated and low-action alerts are visible for governance review |
 | Downtime recovery | A simulated dependency outage continues minimum-safe intake, preserves one patient journey, and reconciles every downtime record with zero lost, duplicated, silently merged, or requeued patients |
 | Interface reconciliation | Every simulated external submission reaches an explicit accepted, rejected, or reviewed-unknown outcome; HTTP success alone never counts as business completion |
@@ -615,14 +623,14 @@ For the hackathon, these controls are demonstrated through the nine-fixture vali
 | An outage loses queue position or forces duplicate registration | Degraded mode issues one reconcilable downtime ticket, stores the minimum safe dataset, preserves manual checks, and requires explicit conflict-safe recovery before normal operation resumes |
 | An external integration returns success but does not commit the intended record | Track transport and business acknowledgement separately; store correlation IDs, idempotency keys, explicit unknown state, bounded retry, and reconciliation outcome |
 | Configuration drift changes routing or billing unexpectedly | Maker/checker approval, effective dating, regression fixtures, atomic activation, decision-version attribution, and rollback apply to rules, prompts, mappings, alerts, and allocation constraints |
-| Overclaiming feasibility of real Clinic Assist/NEHR integration | Judging criteria explicitly ask for conceptual integration only — PRD and pitch should describe the integration pattern honestly, not claim a working live connection |
+| Overclaiming feasibility of real Clinic Assist/NEHR integration | Judging criteria explicitly ask for conceptual integration only — describe the integration pattern honestly, not claim a working live connection |
 | Identity verification scope creep | Treated as an explicit, permanent hard constraint (§2, §7) reinforced throughout, not just stated once |
 | A confirmation screen is mistaken for automated identity/e-card checking | Copy explicitly says staff completed the checks manually; the stored record is an attestation only, contains no automated result/evidence, and fails safely if it cannot be saved |
 | Staff correction silently overwrites extracted evidence | Original/corrected values and a required reason are stored through re-authenticated, immutable audit events |
 | Queue or payment data is stale or submitted twice | Screens show last-updated/processing states, disable duplicate actions, and provide idempotent retry behavior |
 | Status is inaccessible or understood only through color | Every state has a text label and semantic status; production icons are consistent vectors and controls meet keyboard/touch requirements |
 | Operational cost realism (judging criterion) | Architecture favours a lean extraction + rules-matching pipeline over a heavier, more expensive full clinical-AI stack, consistent with constraint #3 |
-| Demo patient account (§4.6) mistaken for a production-ready patient identity system | Stated explicitly in the pitch as a small, fixed demo pool distinct from the tokenized single-visit upload link (§4.4) — not presented as a solved production patient-authentication design |
+| Demo patient account (§4.6) mistaken for a production-ready patient identity system | Stated explicitly as a small, fixed demo pool distinct from the tokenized single-visit upload link (§4.4) — not presented as a solved production patient-authentication design |
 | A returning patient reuses stale or expired coverage | "Yes, same coverage" reuses only the source document; the system re-runs document validity and current eligibility rules and still requires staff confirmation before finalising |
 | A patient-facing document-issue notification leaks an internal review reason, confidence score, or identifier-conflict detail | Notifications map to a small, fixed, versioned patient-safe category list (§4.4) maintained separately from internal `needs_review` reasons; any failure category that would reveal an internal determination falls back to a generic no-action-needed message instead |
 | Automated reminder/issue notifications repeatedly nag a patient or a resubmission goes unnoticed by staff | Notifications follow a bounded cadence that stops at `ready` or the review deadline (§4.4); every send and its outcome is logged in the Patient Notification & Audit Log (§6.2) so staff can see what a patient was told and whether they acted |

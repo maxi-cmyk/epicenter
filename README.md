@@ -13,9 +13,9 @@ Two independently built Next.js applications share one FastAPI contract:
 
 **Registration routing.** Walk-ins always go to slow counters (`S1`–`S4`). Only booked patients with no outstanding issues (`intake_type` `booked` and `readiness_state` `ready`) go to fast counters (`F1`–`F2`). The assigned queue number and counter are visible on both the patient queue screen and the nurse dashboard.
 
-**Nurse task flow.** Opening a ticket walks through gated steps: Identity & e-card → Forms guidance → Forms review → Confirm package (when documents are on file) → Billing & queue → Summary. Exceptions stay on the same ticket. See [`docs/nurse-workflow.md`](docs/nurse-workflow.md).
+**Nurse task flow.** Opening a ticket walks through gated steps: Identity & e-card → Forms guidance → Forms review → Confirm package (when documents are on file) → Billing & queue → Summary. Exceptions stay on the same ticket. See [`docs/workflow.md`](docs/workflow.md).
 
-**Simulator.** The nurse Simulator tab replays a deterministic clinic-day model (`serial_baseline`, `single_ticket`, `dynamic_allocation`) with playback controls. The engine lives in `frontend/nurse/lib/simulation/` and must not write operational patient or queue tables. See [`docs/simulator.md`](docs/simulator.md).
+**Simulator.** The nurse Simulator tab replays a deterministic clinic-day model (`serial_baseline`, `single_ticket`, `dynamic_allocation`) with playback controls. The engine lives in `frontend/nurse/lib/simulation/` and must not write operational patient or queue tables.
 
 ## Repository
 
@@ -23,9 +23,9 @@ Two independently built Next.js applications share one FastAPI contract:
 - `frontend/nurse/` — independently built Next.js staff operations, gated task flow, walk-in kiosk, Database, Audit, and Simulator, with Clerk authentication.
 - `frontend/shared/` — generated data contracts, design tokens and safe presentation primitives shared by both apps.
 - `backend/` — FastAPI domain services, Clerk JWT-protected HTTP API, and the server-side OpenAI integration for document intelligence and reviewed assistant tools.
-- `docs/` — PRD, design, architecture, simulator, nurse workflow, pitch and supporting research.
+- `docs/` — product, requirements, stack, and clinic workflow.
 
-See [`docs/openai_integration.md`](docs/openai_integration.md) for the native analytics dashboard, OpenAI Responses API integration, Copilot-compatible MCP contract, and deferred Power BI/Fabric scalability option. Delivery status lives in [`docs/nextSteps.md`](docs/nextSteps.md).
+See [`docs/PRODUCT.md`](docs/PRODUCT.md), [`docs/PRD.md`](docs/PRD.md), [`docs/techStack.md`](docs/techStack.md), and [`docs/workflow.md`](docs/workflow.md).
 
 ## OpenAI configuration
 
@@ -180,8 +180,6 @@ clerk users list --instance dev --email-address nurse.noor+clerk_test@example.co
 
 `clerk doctor --json` verifies the developer login and linked Clerk application. CLI login is separate from both application sign-in flows: it authorizes account administration, not access to either Epicenter panel. Preview user mutations with `--dry-run`, target `--instance dev` explicitly, and do not commit CLI sessions, patient credentials, nurse credentials, Clerk User IDs, generated passwords, or provider secrets.
 
-See [`docs/auth.md`](docs/auth.md) for provisioning, judge-flow, and authorization test requirements.
-
 FastAPI is the contract authority for both apps. After changing backend request or response models, regenerate and verify the checked-in TypeScript contracts:
 
 ```bash
@@ -201,8 +199,6 @@ npm run contracts:check
 - **Analytics scaling:** use the native dashboard for development and the core demo. Consider Power BI/Fabric only later through a reconciled de-identified aggregate projection; it is never the operational source of truth.
 
 The checked-in provider configuration is a deployment contract, not a claim that live Supabase, Clerk, Vercel or Railway resources have already been provisioned.
-
-Sample-data provenance, identity reconciliation results, and local/hosted database commands are documented in [`docs/sample-data.md`](docs/sample-data.md).
 
 ## Verify
 

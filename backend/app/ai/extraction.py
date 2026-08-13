@@ -4,7 +4,7 @@ Sends a coverage document (PDF or image) to the configured extraction model
 with a strict Structured Output schema. Validates the response and returns
 an ExtractionResult with per-field source evidence.
 
-Constraints from openai_integration.md / techStack.md:
+Constraints from techStack.md:
 - Uses store=False so documents are not retained on OpenAI's servers.
 - If a temporary file upload is needed, it is deleted immediately after the request.
 - Identity/e-card images must NEVER enter this pipeline.

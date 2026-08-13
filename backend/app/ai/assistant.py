@@ -7,7 +7,7 @@ FastAPI orchestration route calls this module. Flow:
 4. Re-authorize every tool execution before dispatching to the MCP handler.
 5. Return a grounded AssistantMessage with snapshot/source labels.
 
-Constraints from openai_integration.md:
+Constraints from techStack.md:
 - The browser never receives the OpenAI API key.
 - OpenAI may summarize, compare, and explain approved tool results only.
 - It may NOT approve readiness, correct canonical facts, attest identity/e-card

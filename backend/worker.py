@@ -5,7 +5,7 @@ document_jobs table, claims jobs transactionally, downloads from private
 Supabase Storage, invokes the OpenAI extraction adapter, validates the
 Structured Output, and writes per-field confidence plus page/excerpt evidence.
 
-Constraints from techStack.md / openai_integration.md:
+Constraints from techStack.md:
 - store=False: documents are not retained on OpenAI's servers.
 - Identity/e-card images must NEVER enter this pipeline.
 - Retries are bounded and idempotent.

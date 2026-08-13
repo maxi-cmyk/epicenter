@@ -1,7 +1,7 @@
 """MCP request/response schemas for both Epicenter custom MCP servers.
 
 All schemas use extra='forbid' so unexpected fields are rejected cleanly.
-Tool names match the contracts in openai_integration.md and techStack.md.
+Tool names match the contracts in techStack.md.
 """
 
 from __future__ import annotations
