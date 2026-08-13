@@ -286,7 +286,8 @@ def test_patient_coverage_questionnaire_and_queue_journey() -> None:
         params={"appointment_id": "APT-DEMO-014"},
     )
     assert questionnaire.status_code == 200
-    assert questionnaire.json()["prefill"][0]["editable"] is False
+    assert all(field["editable"] is False for field in questionnaire.json()["prefill"])
+    assert "full_name" not in {field["field_id"] for field in questionnaire.json()["prefill"]}
     field_ids = {field["field_id"] for field in questionnaire.json()["fields"]}
     assert "gender" in field_ids
     assert "pregnant" in field_ids

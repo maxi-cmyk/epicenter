@@ -3,11 +3,12 @@
 import {
   AlertCircle,
   ArrowRight,
+  ArrowUpRight,
   CalendarDays,
   ClipboardList,
   CreditCard,
   FileText,
-  RefreshCw,
+  Pencil,
   ShieldCheck,
   Ticket,
 } from "lucide-react";
@@ -22,6 +23,8 @@ import { getPatientHome } from "@/lib/api";
 import { useMountedLoad } from "@/lib/useMountedLoad";
 
 import styles from "./Journey.module.css";
+
+const PARKWAY_APPOINTMENT_URL = "https://www.parkwayshenton.com.sg/make-an-appointment";
 
 function formatWhen(value: string) {
   return new Intl.DateTimeFormat("en-SG", {
@@ -104,6 +107,28 @@ export function HomeWorkspace() {
           </div>
         </section>
 
+        <section className={styles.preRegister} aria-labelledby="pre-register-title">
+          <span className={styles.preRegisterIcon}>
+            <CalendarDays aria-hidden="true" size={25} />
+          </span>
+          <div>
+            <h2 id="pre-register-title">Pre-register for an appointment</h2>
+            <p>
+              Choose a service, clinic, and preferred time through Parkway Shenton. The clinic will confirm your
+              appointment based on availability.
+            </p>
+          </div>
+          <a
+            aria-label="Start pre-registration on Parkway Shenton; opens in a new tab"
+            href={PARKWAY_APPOINTMENT_URL}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Start pre-registration
+            <ArrowUpRight aria-hidden="true" size={18} />
+          </a>
+        </section>
+
         {home ? (
           <section className={styles.prepPanel} aria-label="Preparation status">
             <div className={styles.prepHeading}>
@@ -119,6 +144,9 @@ export function HomeWorkspace() {
                   <strong>Coverage</strong>
                   <p>{home.coverage_summary}</p>
                 </div>
+                <Link aria-label="Edit coverage" className={styles.prepEditAction} href="/coverage" title="Edit coverage">
+                  <Pencil aria-hidden="true" size={18} />
+                </Link>
               </li>
               <li>
                 <span className={styles.prepIcon}>
@@ -128,6 +156,9 @@ export function HomeWorkspace() {
                   <strong>Questionnaire</strong>
                   <p>{questionnaireLabel(home.questionnaire_status)}</p>
                 </div>
+                <Link aria-label="Edit questionnaire" className={styles.prepEditAction} href="/questionnaire" title="Edit questionnaire">
+                  <Pencil aria-hidden="true" size={18} />
+                </Link>
               </li>
               <li>
                 <span className={styles.prepIcon}>
@@ -137,6 +168,10 @@ export function HomeWorkspace() {
                   <strong>Queue</strong>
                   <p>{home.queue_summary}</p>
                 </div>
+                <Link className={styles.prepQueueAction} href="/queue">
+                  Check queue
+                  <ArrowRight aria-hidden="true" size={17} />
+                </Link>
               </li>
             </ul>
           </section>
@@ -147,20 +182,11 @@ export function HomeWorkspace() {
             <FileText aria-hidden="true" size={18} />
             Records
           </Link>
-          <Link href="/queue">
-            <Ticket aria-hidden="true" size={18} />
-            Queue
-          </Link>
           <Link href="/payment">
             <CreditCard aria-hidden="true" size={18} />
             Payment
           </Link>
         </nav>
-
-        <button className={styles.refreshLink} onClick={() => void load()} type="button">
-          <RefreshCw aria-hidden="true" size={16} />
-          {loading ? "Refreshing…" : "Refresh status"}
-        </button>
       </div>
     );
   }
@@ -229,7 +255,7 @@ export function HomeWorkspace() {
           <div className={styles.outcome} data-outcome={home.outcome ?? undefined}>
             <strong>
               {home.outcome === "accepted"
-                ? "Accepted for staff confirmation"
+                ? "Checks complete — awaiting staff confirmation"
                 : home.outcome === "rejected"
                   ? "Needs your attention"
                   : "Under review"}
@@ -244,11 +270,6 @@ export function HomeWorkspace() {
             <ArrowRight aria-hidden="true" size={18} />
           </Link>
         ) : null}
-
-        <button className={styles.refreshLink} onClick={() => void load()} type="button">
-          <RefreshCw aria-hidden="true" size={16} />
-          {loading ? "Refreshing…" : "Refresh status"}
-        </button>
       </section>
     </div>
   );

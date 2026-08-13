@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import styles from "./Shared.module.css";
 
 interface PageHeaderProps {
-  title: string;
+  title: ReactNode;
   description?: string;
   actions?: ReactNode;
 }

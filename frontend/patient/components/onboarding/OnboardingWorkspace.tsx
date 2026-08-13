@@ -21,6 +21,8 @@ const STEPS = [
   { id: "questionnaire", label: "Questionnaire" },
 ] as const;
 
+type StepId = (typeof STEPS)[number]["id"];
+
 export function OnboardingWorkspace() {
   const router = useRouter();
   const [state, setState] = useState<PatientOnboardingState | null>(null);
@@ -28,12 +30,14 @@ export function OnboardingWorkspace() {
   const [busy, setBusy] = useState(false);
   const [coverageSubmitted, setCoverageSubmitted] = useState(false);
   const [draftFields, setDraftFields] = useState<SingpassProfileField[]>([]);
+  const [reviewingStep, setReviewingStep] = useState<StepId | null>(null);
 
   const load = useCallback(async () => {
     try {
       const next = await getOnboardingState();
       setState(next);
       setDraftFields(next.singpass_fields);
+      setReviewingStep(null);
       if (next.completed) router.replace("/");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to open onboarding.");
@@ -82,6 +86,17 @@ export function OnboardingWorkspace() {
 
   const canConfirmSingpass =
     draftFields.length > 0 && draftFields.every((field) => field.value.trim().length > 0);
+  const currentIndex = STEPS.findIndex((item) => item.id === state.current_step);
+  const onboardingState = state;
+
+  function stepIsDone(step: StepId) {
+    return (
+      onboardingState.completed ||
+      (step === "singpass" && onboardingState.singpass_authenticated && currentIndex > 0) ||
+      (step === "insurance" && onboardingState.insurance_completed) ||
+      (step === "questionnaire" && onboardingState.questionnaire_completed)
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -92,23 +107,57 @@ export function OnboardingWorkspace() {
 
       <ol className={styles.stepper} aria-label="Onboarding steps">
         {STEPS.map((step, index) => {
-          const currentIndex = STEPS.findIndex((item) => item.id === state.current_step);
-          const done =
-            state.completed ||
-            (step.id === "singpass" && state.singpass_authenticated && currentIndex > 0) ||
-            (step.id === "insurance" && state.insurance_completed) ||
-            (step.id === "questionnaire" && state.questionnaire_completed);
+          const done = stepIsDone(step.id);
           const active = step.id === state.current_step;
+          const canOpenStep = (done && !active) || (active && reviewingStep !== null);
           return (
             <li className={active ? styles.activeStep : done ? styles.doneStep : undefined} key={step.id}>
-              <span>{done ? <Check aria-hidden="true" size={14} /> : index + 1}</span>
-              {step.label}
+              {canOpenStep ? (
+                <button onClick={() => setReviewingStep(active ? null : step.id)} type="button">
+                  <span>{done ? <Check aria-hidden="true" size={14} /> : index + 1}</span>
+                  {step.label}
+                  <small>{active ? "Return" : "Review"}</small>
+                </button>
+              ) : (
+                <div>
+                  <span>{done ? <Check aria-hidden="true" size={14} /> : index + 1}</span>
+                  {step.label}
+                </div>
+              )}
             </li>
           );
         })}
       </ol>
 
-      {state.current_step === "singpass" ? (
+      {reviewingStep ? (
+        <section className={styles.reviewPanel}>
+          <div className={styles.inlineTitle}>
+            {reviewingStep === "singpass" ? <LockKeyhole aria-hidden="true" size={22} /> : <FileCheck2 aria-hidden="true" size={22} />}
+            <div>
+              <strong>{reviewingStep === "singpass" ? "Singpass profile saved" : "Coverage saved"}</strong>
+              <p>
+                {reviewingStep === "singpass"
+                  ? "These details were saved from the synthetic Singpass/Myinfo step. Staff still verify identity and e-card details in person."
+                  : "Your coverage document was received for staff review. This does not confirm eligibility or payment approval."}
+              </p>
+            </div>
+          </div>
+          {reviewingStep === "singpass" ? (
+            <dl className={styles.fieldGrid}>
+              {draftFields.map((field) => (
+                <div key={field.field_id}>
+                  <dt>{field.label}</dt>
+                  <dd>{field.value || "—"}</dd>
+                  <small>{field.source}</small>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          <Button onClick={() => setReviewingStep(null)} variant="secondary">Return to current step</Button>
+        </section>
+      ) : null}
+
+      {!reviewingStep && state.current_step === "singpass" ? (
         <section className={styles.panel}>
           <div className={styles.singpassBand}>
             <LockKeyhole aria-hidden="true" size={24} />
@@ -123,10 +172,18 @@ export function OnboardingWorkspace() {
           </p>
           {!state.singpass_authenticated ? (
             <Button
+              aria-label="Log in with Singpass"
+              className={styles.singpassLoginButton}
               disabled={busy}
               onClick={() => void continueFrom("singpass", { singpass_authenticated: true })}
             >
-              {busy ? "Retrieving…" : "Authenticate with Singpass (demo)"}
+              {busy ? (
+                "Connecting…"
+              ) : (
+                <>
+                  Log in with <span className={styles.singpassWordmark}><span>Sing</span>pass</span>
+                </>
+              )}
             </Button>
           ) : (
             <>
@@ -163,7 +220,7 @@ export function OnboardingWorkspace() {
         </section>
       ) : null}
 
-      {state.current_step === "insurance" ? (
+      {!reviewingStep && state.current_step === "insurance" ? (
         <section className={styles.panel}>
           <div className={styles.inlineTitle}>
             <FileCheck2 aria-hidden="true" size={22} />
@@ -186,15 +243,14 @@ export function OnboardingWorkspace() {
         </section>
       ) : null}
 
-      {state.current_step === "questionnaire" ? (
+      {!reviewingStep && state.current_step === "questionnaire" ? (
         <section className={styles.panel}>
           <div className={styles.inlineTitle}>
             <ShieldCheck aria-hidden="true" size={22} />
             <div>
               <strong>General Health Screening Questionnaire</strong>
               <p>
-                Fields follow the Parkway Shenton questionnaire reference. Singpass values stay read-only; answer only
-                what is still needed.
+                Your Singpass profile is already applied. Answer only the standard health screening questions.
               </p>
             </div>
           </div>

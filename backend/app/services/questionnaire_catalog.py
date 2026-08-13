@@ -117,7 +117,6 @@ def build_general_health_prefill(
         source_items = [dict(item) for item in singpass_dummy_fields()]
         default_source = "Singpass / Myinfo (synthetic)"
     prefill_ids = {
-        "full_name",
         "date_of_birth",
         "contact_mobile",
         "email",

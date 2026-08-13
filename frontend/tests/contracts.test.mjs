@@ -10,10 +10,34 @@ test("routes stay split into focused workspaces", () => {
   assert.match(read("nurse/app/kiosk/page.tsx"), /KioskWorkspace/);
   assert.match(read("patient/app/page.tsx"), /HomeWorkspace/);
   assert.match(read("patient/app/onboarding/page.tsx"), /OnboardingWorkspace/);
+  assert.match(read("patient/app/coverage/page.tsx"), /profileEdit/);
   assert.match(read("patient/app/queue/page.tsx"), /QueueWorkspace/);
   assert.throws(() => read("patient/app/review/page.tsx"));
   assert.throws(() => read("patient/app/kiosk/page.tsx"));
   assert.throws(() => read("nurse/app/pre-arrival/page.tsx"));
+});
+
+test("the patient dashboard offers official pre-registration without a fixed bottom nav", () => {
+  const shell = read("patient/components/layout/PatientShell.tsx");
+  const home = read("patient/components/home/HomeWorkspace.tsx");
+  assert.doesNotMatch(shell, /Patient destinations|navItems/);
+  assert.match(home, /Pre-register for an appointment/);
+  assert.match(home, /parkwayshenton\.com\.sg\/make-an-appointment/);
+  assert.match(home, /clinic will confirm your/);
+});
+
+test("preparation actions edit persisted details and keep queue access contextual", () => {
+  const home = read("patient/components/home/HomeWorkspace.tsx");
+  const coverage = read("patient/components/coverage/CoverageWorkspace.tsx");
+  const questionnairePage = read("patient/app/questionnaire/page.tsx");
+  assert.match(home, /aria-label="Edit coverage"/);
+  assert.match(home, /aria-label="Edit questionnaire"/);
+  assert.match(home, /Check queue/);
+  assert.doesNotMatch(home, /Refresh status|Refreshing…/);
+  assert.doesNotMatch(home, /href="\/queue">\s*<Ticket/);
+  assert.match(coverage, /profileEdit/);
+  assert.match(coverage, /submitOnboardingCoverage/);
+  assert.match(questionnairePage, /startInEditMode/);
 });
 
 test("the walk-in path preserves one ticket and nurse supervision copy", () => {
@@ -41,6 +65,43 @@ test("questionnaire loading recovers without repeated manual retries", () => {
   assert.match(api, /error\.status >= 500/);
   assert.match(questionnaire, /The questionnaire could not be loaded automatically/);
   assert.match(questionnaire, /styles\.errorBox/);
+});
+
+test("the standard questionnaire keeps its fields while presenting a guided flow", () => {
+  const questionnaire = read("patient/components/questionnaire/QuestionnaireWorkspace.tsx");
+  const onboarding = read("patient/components/onboarding/OnboardingWorkspace.tsx");
+  const upload = read("patient/components/upload/UploadLinkWorkspace.tsx");
+  const payment = read("patient/components/payment/PaymentWorkspace.tsx");
+
+  assert.match(questionnaire, /field\.options\?\.map/);
+  assert.match(questionnaire, /Section \$\{safeSectionIndex \+ 1\} of/);
+  assert.match(questionnaire, /questionnaireProgress/);
+  assert.match(questionnaire, /questionnaireTitleLine/);
+  assert.match(questionnaire, /General Health<\/span>/);
+  assert.match(questionnaire, /Screening Questionnaire<\/span>/);
+  assert.match(questionnaire, /Back to home/);
+  assert.match(questionnaire, /className=\{styles\.questionnaireBackLink\} href="\/"/);
+  assert.ok(questionnaire.indexOf("styles.questionnaireActions") < questionnaire.indexOf("Back to home"));
+  assert.match(questionnaire, /styles\.requiredMark/);
+  assert.match(questionnaire, /embedded \? styles\.embeddedQuestionnaire/);
+  assert.doesNotMatch(questionnaire, /styles\.prefillList/);
+  assert.match(questionnaire, /questionnaire\.prefill\.find/);
+  assert.match(questionnaire, /aria-label="Questionnaire sections"/);
+  assert.match(questionnaire, /sections\.map/);
+  assert.match(questionnaire, /void continueTo\(index\)/);
+  assert.match(questionnaire, /setViewingSubmittedSection\(true\)/);
+  assert.match(questionnaire, /Review answers/);
+  assert.doesNotMatch(questionnaire, /Not answered/);
+  assert.match(questionnaire, /This questionnaire does not assess medical urgency/);
+  assert.match(questionnaire, /Clinical care always takes priority/);
+  assert.match(onboarding, /Log in with Singpass/);
+  assert.match(onboarding, /active \? null : step\.id/);
+  assert.doesNotMatch(onboarding, /Leave and finish later|epicenter:onboarding-paused/);
+  assert.match(onboarding, /Return to current step/);
+  assert.match(upload, /Contact clinic for a new link/);
+  assert.match(upload, /Return to patient sign in/);
+  assert.match(payment, /Confirm demo payment/);
+  assert.match(payment, /No card is charged and/);
 });
 
 test("the dashboard labels all demo data honestly", () => {
