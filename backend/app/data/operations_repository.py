@@ -858,10 +858,41 @@ class SupabaseOperationsRepository:
             )
         return self._finalize_onboarding_row(row, subject=subject, patient_id=patient_id)
 
+    def _resolve_onboarding_appointment(
+        self, appointment_id: str, *, subject: str, patient_id: int
+    ) -> str:
+        normalized = (appointment_id or "").strip()
+        if not normalized or normalized in {"pending-booking", "PENDING"}:
+            return "pending-booking"
+        owned = self.api.select(
+            "appointments",
+            "id",
+            filters={
+                "appointment_reference": f"eq.{normalized}",
+                "patient_id": f"eq.{patient_id}",
+                "deleted_at": "is.null",
+            },
+            limit=1,
+        )
+        if owned:
+            return normalized
+        # Personal accounts often still carry the old seeded APT-DEMO-014 default.
+        self.api.update(
+            "patient_onboarding_states",
+            {"appointment_reference": "pending-booking"},
+            filters={"clerk_user_id": f"eq.{subject}"},
+        )
+        return "pending-booking"
+
     def _finalize_onboarding_row(
         self, row: dict[str, object], *, subject: str, patient_id: int
     ) -> PatientOnboardingState:
         state = _onboarding_from_row(row, allow_manual_singpass=not self.use_synthetic_singpass)
+        resolved_appointment = self._resolve_onboarding_appointment(
+            state.appointment_id, subject=subject, patient_id=patient_id
+        )
+        if resolved_appointment != state.appointment_id:
+            state = state.model_copy(update={"appointment_id": resolved_appointment})
         if state.completed or not (state.singpass_authenticated and state.insurance_completed):
             return state
         responses = self.api.select(
@@ -882,7 +913,8 @@ class SupabaseOperationsRepository:
             filters={"clerk_user_id": f"eq.{subject}"},
         )
         if updated:
-            return _onboarding_from_row(updated[0], allow_manual_singpass=not self.use_synthetic_singpass)
+            healed = _onboarding_from_row(updated[0], allow_manual_singpass=not self.use_synthetic_singpass)
+            return healed.model_copy(update={"appointment_id": resolved_appointment})
         return state
 
     def advance_onboarding(

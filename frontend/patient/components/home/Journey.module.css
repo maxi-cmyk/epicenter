@@ -129,11 +129,11 @@
 }
 
 .prepList li {
-  align-items: start;
+  align-items: center;
   border-top: 1px solid var(--rule);
   display: grid;
   gap: 14px;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   padding: 14px 12px;
 }
 
@@ -145,6 +145,31 @@
 .prepList p {
   color: var(--ink-soft);
   margin: 4px 0 0;
+}
+
+.prepAction {
+  align-self: center;
+  color: var(--green-900);
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.prepAction:hover {
+  text-decoration: underline;
+}
+
+.summaryAction {
+  color: var(--green-900);
+  font-weight: 650;
+  margin-left: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.summaryAction:hover {
+  text-decoration: underline;
 }
 
 .homeShortcuts {

@@ -17,6 +17,8 @@ const DEFAULT_APPOINTMENT_ID = "pending-booking";
 type QuestionnaireWorkspaceProps = {
   embedded?: boolean;
   appointmentId?: string;
+  /** Open a submitted questionnaire in edit mode with prior answers prefilled. */
+  initialEditing?: boolean;
   onSubmitted?: () => void;
 };
 
@@ -60,6 +62,7 @@ function isFieldVisible(field: Field, answers: Record<string, string>) {
 export function QuestionnaireWorkspace({
   embedded = false,
   appointmentId = DEFAULT_APPOINTMENT_ID,
+  initialEditing = false,
   onSubmitted,
 }: QuestionnaireWorkspaceProps) {
   const [form, setForm] = useState<PatientQuestionnaire | null>(null);
@@ -67,10 +70,13 @@ export function QuestionnaireWorkspace({
   const [acknowledged, setAcknowledged] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(initialEditing);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const resolvedAppointmentId =
-    !appointmentId || appointmentId === "pending-booking" ? DEFAULT_APPOINTMENT_ID : appointmentId;
+    !appointmentId || appointmentId === "pending-booking" || appointmentId === "PENDING"
+      ? DEFAULT_APPOINTMENT_ID
+      : appointmentId;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,8 +86,8 @@ export function QuestionnaireWorkspace({
       setForm(questionnaire);
       const nextAnswers = Object.fromEntries(
         questionnaire.fields
-          .filter((field) => field.value)
-          .map((field) => [field.field_id, field.value as string]),
+          .filter((field) => field.value != null && String(field.value).length > 0)
+          .map((field) => [field.field_id, String(field.value)]),
       );
       if (!nextAnswers.gender) {
         const sex = questionnaire.prefill.find((field) => field.field_id === "sex" || field.field_id === "gender");
@@ -89,14 +95,17 @@ export function QuestionnaireWorkspace({
       }
       setAnswers(nextAnswers);
       setAcknowledged(questionnaire.declaration_acknowledged);
+      setEditing(initialEditing || questionnaire.status !== "submitted");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load the questionnaire.");
     } finally {
       setLoading(false);
     }
-  }, [resolvedAppointmentId]);
+  }, [initialEditing, resolvedAppointmentId]);
 
   useMountedLoad(load);
+
+  const fieldsEditable = editing || form?.status !== "submitted";
 
   const visibleFields = useMemo(() => {
     if (!form) return [];
@@ -150,8 +159,17 @@ export function QuestionnaireWorkspace({
         idempotency_key: crypto.randomUUID(),
       });
       setForm(saved);
-      setMessage(submit ? "Questionnaire submitted for this appointment." : "Draft saved.");
-      if (submit) onSubmitted?.();
+      if (submit) {
+        setEditing(false);
+        setMessage(
+          embedded
+            ? "Questionnaire saved for onboarding."
+            : "Your answers were updated and submitted.",
+        );
+        onSubmitted?.();
+      } else {
+        setMessage("Draft saved.");
+      }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save the questionnaire.");
     } finally {
@@ -225,7 +243,7 @@ export function QuestionnaireWorkspace({
                 {field.help_text ? <small className={styles.muted}>{field.help_text}</small> : null}
                 {field.field_type === "select" ? (
                   <select
-                    disabled={form.status === "submitted"}
+                    disabled={!fieldsEditable}
                     onChange={(event) => updateAnswer(field.field_id, event.target.value)}
                     value={answers[field.field_id] ?? ""}
                   >
@@ -244,7 +262,7 @@ export function QuestionnaireWorkspace({
                         <label className={styles.checkOption} key={option}>
                           <input
                             checked={checked}
-                            disabled={form.status === "submitted"}
+                            disabled={!fieldsEditable}
                             onChange={() => toggleMulti(field.field_id, option)}
                             type="checkbox"
                           />
@@ -255,14 +273,14 @@ export function QuestionnaireWorkspace({
                   </div>
                 ) : field.field_type === "text" ? (
                   <input
-                    disabled={form.status === "submitted"}
+                    disabled={!fieldsEditable}
                     onChange={(event) => updateAnswer(field.field_id, event.target.value)}
                     type="text"
                     value={answers[field.field_id] ?? ""}
                   />
                 ) : (
                   <textarea
-                    disabled={form.status === "submitted"}
+                    disabled={!fieldsEditable}
                     onChange={(event) => updateAnswer(field.field_id, event.target.value)}
                     value={answers[field.field_id] ?? ""}
                   />
@@ -275,7 +293,7 @@ export function QuestionnaireWorkspace({
         <label className={styles.checkboxRow}>
           <input
             checked={acknowledged}
-            disabled={form.status === "submitted"}
+            disabled={!fieldsEditable}
             onChange={(event) => setAcknowledged(event.target.checked)}
             type="checkbox"
           />
@@ -285,14 +303,23 @@ export function QuestionnaireWorkspace({
           </span>
         </label>
 
-        {form.status !== "submitted" ? (
+        {fieldsEditable ? (
           <div className={styles.uploadActions}>
             <Button disabled={saving} onClick={() => void persist(false)} variant="secondary">
               {saving ? "Saving…" : "Save draft"}
             </Button>
             <Button disabled={saving} onClick={() => void persist(true)}>
-              {saving ? "Submitting…" : "Submit questionnaire"}
+              {saving
+                ? "Submitting…"
+                : form.status === "submitted"
+                  ? "Save changes"
+                  : "Submit questionnaire"}
             </Button>
+            {!embedded && form.status === "submitted" ? (
+              <Button disabled={saving} onClick={() => setEditing(false)} variant="quiet">
+                Cancel
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className={styles.successBox} role="status">
@@ -300,9 +327,14 @@ export function QuestionnaireWorkspace({
             <span>
               {embedded
                 ? "Questionnaire saved for onboarding."
-                : "You can continue to queue status. Staff still confirm the visit outcome."}
+                : "You can update your answers anytime before the clinic visit."}
             </span>
-            {!embedded ? <Link href="/queue">View queue</Link> : null}
+            <div className={styles.uploadActions}>
+              <Button onClick={() => setEditing(true)} variant="secondary">
+                Edit answers
+              </Button>
+              {!embedded ? <Link href="/">Back to home</Link> : null}
+            </div>
           </div>
         )}
 

@@ -203,7 +203,14 @@ export function OnboardingWorkspace() {
             </div>
           </div>
           <QuestionnaireWorkspace
-            appointmentId={state.appointment_id}
+            appointmentId={
+              !state.appointment_id ||
+              state.appointment_id === "pending-booking" ||
+              state.appointment_id === "PENDING" ||
+              state.appointment_id === "APT-DEMO-014"
+                ? "pending-booking"
+                : state.appointment_id
+            }
             embedded
             onSubmitted={() => void continueFrom("questionnaire", { questionnaire_completed: true })}
           />

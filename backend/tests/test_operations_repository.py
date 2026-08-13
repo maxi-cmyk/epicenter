@@ -39,6 +39,25 @@ class FakeApi:
             ]
         return []
 
+    def update(self, table, payload, *, filters=None):
+        if table == "patient_onboarding_states":
+            return [
+                {
+                    "clerk_user_id": "clerk_user_abc",
+                    "patient_id": 14,
+                    "appointment_id": payload.get("appointment_reference", "pending-booking"),
+                    "appointment_reference": payload.get("appointment_reference", "pending-booking"),
+                    "current_step": payload.get("current_step", "insurance"),
+                    "completed": payload.get("completed", False),
+                    "singpass_authenticated": True,
+                    "insurance_completed": payload.get("insurance_completed", False),
+                    "questionnaire_completed": payload.get("questionnaire_completed", False),
+                    "singpass_profile": [],
+                    "version": 2,
+                }
+            ]
+        return []
+
     def rpc(self, function_name, parameters):
         self.rpc_calls.append((function_name, parameters))
         if function_name == "epicenter_transition_ticket":

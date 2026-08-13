@@ -43,6 +43,16 @@ function questionnaireLabel(status: PatientHome["questionnaire_status"]) {
   return "Not started";
 }
 
+function questionnaireEditHref(home: PatientHome) {
+  const appointmentId = home.appointment?.appointment_id || "pending-booking";
+  const params = new URLSearchParams({ edit: "1", appointment_id: appointmentId });
+  return `/questionnaire?${params.toString()}`;
+}
+
+function canEditQuestionnaire(status: PatientHome["questionnaire_status"]) {
+  return status === "submitted" || status === "draft";
+}
+
 export function HomeWorkspace() {
   const [home, setHome] = useState<PatientHome | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +138,11 @@ export function HomeWorkspace() {
                   <strong>Questionnaire</strong>
                   <p>{questionnaireLabel(home.questionnaire_status)}</p>
                 </div>
+                {canEditQuestionnaire(home.questionnaire_status) ? (
+                  <Link className={styles.prepAction} href={questionnaireEditHref(home)}>
+                    Edit
+                  </Link>
+                ) : null}
               </li>
               <li>
                 <span className={styles.prepIcon}>
@@ -205,7 +220,14 @@ export function HomeWorkspace() {
           </div>
           <div>
             <dt>Questionnaire</dt>
-            <dd>{questionnaireLabel(home.questionnaire_status)}</dd>
+            <dd>
+              {questionnaireLabel(home.questionnaire_status)}
+              {canEditQuestionnaire(home.questionnaire_status) ? (
+                <Link className={styles.summaryAction} href={questionnaireEditHref(home)}>
+                  Edit
+                </Link>
+              ) : null}
+            </dd>
           </div>
           <div>
             <dt>Queue</dt>
