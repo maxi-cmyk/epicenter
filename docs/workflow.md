@@ -23,7 +23,7 @@ flowchart TD
         N6{Nurse rechecks package is correct}
         N7{Nurse checks and informs patient about cost + queue number}
         N8{Pharmacist checks prescription}
-        N9[Under insurance or TPA?]
+        N9[Does additional document need to be processed? e.g. TPA]
     end
 
     subgraph System
@@ -33,7 +33,7 @@ flowchart TD
         S3{System checks CHAS + corporate insurance eligibility to match code to right package}
         S4{System works out billing code + uncovered cost + queue number}
         S5((Cost to be covered))
-        S6{System works out total cost, offer including TPA}
+        S6{System tells pharmacist which documents are present + provides links/resources to process them}
         S7{System enters into TPA - what was processed}
     end
 
@@ -67,7 +67,7 @@ flowchart TD
     N7 --> P9
     P9 --> N8
     N8 --> N9
-    N9 -->|No, given| P10
+    N9 -->|No| P10
     N9 -->|Yes| S6
     S6 --> S7
     S7 --> P10
