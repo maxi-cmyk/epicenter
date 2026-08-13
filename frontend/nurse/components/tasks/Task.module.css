@@ -342,6 +342,12 @@ span.checklistDot.status_not_required { background: var(--ink-soft); }
   margin: 0 0 14px;
 }
 
+.tpaDocActions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
 .tpaDocRefLabel {
   color: var(--ink-soft);
   display: flex;

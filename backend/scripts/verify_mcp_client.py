@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 
 import httpx
 from mcp import ClientSession
@@ -31,7 +32,7 @@ async def verify(base_url: str, api_key: str | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
-    parser.add_argument("--api-key")
+    parser.add_argument("--api-key", default=os.getenv("EPICENTER_MCP_API_KEY"))
     args = parser.parse_args()
     asyncio.run(verify(args.base_url, args.api_key))
 

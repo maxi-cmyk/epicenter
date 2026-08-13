@@ -19,10 +19,10 @@ from app.domain.models import (
     DashboardSnapshot,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
+    DocumentUnconfirmRequest,
     FormsConfirmRequest,
     IdentityConfirmRequest,
     KioskCheckInRequest,
-    MedicationDispenseRequest,
     PackageConfirmRequest,
     PatientCreateRequest,
     PatientDeleteRequest,
@@ -30,17 +30,14 @@ from app.domain.models import (
     PatientRecord,
     PatientUpdateRequest,
     PhysicalFormsReceivedRequest,
-    QueueTicket,
     RecommendationDecisionRequest,
     SimulatorSnapshot,
     StaffSession,
     TicketTransitionRequest,
-    TpaSubmission,
-    TpaSubmissionConfirmRequest,
 )
+from app.mcp.operations import _dispatch_tool
 from app.services.allocation import InvalidDecision, normalize_decision
 from app.services.readiness import InvalidTransition
-from app.mcp.operations import _dispatch_tool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -209,6 +206,26 @@ def confirm_document(
     return ActionResult(success=True, message="Document confirmed by staff.", ticket=ticket)
 
 
+@router.post("/tickets/{ticket_id}/documents/{document_id}/unconfirm", response_model=ActionResult)
+def unconfirm_document(
+    ticket_id: str,
+    document_id: str,
+    request: DocumentUnconfirmRequest,
+    repository: Repository,
+    principal: Principal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.unconfirm_document(ticket_id, document_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Document confirmation undone.", ticket=ticket)
+
+
 @router.post("/tickets/{ticket_id}/package/confirm", response_model=ActionResult)
 def confirm_package(
     ticket_id: str,
@@ -327,75 +344,6 @@ def update_ticket(
     return ActionResult(success=True, message=f"{ticket_id} updated without changing its queue identity.", ticket=saved)
 
 
-@router.get("/pharmacy/queue", response_model=list[QueueTicket])
-def get_pharmacy_queue(repository: Repository, principal: Principal) -> list[QueueTicket]:
-    _require_roles(principal, "pharmacist", "operations_admin")
-    try:
-        snapshot = repository.snapshot()
-    except (SupabaseDataError, RuntimeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Supabase operational schema and seed are not ready.",
-        ) from exc
-    return [ticket for ticket in snapshot.tickets if ticket.visit_phase in ("ongoing", "finished")]
-
-
-@router.post("/tickets/{ticket_id}/medication", response_model=ActionResult, status_code=status.HTTP_201_CREATED)
-def record_medication_dispense(
-    ticket_id: str,
-    request: MedicationDispenseRequest,
-    repository: Repository,
-    principal: ReverifiedPrincipal,
-) -> ActionResult:
-    _require_roles(principal, "pharmacist", "operations_admin")
-    try:
-        dispense = repository.record_medication_dispense(ticket_id, request, principal.subject)
-    except (KeyError, StopIteration) as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found") from exc
-    except SupabaseDataError as exc:
-        _raise_repository_error(exc)
-    return ActionResult(success=True, message="Medication dispense recorded.", medication=dispense)
-
-
-@router.get("/tickets/{ticket_id}/tpa-submission", response_model=TpaSubmission)
-def get_tpa_submission(
-    ticket_id: str,
-    repository: Repository,
-    principal: Principal,
-) -> TpaSubmission:
-    _require_roles(principal, "pharmacist", "operations_admin")
-    try:
-        submission = repository.draft_tpa_submission(ticket_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except SupabaseDataError as exc:
-        _raise_repository_error(exc)
-    return submission
-
-
-@router.post("/tickets/{ticket_id}/tpa-submission/confirm", response_model=ActionResult)
-def confirm_tpa_submission(
-    ticket_id: str,
-    request: TpaSubmissionConfirmRequest,
-    repository: Repository,
-    principal: ReverifiedPrincipal,
-) -> ActionResult:
-    _require_roles(principal, "pharmacist", "operations_admin")
-    try:
-        submission = repository.confirm_tpa_submission(ticket_id, request, principal.subject)
-    except (KeyError, StopIteration) as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except SupabaseDataError as exc:
-        _raise_repository_error(exc)
-    return ActionResult(
-        success=True,
-        message="TPA submission confirmed and marked processed.",
-        tpa_submission=submission,
-    )
-
-
 @router.post("/kiosk/check-in", response_model=ActionResult, status_code=status.HTTP_201_CREATED)
 def kiosk_check_in(
     request: KioskCheckInRequest,
@@ -453,7 +401,7 @@ def list_patients(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=100),
 ) -> PatientList:
-    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
+    _require_roles(principal, "registration", "operations_admin", "auditor")
     try:
         return repository.list_patients(
             search=search, contact_filter=contact_filter, sort=sort, offset=offset, limit=limit
@@ -464,7 +412,7 @@ def list_patients(
 
 @router.get("/patients/{patient_id}", response_model=PatientRecord)
 def get_patient(patient_id: int, repository: Repository, principal: Principal) -> PatientRecord:
-    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
+    _require_roles(principal, "registration", "operations_admin", "auditor")
     try:
         patient = repository.get_patient(patient_id)
     except SupabaseDataError as exc:
@@ -532,14 +480,14 @@ def list_audit(
     offset: int = Query(default=0, ge=0, le=10_000),
     search: str | None = Query(default=None, min_length=1, max_length=120),
     actor: str | None = Query(default=None, min_length=1, max_length=120),
-    actor_role: str | None = Query(default=None, pattern="^(nurse|pharmacist|administrator|system)$"),
+    actor_role: str | None = Query(default=None, pattern="^(nurse|administrator|system)$"),
     outcome: str | None = Query(default=None, min_length=1, max_length=80),
     action_type: str | None = Query(default=None, min_length=1, max_length=80),
     target_table: str | None = Query(default=None, min_length=1, max_length=80),
     occurred_from: Annotated[datetime | None, Query()] = None,
     occurred_to: Annotated[datetime | None, Query()] = None,
 ) -> list[AuditRecord]:
-    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
+    _require_roles(principal, "registration", "operations_admin", "auditor")
     if occurred_from and occurred_to and occurred_from > occurred_to:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { confirmDocument } from "@/lib/api";
+import { confirmDocument, unconfirmDocument } from "@/lib/api";
 import type { ClinicDocument, DocumentCategory } from "@epicenter/shared/contracts";
 import { Button } from "@epicenter/shared/ui/Button";
 
@@ -52,6 +52,19 @@ export function DocumentCard({
     }
   };
 
+  const undo = async () => {
+    setPending(true);
+    setError("");
+    try {
+      await unconfirmDocument(ticketId, clinicDocument.id, ticketVersion);
+      await onConfirmed();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Could not undo this confirmation.");
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <div className={styles.tpaDocCard}>
       <header className={styles.tpaDocHead}>
@@ -73,9 +86,16 @@ export function DocumentCard({
           </label>
         ))}
       </div>
-      <Button disabled={pending} onClick={() => void submit()}>
-        {pending ? "Confirming…" : clinicDocument.confirmed ? "Save correction" : "Confirm this document"}
-      </Button>
+      <div className={styles.tpaDocActions}>
+        <Button disabled={pending} onClick={() => void submit()}>
+          {pending ? "Confirming…" : clinicDocument.confirmed ? "Save correction" : "Confirm this document"}
+        </Button>
+        {clinicDocument.confirmed ? (
+          <Button disabled={pending} onClick={() => void undo()} variant="quiet">
+            Undo confirmation
+          </Button>
+        ) : null}
+      </div>
       {error ? <p className={styles.error}>{error}</p> : null}
     </div>
   );

@@ -18,7 +18,7 @@ function clerkMessage(reason: unknown) {
 export default function DatabasePage() {
   const visualQaBypass = process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "true";
   if (visualQaBypass) {
-    return <DatabasePanel audience="nurse" canManage createPatient={createPatient} deletePatient={deletePatient} loadPatients={fetchPatients} updatePatient={updatePatient} verifyPassword={async (password) => { if (!password) throw new Error("Enter your password."); }} />;
+    return <DatabasePanel canManage createPatient={createPatient} deletePatient={deletePatient} loadPatients={fetchPatients} updatePatient={updatePatient} verifyPassword={async (password) => { if (!password) throw new Error("Enter your password."); }} />;
   }
   return <AuthenticatedDatabase />;
 }
@@ -41,5 +41,5 @@ function AuthenticatedDatabase() {
       throw new Error(clerkMessage(reason));
     }
   };
-  return <DatabasePanel audience="nurse" canManage={canManage} createPatient={canManage ? createPatient : undefined} deletePatient={canManage ? deletePatient : undefined} loadPatients={fetchPatients} updatePatient={canManage ? updatePatient : undefined} verifyPassword={verifyPassword} />;
+  return <DatabasePanel canManage={canManage} createPatient={canManage ? createPatient : undefined} deletePatient={canManage ? deletePatient : undefined} loadPatients={fetchPatients} updatePatient={canManage ? updatePatient : undefined} verifyPassword={verifyPassword} />;
 }

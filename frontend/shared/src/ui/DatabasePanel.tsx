@@ -29,7 +29,6 @@ type UpdatePatient = (patientId: number, request: PatientUpdateRequest) => Promi
 type DeletePatient = (patientId: number, request: PatientDeleteRequest) => Promise<PatientRecord>;
 
 type Props = {
-  audience: "nurse" | "pharmacy";
   canManage: boolean;
   loadPatients: LoadPatients;
   createPatient?: CreatePatient;
@@ -62,7 +61,6 @@ function maskIdentifier(value: string) {
 }
 
 export function DatabasePanel({
-  audience,
   canManage,
   loadPatients,
   createPatient,
@@ -160,7 +158,6 @@ export function DatabasePanel({
             </button>
           ) : undefined
         }
-        description={audience === "pharmacy" ? "Clinic-scoped patient references and contact details for dispensing support. Pharmacy access is view only." : undefined}
         title="Database"
       />
 

@@ -52,11 +52,6 @@ export function SimulatorWorkspace() {
   const projected = useMemo(() => projectState(run, time), [run, time]);
 
   useEffect(() => {
-    setTime(0);
-    setPlaying(false);
-  }, [run.snapshotHash]);
-
-  useEffect(() => {
     if (!playing) return;
     const intervalMs = Math.max(16, Math.round(240 / speed));
     const step = speed >= 20 ? 2 : 1;

@@ -348,7 +348,7 @@ def _provision_clerk_patient(
 
     display = (email.split("@")[0] if email and "@" in email else "New patient").replace(".", " ").strip()
     display = display.title() if display else "New patient"
-    identifier_hash = sha256(f"clerk:{clerk_user_id}".encode("utf-8")).hexdigest()
+    identifier_hash = sha256(f"clerk:{clerk_user_id}".encode()).hexdigest()
     return api.insert(
         "patients",
         {

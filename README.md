@@ -17,15 +17,90 @@ Two independently built Next.js applications share one FastAPI contract:
 
 **Simulator.** The nurse Simulator tab replays a deterministic clinic-day model (`serial_baseline`, `single_ticket`, `dynamic_allocation`) with playback controls. The engine lives in `frontend/nurse/lib/simulation/` and must not write operational patient or queue tables.
 
+## Clinic workflow reference
+
+Reference workflow diagram covering the patient, nurse, and system interactions from registration through payment. Kept here for future reference when designing/aligning features against the real-world process.
+
+```mermaid
+flowchart TD
+    subgraph Patient
+        P1[Does the user preregister?]
+        P2{User walks in directly to counter}
+        P3{User sends info + documents into system}
+        P4[Did the patient preregister?]
+        P8{Patient fills in the forms}
+        P9{Patient waits + consultation}
+        P10{Patient pays + leaves}
+    end
+
+    subgraph Nurse
+        N1{Nurse checks the document + info is correct}
+        N2{Nurse fills in the info + document manually}
+        N3[Does patient have TPA?]
+        N4{Nurse writes physical TPA form on paper}
+        N5[Is it a checkup?]
+        N6{Nurse rechecks package is correct}
+        N7{Nurse checks and informs patient about cost + queue number}
+        N8{Pharmacist checks prescription}
+        N9[Does additional document need to be processed? e.g. TPA]
+    end
+
+    subgraph System
+        S0{System keeps the information}
+        S1{System autofills electronic TPA form}
+        S2((Document/TPA - record info))
+        S3{System checks CHAS + corporate insurance eligibility to match code to right package}
+        S4{System works out billing code + uncovered cost + queue number}
+        S5((Cost to be covered))
+        S6{System tells pharmacist which documents are present + provides links/resources to process them}
+        S7{System enters into TPA - what was processed}
+    end
+
+    P1 -->|No| P2
+    P1 -->|Yes| P3
+    P2 --> P4
+    P4 -->|No| N2
+    P4 -->|Yes| N1
+    P3 --> N1
+    N2 --> N1
+    N1 --> S0
+    N1 --> N3
+    S0 --> S2
+    N3 -->|Yes| N4
+    N3 -->|Yes| S1
+    N3 -->|No| S3
+    N4 --> S2
+    S1 --> S2
+    S2 -.->|referenced| N3
+    S2 -.->|preloaded| P8
+    S3 --> N6
+    N6 -.->|referenced| S3
+    N6 --> N5
+    N5 -->|Yes| P8
+    N5 -->|No| N7
+    P8 --> N7
+    N7 --> S4
+    S4 -.->|referenced| N7
+    S4 --> S5
+    S5 -.->|referenced| N7
+    N7 --> P9
+    P9 --> N8
+    N8 --> N9
+    N9 -->|No| P10
+    N9 -->|Yes| S6
+    S6 --> S7
+    S7 --> P10
+```
+
 ## Repository
 
 - `frontend/patient/` — independently built Next.js patient registration and pre-arrival experience with public patient-only Clerk enrollment.
 - `frontend/nurse/` — independently built Next.js staff operations, gated task flow, walk-in kiosk, Database, Audit, and Simulator, with Clerk authentication.
 - `frontend/shared/` — generated data contracts, design tokens and safe presentation primitives shared by both apps.
 - `backend/` — FastAPI domain services, Clerk JWT-protected HTTP API, and the server-side OpenAI integration for document intelligence and reviewed assistant tools.
-- `docs/` — product, requirements, stack, and clinic workflow.
+- `docs/` — product, requirements, stack, clinic workflow, and deployment runbook.
 
-See [`docs/PRODUCT.md`](docs/PRODUCT.md), [`docs/PRD.md`](docs/PRD.md), [`docs/techStack.md`](docs/techStack.md), and [`docs/workflow.md`](docs/workflow.md).
+See [`docs/PRODUCT.md`](docs/PRODUCT.md), [`docs/PRD.md`](docs/PRD.md), [`docs/techStack.md`](docs/techStack.md), [`docs/workflow.md`](docs/workflow.md), and [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
 
 ## OpenAI configuration
 
@@ -42,12 +117,11 @@ Copilot Studio and Power BI are not required for local development. Epicenter us
 
 ## Run locally
 
-The app runs as three processes in three terminals: the patient app, the
-nurse app, and the backend API. The two Next.js apps are separate workspace
+The app runs as three processes in three terminals: the patient app, nurse app,
+and backend API. The two Next.js apps are separate workspace
 packages with separate route trees, builds, environment validation and Vercel
 roots. They share only the backend contract and safe presentation primitives;
-patient routes are not compiled into the nurse deployment and nurse routes are
-not compiled into the patient deployment.
+role-specific routes are not compiled into the other deployments.
 
 Terminal 1 — backend:
 
@@ -88,9 +162,9 @@ cd frontend
 npm run nurse
 ```
 
-Open `http://localhost:3000` for the patient screen and `http://localhost:3001` for the nurse screen. Both frontends use the same local API. The nurse board can show its clearly labelled synthetic fallback when the API is unavailable; patient submissions fail visibly, preserve the selection, and offer retry rather than pretending the action completed.
+Open `http://localhost:3000` for patient and `http://localhost:3001` for nurse. All frontends use the same local API. The nurse board can show its clearly labelled synthetic fallback when the API is unavailable; patient submissions fail visibly, preserve the selection, and offer retry rather than pretending the action completed.
 
-The two commands are independent: either app can run by itself, and starting one does not start or require the other frontend process.
+The frontend commands are independent: any app can run by itself without starting the other frontend processes.
 
 Walk-in kiosk (nurse app): `http://localhost:3001/kiosk`.
 
@@ -193,12 +267,14 @@ npm run contracts:check
 - **Database:** Supabase is the shared persistence target. The migrations and idempotent seeds cover the raw fixtures plus clinics, appointments, the one-ticket queue, review cases, counters, staff availability, human-approved allocation, operational/audit events, configuration releases, and simulator snapshots. The local FastAPI process automatically selects the server-only Supabase adapter when its URL and secret key are configured; Railway is not required for local use.
 - **Authentication:** Clerk wraps both frontends when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, FastAPI verifies Clerk session tokens with the official Python SDK, maps patients through `patient_accounts`, and maps staff through active clinic-scoped `staff_accounts`. `CLERK_JWT_KEY` is an optional networkless-verification optimization.
 - **Patient demo boundary:** each verified patient account is attached only to the configured synthetic scenario. Pre-arrival submissions return a patient-safe outcome pending any required staff confirmation; privileged operational data remains behind FastAPI.
-- **Frontend deployment:** create one Vercel project rooted at `frontend/patient/` and another rooted at `frontend/nurse/`. Set each app's browser-safe environment variables independently; both use the same Railway API URL.
-- **Backend deployment:** create a Railway service with `backend/` as its root directory. `backend/railway.toml` defines the start command and health check; set `EPICENTER_DEMO_MODE=false`, provider credentials and the deployed `EPICENTER_FRONTEND_ORIGINS` (comma-separated; both the patient and nurse deployment URLs) in Railway.
+- **Frontend deployment:** create two Vercel projects rooted at `frontend/patient/` and `frontend/nurse/`. Set each app's browser-safe environment variables independently; all use the same Railway API URL.
+- **Backend deployment:** create API/MCP and worker Railway services with `backend/` as the root directory. `backend/railway.toml` defines the API start command and health check; override the worker start command with `python -m worker`. Set `EPICENTER_DEMO_MODE=false`, provider credentials, and both exact Vercel origins in `EPICENTER_FRONTEND_ORIGINS`.
 - **MCP publication compatibility:** expose the reviewed Operations and Insurance Format Registry servers over public HTTPS Streamable HTTP, verify tool discovery and a read-only synthetic call in Copilot Studio, and keep licensing/publication as an explicit manual release gate.
 - **Analytics scaling:** use the native dashboard for development and the core demo. Consider Power BI/Fabric only later through a reconciled de-identified aggregate projection; it is never the operational source of truth.
 
 The checked-in provider configuration is a deployment contract, not a claim that live Supabase, Clerk, Vercel or Railway resources have already been provisioned.
+
+The ordered provider setup, public smoke checks, evidence, and rollback procedure are in [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
 
 ## Verify
 

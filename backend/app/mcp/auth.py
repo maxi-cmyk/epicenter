@@ -18,7 +18,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
-from app.core.auth import StaffPrincipal, require_staff
+from app.core.auth import StaffPrincipal
 from app.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -61,21 +61,32 @@ def require_mcp_identity(
 ) -> StaffPrincipal:
     """Authenticate an MCP caller.
 
-    In demo mode with no MCP key configured: returns a synthetic operations_admin
-    principal so the local demo works without any credentials.
-    In demo mode with an MCP key configured: requires that key in X-MCP-API-Key.
-    In production: requires Clerk JWT via the standard require_staff dependency.
+    A configured MCP key may authenticate a separately approved machine client
+    in any environment. Without that header, demo mode uses a synthetic principal
+    and production requires a Clerk session.
     """
+    if api_key is not None:
+        if not _verify_api_key(api_key, settings.mcp_api_key):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Valid MCP API key required.",
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+        return StaffPrincipal(
+            subject="mcp-api-key",
+            source="api_key",
+            factor_verification_age=(0, -1),
+            role="operations_admin",
+            clinic_id=settings.clinic_id,
+        )
+
     if settings.demo_mode:
         if settings.mcp_api_key:
-            # Key is set — enforce it
-            if not _verify_api_key(api_key, settings.mcp_api_key):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Valid MCP API key required.",
-                    headers={"WWW-Authenticate": "ApiKey"},
-                )
-        # Demo mode (key matched or no key configured): synthetic principal
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Valid MCP API key required.",
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
         return StaffPrincipal(
             subject="mcp-demo-key",
             source="demo",
@@ -84,18 +95,18 @@ def require_mcp_identity(
             clinic_id=settings.clinic_id,
         )
 
-    # Production: require valid Clerk JWT + active staff mapping
+    # Production browser/staff clients require a valid Clerk JWT + active mapping.
     if not settings.clerk_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="MCP authentication is not configured.",
         )
-    from app.core.auth import (
-        _parse_factor_verification_age,
-        require_clerk_identity,
-        ClerkIdentity,
-    )
     from clerk_backend_api import AuthenticateRequestOptions, authenticate_request
+
+    from app.core.auth import (
+        ClerkIdentity,
+        _parse_factor_verification_age,
+    )
 
     try:
         request_state = authenticate_request(
@@ -119,11 +130,13 @@ def require_mcp_identity(
         factor_verification_age=_parse_factor_verification_age(request_state.payload),
     )
     # Reuse the existing staff lookup
-    from app.core.auth import require_staff as _require_staff
     from app.data.supabase_client import SupabaseDataApi, SupabaseDataError
 
     if not settings.supabase_configured:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Staff authorization storage not configured.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Staff authorization storage not configured.",
+        )
 
     api = SupabaseDataApi(settings.supabase_url, settings.supabase_secret_key)
     try:
@@ -134,7 +147,10 @@ def require_mcp_identity(
             limit=2,
         )
     except SupabaseDataError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Staff authorization could not be verified.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Staff authorization could not be verified.",
+        ) from exc
     finally:
         api.close()
 

@@ -563,7 +563,7 @@ def _compare_simulation_runs(
             "throughput_delta": "+6%",
             "review_clearance_delta": "+12%",
         },
-        bottleneck_shift="Registration bottleneck reduced; downstream pharmacy utilisation increased.",
+        bottleneck_shift="Registration bottleneck reduced; downstream throughput increased.",
         synthetic=True,
         label="synthetic=true: comparison uses isolated scenario state.",
     )

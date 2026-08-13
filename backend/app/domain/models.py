@@ -32,11 +32,6 @@ class CoverageAction(StrEnum):
     REPLACE = "replace"
 
 
-class TpaSubmissionStatus(StrEnum):
-    DRAFT = "draft"
-    SUBMITTED = "submitted"
-
-
 class DocumentCategory(StrEnum):
     """Payer paperwork (TPA, CHAS, corporate insurance, ...) splits into distinct
     kinds, each with different fields worth capturing."""
@@ -337,50 +332,16 @@ class DocumentProcessingRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
 
 
-class MedicationItem(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    quantity: int = Field(ge=1)
-    unit_cost: float = Field(ge=0)
-
-
-class MedicationDispense(BaseModel):
-    id: str
-    ticket_id: str
-    items: list[MedicationItem]
-    total_cost: float = Field(ge=0)
-    dispensed_by: str
-    dispensed_at: datetime
-    version: int = Field(default=1, ge=1)
-
-
-class MedicationDispenseRequest(BaseModel):
-    items: list[MedicationItem] = Field(min_length=1)
-    idempotency_key: str = Field(min_length=8, max_length=128)
-
-
-class TpaSubmission(BaseModel):
-    id: str
-    ticket_id: str
-    status: TpaSubmissionStatus
-    documents: list[Document]
-    checkup_summary: str
-    medication: MedicationDispense | None = None
-    submitted_by: str | None = None
-    submitted_at: datetime | None = None
-    external_reference: str | None = None
-    version: int = Field(default=1, ge=1)
-
-
-class TpaSubmissionConfirmRequest(BaseModel):
-    expected_version: int = Field(ge=1)
-    idempotency_key: str = Field(min_length=8, max_length=128)
-
-
 class DocumentConfirmRequest(BaseModel):
     facts: dict[str, str] | None = None
     reference_number: str | None = Field(default=None, max_length=80)
     valid_from: date | None = None
     valid_to: date | None = None
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class DocumentUnconfirmRequest(BaseModel):
     expected_version: int = Field(ge=1)
     idempotency_key: str = Field(min_length=8, max_length=128)
 
@@ -477,8 +438,6 @@ class ActionResult(BaseModel):
     message: str
     ticket: QueueTicket | None = None
     recommendation: AllocationRecommendation | None = None
-    medication: MedicationDispense | None = None
-    tpa_submission: TpaSubmission | None = None
 
 
 class PatientNextAction(StrEnum):

@@ -199,6 +199,17 @@ export function confirmDocument(
   });
 }
 
+export function unconfirmDocument(ticketId: string, documentId: string, expectedVersion: number) {
+  requireLiveOperationalData();
+  return request<ActionResult>(`/tickets/${ticketId}/documents/${documentId}/unconfirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+    }),
+  });
+}
+
 export function confirmPackage(ticketId: string, expectedVersion: number, correctedPackage?: string) {
   requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/package/confirm`, {
