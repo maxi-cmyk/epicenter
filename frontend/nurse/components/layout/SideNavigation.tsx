@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton, useUser } from "@clerk/nextjs";
-import { ClipboardCheck, LayoutDashboard } from "lucide-react";
+import { ClipboardCheck, LayoutDashboard, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,6 +18,7 @@ type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
 const NAVIGATION: NavItem[] = [
   { href: "/", label: "Readiness board", icon: LayoutDashboard },
   { href: "/review", label: "Assisted review", icon: ClipboardCheck },
+  { href: "/simulator", label: "Simulator", icon: Waypoints },
 ];
 
 export function SideNavigation() {
@@ -35,9 +36,9 @@ export function SideNavigation() {
           <small>Clinic readiness</small>
         </span>
       </Link>
-      <nav aria-label="Primary navigation" className={styles.navigation}>
+      <nav aria-label="Nurse panel" className={styles.navigation}>
         {NAVIGATION.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          const active = href === "/" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link aria-current={active ? "page" : undefined} className={active ? styles.activeLink : styles.navLink} href={href} key={href}>
               <Icon aria-hidden="true" size={19} />

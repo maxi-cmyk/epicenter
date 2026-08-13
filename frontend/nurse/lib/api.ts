@@ -1,5 +1,5 @@
 import { demoSnapshot } from "./demo-data";
-import type { ActionResult, DashboardSnapshot, ReadinessState } from "@epicenter/shared/contracts";
+import type { ActionResult, DashboardSnapshot, ReadinessState, SimulatorSnapshot } from "@epicenter/shared/contracts";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 type AccessTokenProvider = () => Promise<string | null>;
@@ -81,4 +81,12 @@ export function checkInWalkIn(patientName: string, nurseSupervisor: string, clin
     method: "POST",
     body: JSON.stringify({ patient_name: patientName, nurse_supervisor: nurseSupervisor, clinical_escalation: clinicalEscalation, idempotency_key: crypto.randomUUID() }),
   });
+}
+
+export async function fetchSimulatorSnapshots(): Promise<SimulatorSnapshot[] | null> {
+  try {
+    return await request<SimulatorSnapshot[]>("/simulator/snapshots");
+  } catch {
+    return null;
+  }
 }

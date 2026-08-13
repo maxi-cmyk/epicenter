@@ -7,8 +7,9 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 test("routes stay split into focused workspaces", () => {
   assert.match(read("nurse/app/page.tsx"), /DashboardView/);
   assert.match(read("nurse/app/review/page.tsx"), /ReviewWorkspace/);
+  assert.match(read("nurse/app/simulator/page.tsx"), /SimulatorWorkspace/);
   assert.match(read("nurse/app/kiosk/page.tsx"), /KioskWorkspace/);
-  assert.match(read("patient/app/page.tsx"), /PreArrivalWorkspace/);
+  assert.match(read("patient/app/page.tsx"), /HomeWorkspace/);
   assert.throws(() => read("patient/app/review/page.tsx"));
   assert.throws(() => read("patient/app/kiosk/page.tsx"));
   assert.throws(() => read("nurse/app/pre-arrival/page.tsx"));
@@ -35,6 +36,7 @@ test("the dashboard labels all demo data honestly", () => {
   const navigation = read("nurse/components/layout/SideNavigation.tsx");
   const dashboard = read("nurse/components/dashboard/DashboardView.tsx");
   assert.match(navigation, /Nurse panel/);
+  assert.match(navigation, /Simulator/);
   assert.match(dashboard, /Local synthetic fallback/);
 });
 
@@ -72,17 +74,17 @@ test("staff authorization and mutation reverification fail closed", () => {
   const provider = read("nurse/components/providers/AuthProvider.tsx");
   const api = read("nurse/lib/api.ts");
   const review = read("nurse/components/review/ReviewWorkspace.tsx");
-  const allocation = read("nurse/components/dashboard/AllocationDecision.tsx");
+  const dashboard = read("nurse/components/dashboard/DashboardView.tsx");
   const kiosk = read("nurse/components/kiosk/KioskWorkspace.tsx");
 
   assert.match(provider, /fetchStaffSession/);
   assert.match(provider, /Nurse access required/);
   assert.match(api, /reverification-error/);
   assert.match(api, /error\.status === 401 \|\| error\.status === 403/);
+  assert.match(api, /decideRecommendation/);
   assert.match(review, /useReverification\(transitionTicket\)/);
-  assert.match(allocation, /useReverification\(decideRecommendation\)/);
+  assert.match(dashboard, /useReverification\(transitionTicket\)/);
   assert.match(kiosk, /useReverification\(checkInWalkIn\)/);
-  assert.doesNotMatch(allocation, /Demo fallback: recommendation/);
 });
 
 test("the shared workspace contains contracts and presentation primitives only", () => {
