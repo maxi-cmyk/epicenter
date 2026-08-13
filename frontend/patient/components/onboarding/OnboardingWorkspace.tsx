@@ -2,7 +2,7 @@
 
 import { Check, FileCheck2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Button } from "@epicenter/shared/ui/Button";
 import { PageHeader } from "@epicenter/shared/ui/PageHeader";
@@ -41,10 +41,6 @@ export function OnboardingWorkspace() {
   }, [router]);
 
   useMountedLoad(load);
-
-  useEffect(() => {
-    if (state?.singpass_fields) setDraftFields(state.singpass_fields);
-  }, [state?.singpass_fields]);
 
   async function continueFrom(
     step: "singpass" | "insurance" | "questionnaire",

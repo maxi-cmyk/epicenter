@@ -1,24 +1,18 @@
 import { TriangleAlert } from "lucide-react";
+import Link from "next/link";
 
-import type { QueueTicket } from "@epicenter/shared/contracts";
+import type { QueueTicket, ReviewCase } from "@epicenter/shared/contracts";
 
 import styles from "./Dashboard.module.css";
 
-function counterValue(counter: string | null | undefined) {
-  if (!counter) return counter;
-  const match = /^(?:Counter|Review)\s+(\d+)$/i.exec(counter);
-  return match ? match[1] : counter;
+function roomValue(room: string | null | undefined) {
+  if (!room) return room;
+  const match = /^(?:Room|Counter|Review)\s+(\d+)/i.exec(room);
+  return match ? match[1] : room;
 }
 
-function timeLabel(value: string | null | undefined) {
-  if (!value) return null;
-  return new Intl.DateTimeFormat("en-SG", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(
-    new Date(value),
-  );
-}
-
-export function TicketRow({ ticket, onOpenReview }: { ticket: QueueTicket; onOpenReview: (ticket: QueueTicket) => void }) {
-  const counter = counterValue(ticket.actual_counter ?? ticket.expected_counter);
+export function TicketRow({ reviewCase, ticket }: { reviewCase?: ReviewCase; ticket: QueueTicket }) {
+  const room = roomValue(ticket.actual_room ?? ticket.expected_room);
   const needsAttention = ticket.readiness_state === "needs_review";
   const stateClass = needsAttention
     ? styles.card_flagged
@@ -26,45 +20,46 @@ export function TicketRow({ ticket, onOpenReview }: { ticket: QueueTicket; onOpe
       ? styles.card_processing
       : "";
   const isFinished = ticket.visit_phase === "finished";
+  const confirmedDocuments = ticket.documents.filter((document) => document.confirmed).length;
   const statusLabel = ticket.processing_stage.replace(/\s+\d{1,2}:\d{2}$/, "");
   const secondStat = isFinished
     ? { label: "Est. completion", value: ticket.processing_stage.replace(/^Completed\s+/i, "") }
-    : ticket.visit_phase === "incoming"
-      ? { label: "Est. arrival", value: "-" }
+      : ticket.visit_phase === "incoming"
+      ? null
       : ticket.waiting_minutes
         ? { label: "Est. finish", value: `${ticket.waiting_minutes} min` }
         : null;
 
-  return (
-    <article
-      aria-label={needsAttention ? `Resolve issue for ${ticket.patient_name}` : undefined}
-      className={`${styles.card} ${stateClass} ${needsAttention ? styles.card_clickable : ""}`}
-      onClick={needsAttention ? () => onOpenReview(ticket) : undefined}
-      onKeyDown={
-        needsAttention
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onOpenReview(ticket);
-              }
-            }
-          : undefined
-      }
-      role={needsAttention ? "button" : undefined}
-      tabIndex={needsAttention ? 0 : undefined}
-    >
+  const cardBody = (
+    <>
       <header className={styles.cardHead}>
         <span className={styles.cardId}>{ticket.id}</span>
-        {needsAttention ? <TriangleAlert aria-hidden="true" className={styles.attentionFlag} size={16} strokeWidth={2.4} /> : null}
+        <span className={styles.cardHeadRight}>
+          {ticket.documents.length > 0 ? (
+            <span className={styles.tpaBadge}>{confirmedDocuments}/{ticket.documents.length} verified</span>
+          ) : null}
+          {needsAttention ? (
+            <span className={styles.attentionFlag}>
+              <TriangleAlert aria-hidden="true" size={15} strokeWidth={2.4} />
+              Needs confirmation
+            </span>
+          ) : null}
+        </span>
       </header>
       <h3 className={styles.cardName}>{ticket.patient_name}</h3>
       <span className={styles.cardStatus}>Status: {statusLabel}</span>
-      {counter || secondStat ? (
+      {needsAttention && reviewCase ? (
+        <div className={styles.exceptionDetail}>
+          <strong>{reviewCase.reason_label}</strong>
+          <span>{reviewCase.next_action}</span>
+        </div>
+      ) : null}
+      {room || secondStat ? (
         <dl className={styles.cardStats}>
-          {counter ? (
+          {room ? (
             <div>
-              <dt>Counter</dt>
-              <dd>{counter}</dd>
+              <dt>Room</dt>
+              <dd>{room}</dd>
             </div>
           ) : null}
           {secondStat ? (
@@ -75,6 +70,20 @@ export function TicketRow({ ticket, onOpenReview }: { ticket: QueueTicket; onOpe
           ) : null}
         </dl>
       ) : null}
-    </article>
+    </>
+  );
+
+  if (isFinished) {
+    return <article className={`${styles.card} ${styles.card_finished} ${stateClass}`}>{cardBody}</article>;
+  }
+
+  return (
+    <Link
+      aria-label={`Open task for ${ticket.patient_name}`}
+      className={`${styles.card} ${stateClass} ${styles.card_clickable}`}
+      href={`/tasks/${ticket.id}`}
+    >
+      {cardBody}
+    </Link>
   );
 }

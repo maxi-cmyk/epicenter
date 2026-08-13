@@ -101,59 +101,37 @@ test.describe.serial("live Clerk authorization", () => {
 
     await expect(page.getByRole("heading", { name: "Nurse access required" })).toBeVisible();
     await expect(page.getByText("not mapped to an active staff role", { exact: false })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Today’s clinic flow" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Patient readiness board" })).toHaveCount(0);
   });
 
   test("a provisioned nurse can sign in and reach the clinic workspace", async ({ page }) => {
     await signInWithTestEmail(page, nurseEmail);
     await page.reload();
 
-    await expect(page.getByRole("heading", { name: "Today’s clinic flow" })).toBeVisible();
-    await expect(page.getByText("Local synthetic fallback", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Patient readiness board" })).toBeVisible();
+    await expect(page.getByText("Demo data only — confirmations are disabled", { exact: true })).toHaveCount(0);
   });
 
-  test("a stale-factor response opens Clerk reverification and retries the mutation", async ({ page }) => {
+  test("manual confirmation does not open Clerk reverification", async ({ page }) => {
     await signInWithTestEmail(page, nurseEmail);
-    await page.goto("http://localhost:3001/review");
-    await expect(page.getByRole("heading", { name: "Assisted review" })).toBeVisible();
+    await page.goto("http://localhost:3001/tasks/Q-018/identity");
+    await expect(page.getByRole("heading", { name: "Needs review before starting" })).toBeVisible();
 
     let attempts = 0;
     await page.route("**/api/v1/tickets/*/transition", async (route) => {
       attempts += 1;
-      if (attempts === 1) {
-        await route.fulfill({
-          status: 403,
-          contentType: "application/json",
-          body: JSON.stringify({
-            clerk_error: {
-              type: "forbidden",
-              reason: "reverification-error",
-              metadata: { reverification: "strict" },
-            },
-          }),
-        });
-        return;
-      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ success: true, message: "Reverification retry accepted." }),
+        body: JSON.stringify({ success: true, message: "Manual confirmation accepted." }),
       });
     });
 
-    await page.locator('input[type="checkbox"]').check();
-    await page.getByRole("button", { name: "Confirm and mark ready" }).click();
-    await expect(page.getByRole("heading", { name: "Verification required" })).toBeVisible();
-    await page.getByRole("link", { name: "Use another method" }).click();
-    await Promise.all([
-      page.waitForResponse(
-        (response) => response.url().includes("/verify/prepare_first_factor") && response.ok(),
-      ),
-      page.getByRole("button", { name: "Email code" }).click(),
-    ]);
-    await page.getByRole("textbox", { name: "Enter verification code" }).pressSequentially("424242");
-
-    await expect.poll(() => attempts).toBe(2);
+    await page.getByRole("checkbox", { name: /I reviewed the source/ }).check();
+    await page.getByRole("radio", { name: "Replacement document provided" }).check();
+    await page.getByRole("button", { name: "Record resolution" }).click();
+    await expect.poll(() => attempts).toBe(1);
+    await expect(page.getByRole("heading", { name: "Verification required" })).toHaveCount(0);
   });
 
   test("disabling the staff mapping removes access immediately", async ({ page }) => {
@@ -163,7 +141,7 @@ test.describe.serial("live Clerk authorization", () => {
       await signInWithTestEmail(page, nurseEmail);
       await page.reload();
       await expect(page.getByRole("heading", { name: "Nurse access required" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Today’s clinic flow" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Patient readiness board" })).toHaveCount(0);
     } finally {
       await setStaffActive(nurse.id, true);
     }

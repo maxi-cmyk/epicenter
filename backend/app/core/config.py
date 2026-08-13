@@ -10,12 +10,14 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     clinic_id: str = "clinic_harbourfront"
     patient_demo_source_record_key: str = "registration:0107"
-    # Comma-separated. Defaults cover both split-screen dev processes: the
-    # patient screen (port 3000) and the nurse/staff screen (port 3001).
+    # Comma-separated. Defaults cover the three split-screen dev processes: the
+    # patient screen (port 3000), the nurse/staff screen (port 3001), and the
+    # pharmacy screen (port 3002).
     frontend_origins: str = Field(
         default=(
             "http://localhost:3000,http://127.0.0.1:3000,"
-            "http://localhost:3001,http://127.0.0.1:3001"
+            "http://localhost:3001,http://127.0.0.1:3001,"
+            "http://localhost:3002,http://127.0.0.1:3002"
         ),
         validation_alias=AliasChoices("EPICENTER_FRONTEND_ORIGINS", "EPICENTER_FRONTEND_ORIGIN"),
     )
@@ -39,6 +41,19 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     # Nurse assistant model (conversational grounding of tool results)
     openai_model: str = Field(default="gpt-4.1-mini", validation_alias="OPENAI_MODEL")
+    openai_timeout_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=120.0,
+        validation_alias="OPENAI_TIMEOUT_SECONDS",
+    )
+    openai_max_retries: int = Field(default=1, ge=0, le=3, validation_alias="OPENAI_MAX_RETRIES")
+    openai_max_output_tokens: int = Field(
+        default=700,
+        ge=100,
+        le=4_000,
+        validation_alias="OPENAI_MAX_OUTPUT_TOKENS",
+    )
     # Document extraction model (multimodal, Structured Outputs)
     openai_extraction_model: str = Field(
         default="gpt-4.1",

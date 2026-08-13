@@ -9,8 +9,8 @@ const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const backendRoot = resolve(frontendRoot, "../backend");
 const generatedPath = resolve(frontendRoot, "shared/src/contracts/api.generated.ts");
 const pythonCandidates = [
-  resolve(backendRoot, ".venv/Scripts/python.exe"),
   resolve(backendRoot, ".venv/bin/python"),
+  resolve(backendRoot, ".venv/Scripts/python.exe"),
   "python",
   "python3",
 ];

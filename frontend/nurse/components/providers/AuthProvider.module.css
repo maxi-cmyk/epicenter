@@ -83,6 +83,28 @@
   max-width: 58ch;
 }
 
+.staffAccessActions {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+}
+
+.retryAccessButton {
+  background: var(--cream-50);
+  border: 1px solid var(--cream-50);
+  border-radius: 8px;
+  color: var(--green-950);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 0 18px;
+}
+
+.retryAccessButton:hover {
+  background: var(--green-100);
+}
+
 .signInPage {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);
@@ -183,6 +205,13 @@
 .signInTask > p {
   color: var(--ink-soft);
   margin: 0 0 28px;
+}
+
+.signInTask > p.provisioningNote {
+  border-top: 1px solid var(--rule);
+  font-size: 0.82rem;
+  margin: -12px 0 20px;
+  padding-top: 12px;
 }
 
 @media (max-width: 780px) {

@@ -1,31 +1,46 @@
 import logging
+from datetime import datetime
 from typing import Annotated, NoReturn
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from app.ai.assistant import run_nurse_assistant
+from app.ai.client import get_openai_client
+from app.ai.schemas import AssistantMessage, AssistantRequest
 from app.core.auth import StaffPrincipal, require_reverified_staff, require_staff
+from app.core.config import Settings, get_settings
 from app.data.dependencies import get_operations_repository
 from app.data.operations_repository import OperationsRepository
 from app.data.supabase_client import SupabaseDataError
 from app.domain.models import (
     ActionResult,
     AuditRecord,
-    CounterAssignmentRequest,
+    BillingConfirmRequest,
     DashboardSnapshot,
+    DocumentConfirmRequest,
     DocumentProcessingRequest,
+    FormsConfirmRequest,
+    IdentityConfirmRequest,
     KioskCheckInRequest,
+    MedicationDispenseRequest,
+    PackageConfirmRequest,
     PatientCreateRequest,
     PatientDeleteRequest,
     PatientList,
     PatientRecord,
     PatientUpdateRequest,
+    PhysicalFormsReceivedRequest,
+    QueueTicket,
     RecommendationDecisionRequest,
     SimulatorSnapshot,
     StaffSession,
     TicketTransitionRequest,
+    TpaSubmission,
+    TpaSubmissionConfirmRequest,
 )
 from app.services.allocation import InvalidDecision, normalize_decision
 from app.services.readiness import InvalidTransition
+from app.mcp.operations import _dispatch_tool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,6 +48,22 @@ logger = logging.getLogger(__name__)
 Repository = Annotated[OperationsRepository, Depends(get_operations_repository)]
 Principal = Annotated[StaffPrincipal, Depends(require_staff)]
 ReverifiedPrincipal = Annotated[StaffPrincipal, Depends(require_reverified_staff)]
+CurrentSettings = Annotated[Settings, Depends(get_settings)]
+
+_AUDIT_REDACTED_KEYS = {
+    "access_token",
+    "contact_mobile",
+    "email",
+    "identifier_hash",
+    "nric",
+    "passport",
+    "provider_id",
+    "provider_identifier",
+    "raw_document_text",
+    "refresh_token",
+    "secret",
+    "token",
+}
 
 
 def _require_roles(principal: StaffPrincipal, *allowed_roles: str) -> None:
@@ -57,6 +88,21 @@ def _raise_repository_error(exc: SupabaseDataError) -> NoReturn:
     ) from exc
 
 
+def _safe_audit_record(record: AuditRecord) -> AuditRecord:
+    def redact(value: object) -> object:
+        if isinstance(value, dict):
+            return {
+                str(key): redact(item) for key, item in value.items() if str(key).casefold() not in _AUDIT_REDACTED_KEYS
+            }
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        return value
+
+    details = redact(record.details)
+    assert isinstance(details, dict)
+    return record.model_copy(update={"details": details}, deep=True)
+
+
 @router.get("/dashboard", response_model=DashboardSnapshot)
 def get_dashboard(repository: Repository, principal: Principal) -> DashboardSnapshot:
     try:
@@ -73,6 +119,48 @@ def get_staff_session(principal: Principal) -> StaffSession:
     return StaffSession(role=principal.role, clinic_id=principal.clinic_id)
 
 
+@router.post("/assistant", response_model=AssistantMessage)
+async def ask_nurse_assistant(
+    request: AssistantRequest,
+    repository: Repository,
+    principal: Principal,
+    settings: CurrentSettings,
+) -> AssistantMessage:
+    """Answer one bounded staff question through the server-side Responses API."""
+    _require_roles(principal, "registration", "operations_admin", "auditor")
+    if not settings.openai_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The staff assistant is not configured.",
+        )
+
+    async def dispatch(
+        tool_name: str,
+        arguments: dict[str, object],
+        actor: StaffPrincipal,
+    ) -> tuple[object, str, str | None]:
+        result = await _dispatch_tool(tool_name, arguments, actor, settings, repository)
+        snapshot_time = str(result.get("snapshot_time")) if result.get("snapshot_time") else None
+        label = tool_name.removeprefix("epicenter_").replace("_", " ")
+        return result, label, snapshot_time
+
+    try:
+        client = get_openai_client(settings)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The staff assistant is not configured.",
+        ) from exc
+
+    return await run_nurse_assistant(
+        client,
+        settings=settings,
+        principal=principal,
+        user_message=request.message,
+        tool_dispatcher=dispatch,
+    )
+
+
 @router.get("/simulator/snapshots", response_model=list[SimulatorSnapshot])
 def get_simulator_snapshots(repository: Repository, principal: Principal) -> list[SimulatorSnapshot]:
     _require_roles(principal, "operations_admin", "auditor")
@@ -87,7 +175,7 @@ def process_document(
     ticket_id: str,
     request: DocumentProcessingRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -101,27 +189,123 @@ def process_document(
     return ActionResult(success=True, message="Document result committed with its audit evidence.", ticket=ticket)
 
 
-@router.post("/tickets/{ticket_id}/counter", response_model=ActionResult)
-def assign_counter(
+@router.post("/tickets/{ticket_id}/documents/{document_id}/confirm", response_model=ActionResult)
+def confirm_document(
     ticket_id: str,
-    request: CounterAssignmentRequest,
+    document_id: str,
+    request: DocumentConfirmRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
-        ticket = repository.assign_counter(ticket_id, request, principal.subject)
+        ticket = repository.confirm_document(ticket_id, document_id, request, principal.subject)
     except (KeyError, StopIteration) as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found") from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Document confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/package/confirm", response_model=ActionResult)
+def confirm_package(
+    ticket_id: str,
+    request: PackageConfirmRequest,
+    repository: Repository,
+    principal: Principal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_package(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Package rechecked and confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/billing/confirm", response_model=ActionResult)
+def confirm_billing(
+    ticket_id: str,
+    request: BillingConfirmRequest,
+    repository: Repository,
+    principal: Principal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_billing(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
     return ActionResult(
         success=True,
-        message="Counter assignment committed without replacing the ticket.",
+        message="Billing and queue number rechecked and confirmed by staff.",
         ticket=ticket,
     )
+
+
+@router.post("/tickets/{ticket_id}/identity/confirm", response_model=ActionResult)
+def confirm_identity(
+    ticket_id: str,
+    request: IdentityConfirmRequest,
+    repository: Repository,
+    principal: Principal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_identity(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Identity and e-card verification confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/forms/confirm", response_model=ActionResult)
+def confirm_forms(
+    ticket_id: str,
+    request: FormsConfirmRequest,
+    repository: Repository,
+    principal: Principal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.confirm_forms(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Electronic forms confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/physical-forms/received", response_model=ActionResult)
+def mark_physical_forms_received(
+    ticket_id: str,
+    request: PhysicalFormsReceivedRequest,
+    repository: Repository,
+    principal: Principal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.mark_physical_forms_received(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Physical forms received from patient.", ticket=ticket)
 
 
 @router.post("/tickets/{ticket_id}/transition", response_model=ActionResult)
@@ -129,7 +313,7 @@ def update_ticket(
     ticket_id: str,
     request: TicketTransitionRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -143,11 +327,80 @@ def update_ticket(
     return ActionResult(success=True, message=f"{ticket_id} updated without changing its queue identity.", ticket=saved)
 
 
+@router.get("/pharmacy/queue", response_model=list[QueueTicket])
+def get_pharmacy_queue(repository: Repository, principal: Principal) -> list[QueueTicket]:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        snapshot = repository.snapshot()
+    except (SupabaseDataError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase operational schema and seed are not ready.",
+        ) from exc
+    return [ticket for ticket in snapshot.tickets if ticket.visit_phase in ("ongoing", "finished")]
+
+
+@router.post("/tickets/{ticket_id}/medication", response_model=ActionResult, status_code=status.HTTP_201_CREATED)
+def record_medication_dispense(
+    ticket_id: str,
+    request: MedicationDispenseRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        dispense = repository.record_medication_dispense(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found") from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Medication dispense recorded.", medication=dispense)
+
+
+@router.get("/tickets/{ticket_id}/tpa-submission", response_model=TpaSubmission)
+def get_tpa_submission(
+    ticket_id: str,
+    repository: Repository,
+    principal: Principal,
+) -> TpaSubmission:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        submission = repository.draft_tpa_submission(ticket_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return submission
+
+
+@router.post("/tickets/{ticket_id}/tpa-submission/confirm", response_model=ActionResult)
+def confirm_tpa_submission(
+    ticket_id: str,
+    request: TpaSubmissionConfirmRequest,
+    repository: Repository,
+    principal: ReverifiedPrincipal,
+) -> ActionResult:
+    _require_roles(principal, "pharmacist", "operations_admin")
+    try:
+        submission = repository.confirm_tpa_submission(ticket_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(
+        success=True,
+        message="TPA submission confirmed and marked processed.",
+        tpa_submission=submission,
+    )
+
+
 @router.post("/kiosk/check-in", response_model=ActionResult, status_code=status.HTTP_201_CREATED)
 def kiosk_check_in(
     request: KioskCheckInRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -195,19 +448,23 @@ def list_patients(
     repository: Repository,
     principal: Principal,
     search: str | None = Query(default=None, max_length=80),
+    contact_filter: str = Query(default="all", pattern="^(all|email|mobile|complete)$"),
+    sort: str = Query(default="name", pattern="^(name|reference|dob)$"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=100),
 ) -> PatientList:
-    _require_roles(principal, "registration", "operations_admin", "auditor")
+    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
     try:
-        return repository.list_patients(search=search, offset=offset, limit=limit)
+        return repository.list_patients(
+            search=search, contact_filter=contact_filter, sort=sort, offset=offset, limit=limit
+        )
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
 
 
 @router.get("/patients/{patient_id}", response_model=PatientRecord)
 def get_patient(patient_id: int, repository: Repository, principal: Principal) -> PatientRecord:
-    _require_roles(principal, "registration", "operations_admin", "auditor")
+    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
     try:
         patient = repository.get_patient(patient_id)
     except SupabaseDataError as exc:
@@ -221,7 +478,7 @@ def get_patient(patient_id: int, repository: Repository, principal: Principal) -
 def create_patient(
     request: PatientCreateRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> PatientRecord:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -270,10 +527,38 @@ def delete_patient(
 def list_audit(
     repository: Repository,
     principal: Principal,
+    response: Response,
     limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=10_000),
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    actor: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: str | None = Query(default=None, pattern="^(nurse|pharmacist|administrator|system)$"),
+    outcome: str | None = Query(default=None, min_length=1, max_length=80),
+    action_type: str | None = Query(default=None, min_length=1, max_length=80),
+    target_table: str | None = Query(default=None, min_length=1, max_length=80),
+    occurred_from: Annotated[datetime | None, Query()] = None,
+    occurred_to: Annotated[datetime | None, Query()] = None,
 ) -> list[AuditRecord]:
-    _require_roles(principal, "operations_admin", "auditor")
+    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
+    if occurred_from and occurred_to and occurred_from > occurred_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Start date must be before end date.",
+        )
+    response.headers["Cache-Control"] = "no-store"
     try:
-        return repository.list_audit(limit=limit)
+        records = repository.list_audit(
+            limit=limit,
+            offset=offset,
+            search=search,
+            actor=actor,
+            actor_role=actor_role,
+            outcome=outcome,
+            action_type=action_type,
+            target_table=target_table,
+            occurred_from=occurred_from,
+            occurred_to=occurred_to,
+        )
+        return [_safe_audit_record(record) for record in records]
     except SupabaseDataError as exc:
         _raise_repository_error(exc)

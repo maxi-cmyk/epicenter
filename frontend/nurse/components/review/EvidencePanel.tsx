@@ -8,9 +8,14 @@ import type { ReviewCase } from "@epicenter/shared/contracts";
 
 import styles from "./Review.module.css";
 
-const RESOLUTION_METHODS = ["Replacement document provided", "Confirmed self-pay", "Other"];
+const RESOLUTION_METHODS = ["Replacement document provided", "Confirmed self-pay"] as const;
 
-export function EvidencePanel({ reviewCase, onConfirm }: { reviewCase: ReviewCase; onConfirm: () => void }) {
+export type ReviewResolution = {
+  method: (typeof RESOLUTION_METHODS)[number];
+  note: string;
+};
+
+export function EvidencePanel({ reviewCase, onConfirm }: { reviewCase: ReviewCase; onConfirm: (resolution: ReviewResolution) => void }) {
   const [confirmed, setConfirmed] = useState(false);
   const [resolutionMethod, setResolutionMethod] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
@@ -29,14 +34,19 @@ export function EvidencePanel({ reviewCase, onConfirm }: { reviewCase: ReviewCas
       <div className={styles.documentStrip}>
         <FileText aria-hidden="true" size={22} />
         <span><strong>{reviewCase.document_name ?? "No document received"}</strong><small>{reviewCase.evidence_summary}</small></span>
-        <button type="button">View source page</button>
+        {reviewCase.document_name ? (
+          <details className={styles.sourceDetails}>
+            <summary>View source details</summary>
+            <p>{reviewCase.evidence_summary}</p>
+          </details>
+        ) : null}
       </div>
 
       <div className={styles.evidenceGrid}>
-        <div><span>Issuer</span><strong>Bluepeak</strong><small>Source page 1 · exact match</small></div>
-        <div><span>Patient ID</span><strong>S••••451A</strong><small>Registration match</small></div>
-        <div><span>Package</span><strong>Executive screening</strong><small>Rule BLPHS-04</small></div>
-        <div className={styles.failedEvidence}><span>Valid until</span><strong>10 Aug 2026</strong><small>Expired · staff action required</small></div>
+        <div><span>Exception</span><strong>{reviewCase.reason_label}</strong><small>{reviewCase.reason_code.replaceAll("_", " ")}</small></div>
+        <div><span>Current evidence</span><strong>{reviewCase.document_name ?? "No document on file"}</strong><small>{reviewCase.evidence_summary}</small></div>
+        <div><span>Next safe action</span><strong>{reviewCase.next_action}</strong><small>Staff confirmation required</small></div>
+        <div className={styles.failedEvidence}><span>Waiting age</span><strong>{reviewCase.waiting_minutes ? `${reviewCase.waiting_minutes} min` : "Pre-arrival"}</strong><small>Original ticket position is retained</small></div>
       </div>
 
       <div className={styles.resolutionBand}>
@@ -70,7 +80,13 @@ export function EvidencePanel({ reviewCase, onConfirm }: { reviewCase: ReviewCas
 
       <div className={styles.evidenceActions}>
         <Button variant="secondary">Keep in review</Button>
-        <Button disabled={!canConfirm} icon={<Check aria-hidden="true" size={17} />} onClick={onConfirm}>Confirm and mark ready</Button>
+        <Button
+          disabled={!canConfirm}
+          icon={<Check aria-hidden="true" size={17} />}
+          onClick={() => onConfirm({ method: resolutionMethod as ReviewResolution["method"], note: resolutionNote.trim() })}
+        >
+          Record resolution
+        </Button>
       </div>
     </section>
   );

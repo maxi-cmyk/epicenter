@@ -1,5 +1,5 @@
-import { ReviewWorkspace } from "@/components/review/ReviewWorkspace";
+import { redirect } from "next/navigation";
 
 export default function ReviewPage() {
-  return <ReviewWorkspace />;
+  redirect("/");
 }

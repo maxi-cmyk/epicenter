@@ -45,6 +45,15 @@ def test_healthcheck() -> None:
     assert "openai" in providers  # new field — present but unconfigured in demo
 
 
+def test_assistant_fails_closed_when_openai_is_not_configured() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
+
+    response = client.post("/api/v1/assistant", json={"message": "Summarize the queue."})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "The staff assistant is not configured."
+
+
 def test_production_routes_fail_closed_without_clerk_configuration() -> None:
     app.dependency_overrides[get_settings] = lambda: Settings(
         demo_mode=False,
@@ -443,22 +452,281 @@ def test_recommendation_requires_explicit_decision() -> None:
     assert response.status_code == 422
 
 
-def test_counter_assignment_preserves_ticket_and_increments_version() -> None:
-    response = client.post(
-        "/api/v1/tickets/Q-017/counter",
-        json={
-            "counter_number": "Counter 4",
-            "expected_version": 1,
-            "idempotency_key": "counter-assignment-test",
-        },
-    )
+def test_pharmacy_queue_lists_ongoing_and_finished_tickets() -> None:
+    response = client.get("/api/v1/pharmacy/queue")
 
     assert response.status_code == 200
-    ticket = response.json()["ticket"]
-    assert ticket["id"] == "Q-017"
-    assert ticket["original_ordering_at"] == "2026-08-12T09:34:00Z"
-    assert ticket["actual_counter"] == "Counter 4"
-    assert ticket["version"] == 2
+    tickets = response.json()
+    assert all(ticket["visit_phase"] in {"ongoing", "finished"} for ticket in tickets)
+    assert any(ticket["id"] == "Q-020" for ticket in tickets)
+
+
+def test_medication_dispense_and_tpa_submission_draft_compose_without_retyping() -> None:
+    dispense_response = client.post(
+        "/api/v1/tickets/Q-020/medication",
+        json={
+            "items": [{"name": "Ibuprofen 200mg", "quantity": 10, "unit_cost": 0.2}],
+            "idempotency_key": "medication-dispense-test",
+        },
+    )
+    assert dispense_response.status_code == 201
+    dispense = dispense_response.json()["medication"]
+    assert dispense["ticket_id"] == "Q-020"
+    assert dispense["total_cost"] == 2.0
+
+    draft_response = client.get("/api/v1/tickets/Q-020/tpa-submission")
+    assert draft_response.status_code == 200
+    draft = draft_response.json()
+    assert draft["status"] == "draft"
+    assert len(draft["documents"]) == 4
+    assert {doc["category"] for doc in draft["documents"]} == {
+        "form",
+        "authorisation_letter",
+        "benefit_structure",
+        "coding_scheme",
+    }
+    assert draft["medication"]["ticket_id"] == "Q-020"
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-020/tpa-submission/confirm",
+        json={"expected_version": draft["version"], "idempotency_key": "tpa-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    submission = confirm_response.json()["tpa_submission"]
+    assert submission["status"] == "submitted"
+    assert submission["external_reference"]
+
+
+def test_registration_confirms_autofilled_tpa_document_without_retyping() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-020")
+    benefit_doc = next(doc for doc in ticket["documents"] if doc["category"] == "benefit_structure")
+    assert benefit_doc["facts"]["membership_number"] == "MTP-88213045"
+    assert benefit_doc["confirmed"] is False
+
+    confirm_response = client.post(
+        f"/api/v1/tickets/Q-020/documents/{benefit_doc['id']}/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "tpa-document-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed_ticket = confirm_response.json()["ticket"]
+    confirmed_doc = next(doc for doc in confirmed_ticket["documents"] if doc["id"] == benefit_doc["id"])
+    assert confirmed_doc["confirmed"] is True
+    assert confirmed_doc["facts"]["membership_number"] == benefit_doc["facts"]["membership_number"]
+    assert confirmed_ticket["version"] == ticket["version"] + 1
+
+
+def test_nurse_explicitly_rechecks_the_matched_package() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-019")
+    assert ticket["matched_package"] == "PEE226 — Basic Screen"
+    assert ticket["package_confirmed"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-019/package/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "package-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["package_confirmed"] is True
+    assert confirmed["matched_package"] == "PEE226 — Basic Screen"
+    assert confirmed["version"] == ticket["version"] + 1
+
+
+def test_nurse_can_correct_a_wrong_matched_package() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-018")
+    assert ticket["matched_package"] == "Executive screening"
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-018/package/confirm",
+        json={
+            "corrected_package": "WELL2 — Comprehensive Screen",
+            "expected_version": ticket["version"],
+            "idempotency_key": "package-correction-test",
+        },
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["package_confirmed"] is True
+    assert confirmed["matched_package"] == "WELL2 — Comprehensive Screen"
+
+
+def test_nurse_explicitly_rechecks_billing_code_uncovered_cost_and_queue_number() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-019")
+    assert ticket["billing_code"] == "PEE226-CHAS"
+    assert ticket["uncovered_cost"] == 8.5
+    assert ticket["queue_number"] == "Q019"
+    assert ticket["billing_confirmed"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-019/billing/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "billing-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["billing_confirmed"] is True
+    assert confirmed["billing_code"] == "PEE226-CHAS"
+    assert confirmed["uncovered_cost"] == 8.5
+    assert confirmed["queue_number"] == "Q019"
+    assert confirmed["version"] == ticket["version"] + 1
+
+
+def test_nurse_can_correct_wrong_billing_uncovered_cost_or_queue_number() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-018")
+    assert ticket["uncovered_cost"] == 45.0
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-018/billing/confirm",
+        json={
+            "corrected_uncovered_cost": 30.0,
+            "corrected_queue_number": "Q018B",
+            "expected_version": ticket["version"],
+            "idempotency_key": "billing-correction-test",
+        },
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["billing_confirmed"] is True
+    assert confirmed["uncovered_cost"] == 30.0
+    assert confirmed["queue_number"] == "Q018B"
+    assert confirmed["billing_code"] == "EXEC-STD"
+
+
+def test_nurse_confirms_identity_and_ecard() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["identity_confirmed"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-014/identity/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "identity-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["identity_confirmed"] is True
+    assert confirmed["ecard_verified"] is True
+    assert confirmed["ecard_not_applicable"] is False
+    assert confirmed["version"] == ticket["version"] + 1
+
+
+def test_nurse_confirms_identity_with_ecard_not_applicable() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-015")
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-015/identity/confirm",
+        json={
+            "ecard_not_applicable": True,
+            "ecard_na_reason": "Patient forgot e-card, verified via passport instead.",
+            "expected_version": ticket["version"],
+            "idempotency_key": "identity-confirm-na-test",
+        },
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["identity_confirmed"] is True
+    assert confirmed["ecard_verified"] is False
+    assert confirmed["ecard_not_applicable"] is True
+    assert confirmed["ecard_na_reason"] == "Patient forgot e-card, verified via passport instead."
+
+
+def test_nurse_confirms_forms_when_no_documents_present() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["documents"] == []
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-014/forms/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "forms-confirm-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["forms_confirmed"] is True
+
+
+def test_forms_confirm_rejects_unconfirmed_electronic_documents() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-020")
+    assert any(doc["confirmed"] is False for doc in ticket["documents"])
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-020/forms/confirm",
+        json={"expected_version": ticket["version"], "idempotency_key": "forms-confirm-blocked-test"},
+    )
+    assert confirm_response.status_code == 409
+
+
+def test_forms_confirm_succeeds_once_all_electronic_documents_confirmed() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-020")
+
+    version = ticket["version"]
+    for index, doc in enumerate(ticket["documents"]):
+        confirm_response = client.post(
+            f"/api/v1/tickets/Q-020/documents/{doc['id']}/confirm",
+            json={"expected_version": version, "idempotency_key": f"forms-confirm-doc-{index}"},
+        )
+        assert confirm_response.status_code == 200
+        version = confirm_response.json()["ticket"]["version"]
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-020/forms/confirm",
+        json={"expected_version": version, "idempotency_key": "forms-confirm-success-test"},
+    )
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["ticket"]["forms_confirmed"] is True
+
+
+def test_nurse_marks_physical_forms_received() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["physical_forms_received"] is False
+
+    confirm_response = client.post(
+        "/api/v1/tickets/Q-014/physical-forms/received",
+        json={"expected_version": ticket["version"], "idempotency_key": "physical-forms-received-test"},
+    )
+    assert confirm_response.status_code == 200
+    confirmed = confirm_response.json()["ticket"]
+    assert confirmed["physical_forms_received"] is True
+    assert confirmed["physical_forms_received_by"]
+
+
+def test_kiosk_check_in_can_flag_a_walk_in_as_a_checkup() -> None:
+    response = client.post(
+        "/api/v1/kiosk/check-in",
+        json={
+            "patient_name": "Checkup Walk-in",
+            "nurse_supervisor": "Test Nurse",
+            "is_checkup": True,
+            "idempotency_key": "kiosk-checkup-test",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["ticket"]["is_checkup"] is True
+
+
+def test_transition_can_move_visit_phase_to_ongoing() -> None:
+    ticket_response = client.get("/api/v1/dashboard")
+    ticket = next(item for item in ticket_response.json()["tickets"] if item["id"] == "Q-014")
+    assert ticket["visit_phase"] == "incoming"
+
+    response = client.post(
+        "/api/v1/tickets/Q-014/transition",
+        json={
+            "readiness_state": ticket["readiness_state"],
+            "reason": ticket["readiness_reason"],
+            "staff_confirmed": True,
+            "visit_phase": "ongoing",
+            "expected_version": ticket["version"],
+            "idempotency_key": "visit-phase-transition-test",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["ticket"]["visit_phase"] == "ongoing"
 
 
 def test_patient_crud_uses_versioned_soft_delete() -> None:
@@ -535,6 +803,70 @@ def test_auditor_role_cannot_mutate_patients() -> None:
     assert response.json()["detail"] == "Staff role is not permitted for this action."
 
 
+def test_pharmacist_can_view_patient_database_but_cannot_create_records() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("pharmacist")
+
+    assert client.get("/api/v1/patients").status_code == 200
+    response = client.post(
+        "/api/v1/patients",
+        json={
+            "source_record_key": "api-test:pharmacy-denied",
+            "identifier_hash": "d" * 64,
+            "identifier_masked": "*****888Y",
+            "full_name": "Pharmacy Denied Patient",
+            "reason": "Permission test",
+            "idempotency_key": "pharmacy-denied-test",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Staff role is not permitted for this action."
+
+
+def test_patient_filters_and_sort_apply_before_pagination() -> None:
+    response = client.get(
+        "/api/v1/patients",
+        params={"contact_filter": "email", "sort": "reference", "offset": 0, "limit": 1},
+    )
+
+    assert response.status_code == 200
+    records = response.json()["records"]
+    assert len(records) <= 1
+    assert all(record["email"] for record in records)
+    assert response.json()["offset"] == 0
+    assert response.json()["limit"] == 1
+
+
+def test_patient_create_does_not_require_reverification_but_update_does() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration", factor_age=(10, -1))
+
+    created = client.post(
+        "/api/v1/patients",
+        json={
+            "source_record_key": "api-test:create-without-step-up",
+            "identifier_hash": "e" * 64,
+            "identifier_masked": "*****777X",
+            "full_name": "Create Without Step Up",
+            "reason": "Database policy test",
+            "idempotency_key": "create-no-step-up-test",
+        },
+    )
+    assert created.status_code == 201
+
+    response = client.patch(
+        f"/api/v1/patients/{created.json()['id']}",
+        json={
+            "expected_version": created.json()["version"],
+            "full_name": "Must Reverify",
+            "reason": "Database policy test",
+            "idempotency_key": "update-needs-step-up-test",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["clerk_error"]["reason"] == "reverification-error"
+
+
 def test_registration_role_cannot_decide_operations_recommendations() -> None:
     app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
 
@@ -551,11 +883,44 @@ def test_registration_role_cannot_decide_operations_recommendations() -> None:
     assert response.json()["detail"] == "Staff role is not permitted for this action."
 
 
-def test_registration_role_cannot_read_audit_or_simulator() -> None:
-    app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
+@pytest.mark.parametrize("role", ["registration", "pharmacist"])
+def test_demo_nurse_and_pharmacist_roles_can_read_audit_but_not_simulator(role: str) -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal(role)
 
-    assert client.get("/api/v1/audit").status_code == 403
+    assert client.get("/api/v1/audit").status_code == 200
     assert client.get("/api/v1/simulator/snapshots").status_code == 403
+
+
+def test_audit_is_no_store_searchable_filterable_paginated_and_read_only() -> None:
+    response = client.get(
+        "/api/v1/audit",
+        params={"search": "medication", "action_type": "medication_dispensed", "limit": 1, "offset": 0},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert len(response.json()) == 1
+    assert response.json()[0]["action_type"] == "medication_dispensed"
+    assert response.json()[0]["actor_role"] == "pharmacist"
+    assert client.patch("/api/v1/audit/1", json={"details": {"tampered": True}}).status_code == 404
+    assert client.delete("/api/v1/audit/1").status_code == 404
+
+    completed = client.get(
+        "/api/v1/audit",
+        params={"actor_role": "system", "outcome": "completed", "target_table": "queue_entries"},
+    )
+    assert completed.status_code == 200
+    assert [row["action_type"] for row in completed.json()] == ["visit_completed"]
+
+
+def test_audit_rejects_an_inverted_date_range() -> None:
+    response = client.get(
+        "/api/v1/audit",
+        params={"occurred_from": "2026-08-13T00:00:00Z", "occurred_to": "2026-08-12T00:00:00Z"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Start date must be before end date."
 
 
 def test_operations_admin_can_read_audit_and_simulator() -> None:
@@ -565,28 +930,106 @@ def test_operations_admin_can_read_audit_and_simulator() -> None:
     assert client.get("/api/v1/simulator/snapshots").status_code == 200
 
 
-def test_stale_factor_returns_clerk_reverification_hint_before_mutation() -> None:
+def test_audit_records_medication_tpa_payment_and_visit_times_once() -> None:
+    medication_payload = {
+        "items": [{"name": "Ibuprofen 200mg", "quantity": 10, "unit_cost": 0.2}],
+        "idempotency_key": "audit-medication-test",
+    }
+    first_medication = client.post("/api/v1/tickets/Q-020/medication", json=medication_payload)
+    replayed_medication = client.post("/api/v1/tickets/Q-020/medication", json=medication_payload)
+    assert first_medication.status_code == replayed_medication.status_code == 201
+
+    draft = client.get("/api/v1/tickets/Q-020/tpa-submission").json()
+    tpa_payload = {"expected_version": draft["version"], "idempotency_key": "audit-tpa-test"}
+    first_tpa = client.post("/api/v1/tickets/Q-020/tpa-submission/confirm", json=tpa_payload)
+    replayed_tpa = client.post("/api/v1/tickets/Q-020/tpa-submission/confirm", json=tpa_payload)
+    assert first_tpa.status_code == replayed_tpa.status_code == 200
+
+    ticket = next(item for item in client.get("/api/v1/dashboard").json()["tickets"] if item["id"] == "Q-019")
+    payment_payload = {"expected_version": ticket["version"], "idempotency_key": "audit-payment-test"}
+    first_payment = client.post("/api/v1/tickets/Q-019/billing/confirm", json=payment_payload)
+    replayed_payment = client.post("/api/v1/tickets/Q-019/billing/confirm", json=payment_payload)
+    assert first_payment.status_code == replayed_payment.status_code == 200
+
+    audit_rows = client.get("/api/v1/audit").json()
+
+    medication_rows = [
+        row
+        for row in audit_rows
+        if row["action_type"] == "medication_dispensed" and row["details"]["medication"][0]["name"] == "Ibuprofen 200mg"
+    ]
+    assert len(medication_rows) == 1
+    assert medication_rows[0]["details"]["medication"] == [
+        {"name": "Ibuprofen 200mg", "quantity": 10, "unit_cost": 0.2}
+    ]
+    assert medication_rows[0]["details"]["total_cost"] == 2.0
+    assert medication_rows[0]["details"]["dispensed_at"]
+    assert medication_rows[0]["details"]["visit_times"]["checked_in_at"] == "2026-08-12T09:20:00+00:00"
+
+    tpa_rows = [row for row in audit_rows if row["action_type"] == "tpa_submission_confirmed"]
+    assert len(tpa_rows) == 1
+    assert tpa_rows[0]["details"]["mode"] == "synthetic_demo"
+    assert tpa_rows[0]["details"]["status"] == "submitted"
+    assert tpa_rows[0]["details"]["external_reference"].startswith("CLAIM-")
+    assert {document["category"] for document in tpa_rows[0]["details"]["documents"]} == {
+        "form",
+        "authorisation_letter",
+        "benefit_structure",
+        "coding_scheme",
+    }
+    assert tpa_rows[0]["details"]["medication_dispense_id"] == "MED-Q-020"
+    assert tpa_rows[0]["details"]["submitted_at"]
+
+    payment_rows = [
+        row
+        for row in audit_rows
+        if row["action_type"] == "payment_details_confirmed" and row["details"]["ticket_id"] == "Q-019"
+    ]
+    assert len(payment_rows) == 1
+    assert payment_rows[0]["details"]["payment"] == {
+        "mode": "synthetic_demo",
+        "status": "amount_due_confirmed",
+        "currency": "SGD",
+        "billing_code": "PEE226-CHAS",
+        "amount_due": 8.5,
+        "queue_number": "Q019",
+        "confirmed_at": payment_rows[0]["details"]["payment"]["confirmed_at"],
+    }
+    assert payment_rows[0]["details"]["visit_times"]["checked_in_at"] == "2026-08-12T09:37:00+00:00"
+
+    visit_rows = [row for row in audit_rows if row["action_type"] == "visit_completed"]
+    assert len(visit_rows) == 1
+    assert visit_rows[0]["details"]["visit_times"] == {
+        "scheduled_at": "2026-08-12T08:30:00+00:00",
+        "checked_in_at": "2026-08-12T08:22:00+00:00",
+        "completed_at": "2026-08-12T09:08:00+00:00",
+    }
+
+
+def test_demo_audit_reads_cannot_mutate_stored_history() -> None:
+    repository = DemoRepository()
+    returned = repository.list_audit(limit=50)
+    returned[0].details["tampered"] = True
+
+    stored = repository.list_audit(limit=50)
+    assert "tampered" not in stored[0].details
+
+
+def test_stale_factor_allows_manual_confirmation_without_step_up() -> None:
     app.dependency_overrides[require_staff] = lambda: staff_principal("registration", factor_age=(10, -1))
 
     response = client.post(
         "/api/v1/tickets/Q-017/transition",
         json={
             "readiness_state": "needs_review",
-            "reason": "reverification-test",
+            "reason": "manual-confirmation-test",
             "staff_confirmed": False,
             "expected_version": 1,
-            "idempotency_key": "stale-reverification-test",
+            "idempotency_key": "manual-no-step-up-test",
         },
     )
 
-    assert response.status_code == 403
-    assert response.json() == {
-        "clerk_error": {
-            "type": "forbidden",
-            "reason": "reverification-error",
-            "metadata": {"reverification": "strict"},
-        }
-    }
+    assert response.status_code == 200
 
 
 def test_fresh_factor_allows_registration_mutation() -> None:

@@ -1,59 +1,66 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
-import { useState } from "react";
+import { RotateCcw, TriangleAlert } from "lucide-react";
 
 import { useDashboard } from "@/hooks/useDashboard";
-import { transitionTicket } from "@/lib/api";
-import type { QueueTicket } from "@epicenter/shared/contracts";
+import { Button } from "@epicenter/shared/ui/Button";
 import { LoadingBoard } from "@epicenter/shared/ui/LoadingBoard";
 
 import { PatientFlowBoard } from "./PatientFlowBoard";
-import { TicketReviewModal } from "./TicketReviewModal";
+import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import styles from "./Dashboard.module.css";
 
 export function DashboardView() {
-  const { data, source, loading, refresh } = useDashboard();
-  const [reviewTicketId, setReviewTicketId] = useState<string | null>(null);
-  const reverifiedTransition = useReverification(transitionTicket);
-
-  const reviewTicket = data?.tickets.find((ticket) => ticket.id === reviewTicketId);
-  const reviewCase = data?.review_cases.find((item) => item.ticket_id === reviewTicketId);
-
-  async function confirmReview(ticket: QueueTicket) {
-    await reverifiedTransition(ticket.id, ticket.version ?? 1, "ready", "all_prerequisites_passed", true);
-    setReviewTicketId(null);
-    await refresh();
-  }
+  const { data, error, source, loading, refreshing, refresh } = useDashboard();
+  const generatedAt = data
+    ? new Intl.DateTimeFormat("en-SG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.generated_at))
+    : null;
 
   return (
     <div className={styles.dashboard}>
-      {loading || !data ? (
-        <LoadingBoard />
-      ) : (
-        <PatientFlowBoard
-          loading={loading}
-          onOpenReview={(ticket) => setReviewTicketId(ticket.id)}
-          onRefresh={refresh}
-          tickets={data.tickets}
-        />
-      )}
-
       <div className={styles.contextBar}>
         <span>{data?.clinic_name ?? "Parkway Shenton · HarbourFront"}</span>
-        <span>12 Aug 2026 · 09:42</span>
-        <span className={source === "api" ? styles.apiSource : styles.demoSource}>
-          {source === "api" ? "API connected" : "Local synthetic fallback"}
-        </span>
+        <span>{generatedAt ? `Updated ${generatedAt}` : "Waiting for clinic data"}</span>
       </div>
 
-      {reviewCase && reviewTicket ? (
-        <TicketReviewModal
-          onClose={() => setReviewTicketId(null)}
-          onConfirm={() => void confirmReview(reviewTicket)}
-          reviewCase={reviewCase}
-        />
-      ) : null}
+      {loading ? (
+        <LoadingBoard />
+      ) : !data ? (
+        <section className={styles.loadError} role="alert">
+          <TriangleAlert aria-hidden="true" size={24} />
+          <div>
+            <h1>Clinic data could not be loaded</h1>
+            <p>{error || "Check the clinic API connection, then try again."}</p>
+          </div>
+          <Button icon={<RotateCcw aria-hidden="true" size={15} />} onClick={() => void refresh()}>
+            Retry
+          </Button>
+        </section>
+      ) : (
+        <>
+          {source === "fallback" ? (
+            <div className={styles.fallbackBanner} role="alert">
+              <TriangleAlert aria-hidden="true" size={22} />
+              <div>
+                <strong>Demo data only — confirmations are disabled</strong>
+                <span>The live clinic API could not be reached. Reconnect before acting on a patient record.</span>
+              </div>
+              <Button icon={<RotateCcw aria-hidden="true" size={15} />} onClick={() => void refresh()} variant="secondary">
+                Try live data again
+              </Button>
+            </div>
+          ) : null}
+          {error ? <p className={styles.refreshError}>{error}</p> : null}
+          <AssistantPanel available={source === "api"} />
+          <PatientFlowBoard
+            loading={refreshing}
+            onRefresh={refresh}
+            reviewCases={data.review_cases}
+            tickets={data.tickets}
+          />
+        </>
+      )}
+
     </div>
   );
 }

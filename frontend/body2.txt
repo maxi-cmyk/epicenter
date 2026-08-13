@@ -1,1 +1,0 @@
-{"detail":"Valid Clerk session required."}

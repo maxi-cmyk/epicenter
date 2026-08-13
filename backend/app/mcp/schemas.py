@@ -6,11 +6,9 @@ Tool names match the contracts in openai_integration.md and techStack.md.
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ---------------------------------------------------------------------------
 # Shared
@@ -213,9 +211,21 @@ class GetSchemaInput(BaseModel):
 class ProposeMappingInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     form_id: Annotated[str, Field(min_length=1, max_length=128)]
+    fixture_classification: Annotated[
+        str,
+        Field(pattern="^(synthetic|formally_deidentified)$"),
+    ]
+    approval_reference: Annotated[str, Field(min_length=3, max_length=160)]
     synthetic_fixture: dict[str, Any] = Field(
         description="Approved synthetic or formally de-identified fixture data only.",
     )
+
+
+class ReviewMappingInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    proposal_id: Annotated[str, Field(min_length=1, max_length=128)]
+    decision: Annotated[str, Field(pattern="^(approved|rejected)$")]
+    reason: Annotated[str, Field(min_length=3, max_length=500)]
 
 
 class GetEvidenceRequirementsInput(BaseModel):
@@ -260,6 +270,17 @@ class MappingProposalOutput(BaseModel):
         "This proposal is pending_review. "
         "Only an authorized staff maker/checker activation can promote it."
     )
+    synthetic: bool = True
+
+
+class MappingReviewOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    proposal_id: str
+    status: str
+    maker_reference: str
+    checker_reference: str
+    reviewed_at: str
+    reason: str
     synthetic: bool = True
 
 
