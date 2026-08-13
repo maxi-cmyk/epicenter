@@ -265,6 +265,14 @@ Nurse validation and workload:
 - [ ] Measure end-to-end administrative time, touches, repeated entries, corrections, errors, and perceived workload for representative registration/nurse tasks; compare against the documented 23–32-minute manual baseline without treating the estimate as measured clinic performance.
 - [ ] Prove the simplified Today flow completes the oldest actionable visit without requiring the generic Patients browser and never blocks physical urgent escalation or the core visit.
 
+Pharmacy queue (incoming/outgoing TPA checklist) — scoped, not started:
+
+- [ ] Split `PharmacyQueueBoard` into two columns: Incoming (consultation finished, medication not yet dispensed) and Outgoing (medication dispensed, TPA portal uploads pending).
+- [ ] Move a ticket from Incoming to Outgoing when a medication dispense is recorded on it, but only if it carries coverage documents; a ticket with no coverage documents completes and drops off the board immediately on dispense instead of entering Outgoing.
+- [ ] Replace the outgoing ticket's single "Confirm & submit to TPA" action with a checklist: one row per distinct TPA company (`issuer_name`) on the ticket's coverage documents, each linking out to that company's portal via a static `issuer_name -> URL` config table maintained in code.
+- [ ] Clear the outgoing ticket once every TPA company row on it is checked off.
+- [ ] Track per-ticket dispensed state and per-company checked state as new fields alongside the existing in-memory medication/TPA demo data; this persistence still moves to Supabase only as part of Task 8's deferred follow-on.
+
 ### 7. Add intentional staff database access
 
 **Status: Complete for the approved patient-record demo scope — nurse management and pharmacy read access delivered**
