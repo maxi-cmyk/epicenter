@@ -162,7 +162,7 @@ The physical split is implemented as independent npm workspaces and Next.js rout
 | Preserve mandatory in-person steps | Identity verification and e-card validation remain explicitly untouched, staff-performed steps |
 | Keep staff and patients in control | Every automated determination is reviewable and correctable by staff before being finalised |
 | Keep nurse work task-first | A nurse can complete the next safe action from one patient task screen; the generic data browser, simulator, and analytics do not interrupt routine flow |
-| Make database changes intentional | Approved operational entities support controlled CRUD, while every mutation and sensitive reveal requires password reverification and immutable audit |
+| Make database changes intentional | Approved operational entities support controlled CRUD; database updates and deletions require password reverification and immutable audit, while authorised create/view operations do not add a second prompt |
 | Preserve panel isolation | Patient and nurse applications deploy separately but share one backend contract and Supabase source of truth |
 
 ### Non-Goals (Explicitly Out of Scope)
@@ -363,13 +363,13 @@ The default workflow is:
 4. **Commit one outcome:** accept, reject, or keep under review. Reject requires a reason and maps eligible cases to a curated patient-safe explanation and next step.
 5. **Route automatically:** the same visit ticket and original waiting age are retained while the backend updates readiness and the expected/actual counter.
 
-The primary navigation is limited to **Today**, **Review**, **Patients**, **Simulator**, and **Audit**. Dynamic allocation appears as a single recommendation card in Today and Simulator, not as a separate command-centre workflow. Patient data administration is isolated under Patients so routine queue work is not mixed with generic record maintenance.
+The nurse primary navigation keeps routine work separate from **Database** and **Audit**. Pharmacy also exposes Database and Audit as separate destinations. Dynamic allocation appears as a single recommendation card in Today and Simulator, not as a separate command-centre workflow. Patient data administration is isolated under Database so routine queue and dispensing work is not mixed with generic record maintenance.
 
-The Patients area provides an allowlisted, viewable database interface with search, filter, sort, pagination, record detail, and full create/read/update/delete capability for approved operational entities. It is not a raw SQL console. All access goes through the shared backend, which applies field validation, role/clinic scope, RLS-compatible authorization, optimistic concurrency, idempotency, and immutable audit logging.
+The Database area provides an allowlisted patient-record interface with search, filter, sort, pagination, record detail, and role-scoped create/read/update/recoverable-delete capability. It is not a raw SQL console. All access goes through the shared backend, which applies field validation, role/clinic scope, RLS-compatible authorization, optimistic concurrency, idempotency, and immutable audit logging.
 
-- All database reads require an authenticated nurse session; opening a full sensitive record or revealing a protected identifier requires password reverification.
-- Every create, update, delete, readiness decision, identity/e-card attestation, patient merge, counter reassignment, and allocation decision requires a fresh Clerk password reverification immediately before the backend commit. Draft edits do not mutate data.
-- The confirmation step shows the exact action, affected record, before/after values, and required reason. Delete defaults to a recoverable soft delete; hard delete is restricted to an administrator and requires the record reference to be typed.
+- Database reads require an authenticated, clinic-scoped staff session. Nurse/administrator accounts may create patient records without a second password prompt; pharmacists may view the allowlisted patient reference/contact surface but cannot alter patient records.
+- Database Update and Delete require a fresh Clerk password verification immediately before the backend commit. Draft edits do not mutate data, and cancelling or failing verification preserves the draft and deletion reason.
+- Clicking a row exposes View, Update, and Delete where the role permits them. Update and Delete open a centered password dialog at commit; Delete defaults to a recoverable soft delete and hard delete is unavailable in the demo.
 - The backend independently validates the fresh reverification state. A frontend modal alone is never treated as authorization.
 - Append-only audit and source-evidence records are intentionally read-only; “full CRUD” does not permit rewriting or deleting the audit trail.
 
@@ -398,7 +398,7 @@ The Patients area provides an allowlisted, viewable database interface with sear
 - As billing staff, I want to confirm or correct the reused coverage/billing record and preview the demo TPA payload from one screen.
 - As a nurse, I want Today's Work to show one next safe action per patient and expand only exceptions, so that I do not repeatedly review fields the system already validated.
 - As a nurse, I want to accept, reject with a reason, or retain a case under review from one task screen, so that the patient receives a clear outcome while the same queue ticket is preserved.
-- As an authorised nurse or administrator, I want to browse and maintain approved operational records through a controlled CRUD interface, with password reverification and before/after confirmation for every mutation, so that changes are deliberate and attributable.
+- As an authorised nurse or administrator, I want to browse and maintain approved patient records through a controlled interface, with password reverification for updates and deletions, so that consequential changes are deliberate and attributable without adding friction to viewing or creating a record.
 - As a nurse running the demo, I want the simulator inside my panel to load an approved Supabase seed or snapshot and replay dynamic allocation, known administrative urgency, and manual identity-check states without touching live operational records.
 
 ### GP / Clinical Staff
@@ -476,7 +476,7 @@ Patient's coverage document (chit/voucher/referral letter)
 | Patient Notification & Audit Log | Sends the curated issue-category/reminder message to the patient (§4.4) and immutably logs every send | Log entry captures visit ticket ID, category shown (never the raw internal reason), channel, timestamp, delivery outcome, and whether it led to a resubmission, token reuse, or no action; entries are append-only and staff-readable but not patient-editable |
 | Operational Intelligence and Allocation Advisor | Aggregates flow events, estimates near-term stage demand, and proposes qualified staff/station changes with constraints, rationale, expiry, and expected effect | Supports continuous improvement and human-approved load balancing without crossing role boundaries, using raw documents, ranking staff, or changing clinical priority |
 | Nurse Simulator | Replays versioned synthetic Supabase snapshots for allocation, administrative-urgency, and manual identity-check scenarios | Nurse-panel only; isolated simulation tables/types; never mutates operational state |
-| Controlled Data Administration | Allowlisted record browser and full CRUD for approved entities | Reads are authenticated; sensitive reveals and every mutation require backend-verified password reverification and immutable audit |
+| Controlled Data Administration | Separate allowlisted Database tabs for nurse and pharmacy panels | Reads and creates use role/clinic authorization; patient updates and deletions require backend-verified fresh reverification and immutable audit |
 
 ### 6.3 Data Sources (Demo)
 
@@ -529,7 +529,7 @@ The idempotent seed must be applied to the designated synthetic Supabase project
 - Any failed extraction-readiness gate is flagged with a reason rather than guessed; model confidence is advisory only.
 - Reusing a prior coverage document never reuses an old eligibility decision. Validity and eligibility rules run again for the new appointment, followed by staff confirmation.
 - All actions are logged, supporting both audit and the ability to correct systematic extraction errors over time.
-- Nurse-panel data access is never a direct database connection. All CRUD requests pass through allowlisted backend commands; every mutation and sensitive reveal requires backend-verified password reverification, an explicit confirmation payload, and an immutable audit event.
+- Staff-panel data access is never a direct database connection. All CRUD requests pass through allowlisted backend commands; patient updates and deletions require backend-verified fresh reverification, a reason, concurrency/idempotency controls, and an immutable audit event. Create and View rely on normal role/clinic authorization without a second password prompt.
 - Audit events and source evidence are append-only. “Full CRUD” applies only to approved operational entities and never authorizes alteration of evidence or history.
 - Patient views expose only patient-scoped outcomes; extraction confidence, review reasons, internal eligibility rules, staff audit data, and other patients are never shown. Where a patient is notified that a document needs fixing (§4.4), only a curated, versioned issue category maps to that notification — never the raw internal `needs_review` reason, source excerpt, or confidence score — and every such notification is itself an immutable, staff-visible audit event (who/what system sent it, category shown, channel, timestamp, delivery outcome, and resulting patient action).
 - Loading, empty, error, retry, disabled, and success states are explicit. Status never relies on color alone, and critical controls are keyboard/touch accessible.
@@ -587,7 +587,7 @@ For the hackathon, these controls are demonstrated through the nine-fixture vali
 | Custom MCP boundary | Only the reviewed Operations and Insurance Format Registry servers are enabled; neither duplicates Supabase nor bypasses deterministic Epicenter rules |
 | Separate panel contract | Patient and nurse panels build and deploy independently, share one versioned backend API, and cannot navigate into each other's routes or data scopes |
 | Patient outcome clarity | Every registration submission shows `accepted`, `rejected`, or `under_review`; every rejection includes one curated safe reason and a concrete next action |
-| Intentional CRUD | Every approved create/update/delete and sensitive reveal fails without fresh password reverification; successful mutations retain actor, reason, before/after values, timestamp, and version |
+| Intentional CRUD | Approved patient Update/Delete fail without fresh password reverification; Create/View use normal authorization, and successful mutations retain actor, reason, before/after values, timestamp, and version |
 | Nurse workflow simplicity | A nurse can take the oldest actionable ticket from Today through review, manual-check attestation, outcome, and routing on one task screen without opening the generic data browser |
 | Database-backed simulator isolation | Nurse-panel simulator loads a versioned Supabase seed/snapshot, reproduces allocation/administrative-urgency/manual-identity states, and produces zero writes to operational tables |
 | Tool integration | Epicenter Operations and Insurance Format Registry tools pass contract/security tests; metrics reconcile with the curated backend, and the product never depends on model or MCP availability |

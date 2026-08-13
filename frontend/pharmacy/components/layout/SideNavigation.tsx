@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton, useUser } from "@clerk/nextjs";
-import { Pill, ShieldCheck } from "lucide-react";
+import { Database, Pill, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -17,6 +17,7 @@ type NavItem = { href: string; label: string; icon: typeof Pill };
 
 const NAVIGATION: NavItem[] = [
   { href: "/", label: "Pharmacy queue", icon: Pill },
+  { href: "/database", label: "Database", icon: Database },
   { href: "/audit", label: "Audit trail", icon: ShieldCheck },
 ];
 
