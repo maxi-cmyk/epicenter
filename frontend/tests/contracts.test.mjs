@@ -211,13 +211,10 @@ test("the shared workspace contains contracts and presentation primitives only",
 test("database is separate from audit and protects only update and delete", () => {
   const database = read("shared/src/ui/DatabasePanel.tsx");
   const nursePage = read("nurse/app/database/page.tsx");
-  const pharmacyPage = read("pharmacy/app/database/page.tsx");
 
   assert.match(read("nurse/components/layout/SideNavigation.tsx"), /Database/);
-  assert.match(read("pharmacy/components/layout/SideNavigation.tsx"), /Database/);
   assert.match(nursePage, /createPatient/);
   assert.match(nursePage, /role === "registration" \|\| role === "operations_admin"/);
-  assert.match(pharmacyPage, /canManage=\{false\}/);
   assert.match(database, /View/);
   assert.match(database, /Update/);
   assert.match(database, /Delete/);
@@ -228,12 +225,10 @@ test("database is separate from audit and protects only update and delete", () =
   assert.doesNotMatch(database, /Search and maintain approved patient records/);
 });
 
-test("audit is a shared read-only surface for nurse and pharmacy", () => {
+test("audit is a shared read-only surface for nurse", () => {
   const auditPanel = read("shared/src/ui/AuditPanel.tsx");
   assert.match(read("nurse/app/audit/page.tsx"), /AuditPanel/);
-  assert.match(read("pharmacy/app/audit/page.tsx"), /AuditPanel/);
   assert.match(read("nurse/components/layout/SideNavigation.tsx"), /Audit trail/);
-  assert.match(read("pharmacy/components/layout/SideNavigation.tsx"), /Audit trail/);
   assert.doesNotMatch(auditPanel, /Immutable · read only/);
   assert.match(auditPanel, /Search audit trail/);
   assert.match(auditPanel, /Audit entries cannot be edited or deleted, for viewing purposes only\./);

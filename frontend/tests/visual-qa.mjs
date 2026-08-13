@@ -31,8 +31,6 @@ await capture({ width: 1440, height: 1000 }, "nurse-desktop.png", "http://localh
 await capture({ width: 390, height: 844 }, "nurse-mobile.png", "http://localhost:3001", "Patient readiness board");
 await capture({ width: 1440, height: 1000 }, "audit-nurse-desktop.png", "http://localhost:3001/audit", "Audit trail");
 await capture({ width: 390, height: 844 }, "audit-nurse-mobile.png", "http://localhost:3001/audit", "Audit trail");
-await capture({ width: 1440, height: 1000 }, "audit-pharmacy-desktop.png", "http://localhost:3002/audit", "Audit trail");
-await capture({ width: 390, height: 844 }, "audit-pharmacy-mobile.png", "http://localhost:3002/audit", "Audit trail");
 await capture({ width: 1440, height: 1000 }, "patient-desktop.png", "http://localhost:3000", "Pre-arrival check");
 await capture({ width: 390, height: 844 }, "patient-mobile.png", "http://localhost:3000", "Pre-arrival check");
 
@@ -49,8 +47,8 @@ assert.equal(await interactionPage.getByRole("button", { name: "Create one visit
 
 await interactionPage.goto("http://localhost:3001/audit", { waitUntil: "networkidle" });
 await interactionPage.getByRole("heading", { name: "Audit trail" }).waitFor();
-await interactionPage.getByPlaceholder("Search actor, action, ticket, or safe event detail").fill("medication");
-await interactionPage.getByText("Medication dispensed", { exact: true }).waitFor();
+await interactionPage.getByPlaceholder("Search actor, action, ticket, or safe event detail").fill("payment");
+await interactionPage.getByText("Payment details confirmed", { exact: true }).waitFor();
 assert.equal(await interactionPage.getByRole("button", { name: "CSV" }).isEnabled(), true);
 
 await interactionPage.goto("http://localhost:3000", { waitUntil: "networkidle" });

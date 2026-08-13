@@ -72,7 +72,12 @@ PROVIDER_LOCATIONS = {
         "Tembeling Centre",
     ],
     "Parkway MediCentre": ["Parkway MediCentre (Woodleigh)"],
-    "Executive Health Screeners": ["Paragon", "Gleneagles Hospital", "Mount Elizabeth Novena Hospital", "Mount Elizabeth Orchard"],
+    "Executive Health Screeners": [
+        "Paragon",
+        "Gleneagles Hospital",
+        "Mount Elizabeth Novena Hospital",
+        "Mount Elizabeth Orchard",
+    ],
     "Mobile Health Screeners": ["On-site", "Home"],
     "Home Care": ["Home"],
 }
@@ -281,7 +286,9 @@ def build_general_health_fields(answers: dict[str, str | None] | None = None) ->
                 "Eczema, Hives or Skin Allergies",
             ],
             value=values.get("medical_conditions"),
-            help_text="Male/female options follow gender. Skin allergy is included in this digital form for all providers.",
+            help_text=(
+                "Male/female options follow gender. Skin allergy is included in this digital form for all providers."
+            ),
             section="Your Medical History",
         ),
         _field(
@@ -699,7 +706,10 @@ def build_general_health_fields(answers: dict[str, str | None] | None = None) ->
                 section="Your Lifestyle",
                 show_if_field="smoking_status",
                 show_if_mode="any_of",
-                show_if_value="Yes, less than 10 cigarettes/day|Yes, 10–20 cigarettes/day|Yes, more than 20 cigarettes/day",
+                show_if_value=(
+                    "Yes, less than 10 cigarettes/day|Yes, 10–20 cigarettes/day|"
+                    "Yes, more than 20 cigarettes/day"
+                ),
             ),
             _field(
                 "drinks_alcohol",

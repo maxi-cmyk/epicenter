@@ -352,23 +352,6 @@ export interface paths {
         patch: operations["update_patient_api_v1_patients__patient_id__patch"];
         trace?: never;
     };
-    "/api/v1/pharmacy/queue": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Pharmacy Queue */
-        get: operations["get_pharmacy_queue_api_v1_pharmacy_queue_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/recommendations/{recommendation_id}/decision": {
         parameters: {
             query?: never;
@@ -505,23 +488,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tickets/{ticket_id}/medication": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record Medication Dispense */
-        post: operations["record_medication_dispense_api_v1_tickets__ticket_id__medication_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/tickets/{ticket_id}/package/confirm": {
         parameters: {
             query?: never;
@@ -550,40 +516,6 @@ export interface paths {
         put?: never;
         /** Mark Physical Forms Received */
         post: operations["mark_physical_forms_received_api_v1_tickets__ticket_id__physical_forms_received_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/tickets/{ticket_id}/tpa-submission": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Tpa Submission */
-        get: operations["get_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/tickets/{ticket_id}/tpa-submission/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Confirm Tpa Submission */
-        post: operations["confirm_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -820,14 +752,12 @@ export interface components {
     schemas: {
         /** ActionResult */
         ActionResult: {
-            medication?: components["schemas"]["MedicationDispense"] | null;
             /** Message */
             message: string;
             recommendation?: components["schemas"]["AllocationRecommendation"] | null;
             /** Success */
             success: boolean;
             ticket?: components["schemas"]["QueueTicket"] | null;
-            tpa_submission?: components["schemas"]["TpaSubmission"] | null;
         };
         /** ActivityEvent */
         ActivityEvent: {
@@ -1161,45 +1091,6 @@ export interface components {
              * @default supervised_kiosk
              */
             registration_source: string;
-        };
-        /** MedicationDispense */
-        MedicationDispense: {
-            /**
-             * Dispensed At
-             * Format: date-time
-             */
-            dispensed_at: string;
-            /** Dispensed By */
-            dispensed_by: string;
-            /** Id */
-            id: string;
-            /** Items */
-            items: components["schemas"]["MedicationItem"][];
-            /** Ticket Id */
-            ticket_id: string;
-            /** Total Cost */
-            total_cost: number;
-            /**
-             * Version
-             * @default 1
-             */
-            version: number;
-        };
-        /** MedicationDispenseRequest */
-        MedicationDispenseRequest: {
-            /** Idempotency Key */
-            idempotency_key: string;
-            /** Items */
-            items: components["schemas"]["MedicationItem"][];
-        };
-        /** MedicationItem */
-        MedicationItem: {
-            /** Name */
-            name: string;
-            /** Quantity */
-            quantity: number;
-            /** Unit Cost */
-            unit_cost: number;
         };
         /** Metric */
         Metric: {
@@ -2080,42 +1971,6 @@ export interface components {
             staff_confirmed: boolean;
             visit_phase?: components["schemas"]["VisitPhase"] | null;
         };
-        /** TpaSubmission */
-        TpaSubmission: {
-            /** Checkup Summary */
-            checkup_summary: string;
-            /** Documents */
-            documents: components["schemas"]["Document"][];
-            /** External Reference */
-            external_reference?: string | null;
-            /** Id */
-            id: string;
-            medication?: components["schemas"]["MedicationDispense"] | null;
-            status: components["schemas"]["TpaSubmissionStatus"];
-            /** Submitted At */
-            submitted_at?: string | null;
-            /** Submitted By */
-            submitted_by?: string | null;
-            /** Ticket Id */
-            ticket_id: string;
-            /**
-             * Version
-             * @default 1
-             */
-            version: number;
-        };
-        /** TpaSubmissionConfirmRequest */
-        TpaSubmissionConfirmRequest: {
-            /** Expected Version */
-            expected_version: number;
-            /** Idempotency Key */
-            idempotency_key: string;
-        };
-        /**
-         * TpaSubmissionStatus
-         * @enum {string}
-         */
-        TpaSubmissionStatus: "draft" | "submitted";
         /** UploadLinkSession */
         UploadLinkSession: {
             /** Appointment Id */
@@ -2868,26 +2723,6 @@ export interface operations {
             };
         };
     };
-    get_pharmacy_queue_api_v1_pharmacy_queue_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QueueTicket"][];
-                };
-            };
-        };
-    };
     decide_recommendation_api_v1_recommendations__recommendation_id__decision_post: {
         parameters: {
             query?: never;
@@ -3139,41 +2974,6 @@ export interface operations {
             };
         };
     };
-    record_medication_dispense_api_v1_tickets__ticket_id__medication_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ticket_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MedicationDispenseRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     confirm_package_api_v1_tickets__ticket_id__package_confirm_post: {
         parameters: {
             query?: never;
@@ -3221,72 +3021,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PhysicalFormsReceivedRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ticket_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TpaSubmission"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    confirm_tpa_submission_api_v1_tickets__ticket_id__tpa_submission_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                ticket_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TpaSubmissionConfirmRequest"];
             };
         };
         responses: {

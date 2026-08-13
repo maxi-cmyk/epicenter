@@ -27,12 +27,11 @@ Copilot Studio and Power BI are not required for local development. Epicenter us
 
 ## Run locally
 
-The app runs as three processes in three terminals: the patient app, the
-nurse app, and the backend API. The two Next.js apps are separate workspace
+The app runs as three processes in three terminals: the patient app, nurse app,
+and backend API. The two Next.js apps are separate workspace
 packages with separate route trees, builds, environment validation and Vercel
 roots. They share only the backend contract and safe presentation primitives;
-patient routes are not compiled into the nurse deployment and nurse routes are
-not compiled into the patient deployment.
+role-specific routes are not compiled into the other deployments.
 
 Terminal 1 — backend:
 
@@ -64,9 +63,9 @@ cd frontend
 npm run nurse
 ```
 
-Open `http://localhost:3000` for the patient screen and `http://localhost:3001` for the nurse screen. Both frontends use the same local API. The nurse board can show its clearly labelled synthetic fallback when the API is unavailable; patient submissions fail visibly, preserve the selection, and offer retry rather than pretending the action completed.
+Open `http://localhost:3000` for patient and `http://localhost:3001` for nurse. All frontends use the same local API. The nurse board can show its clearly labelled synthetic fallback when the API is unavailable; patient submissions fail visibly, preserve the selection, and offer retry rather than pretending the action completed.
 
-The two commands are independent: either app can run by itself, and starting one does not start or require the other frontend process.
+The frontend commands are independent: any app can run by itself without starting the other frontend processes.
 
 ## Sign-in and account roles
 
@@ -169,14 +168,15 @@ npm run contracts:check
 - **Database:** Supabase is the shared persistence target. The migrations and idempotent seeds cover the raw fixtures plus clinics, appointments, the one-ticket queue, review cases, counters, staff availability, human-approved allocation, operational/audit events, configuration releases, and simulator snapshots. The local FastAPI process automatically selects the server-only Supabase adapter when its URL and secret key are configured; Railway is not required for local use.
 - **Authentication:** Clerk wraps both frontends when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, FastAPI verifies Clerk session tokens with the official Python SDK, maps patients through `patient_accounts`, and maps staff through active clinic-scoped `staff_accounts`. `CLERK_JWT_KEY` is an optional networkless-verification optimization.
 - **Patient demo boundary:** each verified patient account is attached only to the configured synthetic scenario. Pre-arrival submissions return a patient-safe outcome pending any required staff confirmation; privileged operational data remains behind FastAPI.
-- **Frontend deployment:** create one Vercel project rooted at `frontend/patient/` and another rooted at `frontend/nurse/`. Set each app's browser-safe environment variables independently; both use the same Railway API URL.
-- **Backend deployment:** create a Railway service with `backend/` as its root directory. `backend/railway.toml` defines the start command and health check; set `EPICENTER_DEMO_MODE=false`, provider credentials and the deployed `EPICENTER_FRONTEND_ORIGINS` (comma-separated; both the patient and nurse deployment URLs) in Railway.
+- **Frontend deployment:** create two Vercel projects rooted at `frontend/patient/` and `frontend/nurse/`. Set each app's browser-safe environment variables independently; all use the same Railway API URL.
+- **Backend deployment:** create API/MCP and worker Railway services with `backend/` as the root directory. `backend/railway.toml` defines the API start command and health check; override the worker start command with `python -m worker`. Set `EPICENTER_DEMO_MODE=false`, provider credentials, and both exact Vercel origins in `EPICENTER_FRONTEND_ORIGINS`.
 - **MCP publication compatibility:** expose the reviewed Operations and Insurance Format Registry servers over public HTTPS Streamable HTTP, verify tool discovery and a read-only synthetic call in Copilot Studio, and keep licensing/publication as an explicit manual release gate.
 - **Analytics scaling:** use the native dashboard for development and the core demo. Consider Power BI/Fabric only later through a reconciled de-identified aggregate projection; it is never the operational source of truth.
 
 The checked-in provider configuration is a deployment contract, not a claim that live Supabase, Clerk, Vercel or Railway resources have already been provisioned.
 
 Sample-data provenance, identity reconciliation results, and local/hosted database commands are documented in [`docs/sample-data.md`](docs/sample-data.md).
+The ordered provider setup, public smoke checks, evidence, and rollback procedure are in [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
 
 ## Verify
 
@@ -185,4 +185,4 @@ cd backend && .venv/bin/pytest -q && .venv/bin/ruff check app tests
 cd frontend && npm test && npm run typecheck && npm run lint && npm run build
 ```
 
-Local `.env` and `.env.local` files contain development-only configuration and are ignored. Copy `frontend/patient/.env.example` and `frontend/nurse/.env.example` into each app when setting up another machine. No real patient data or live provider integration is included.
+Local `.env` and `.env.local` files contain development-only configuration and are ignored. Copy each app's `.env.example` when setting up another machine. No real patient data or live provider integration is included.

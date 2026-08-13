@@ -1,3 +1,4 @@
+import os
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request
@@ -8,8 +9,8 @@ from app.api.patient_routes import router as patient_router
 from app.api.routes import router
 from app.core.auth import ReverificationRequired
 from app.core.config import Settings, get_settings
-from app.mcp.operations import router as mcp_operations_router
 from app.mcp.insurance_registry import router as mcp_registry_router
+from app.mcp.operations import router as mcp_operations_router
 
 settings = get_settings()
 
@@ -69,6 +70,10 @@ def healthcheck(current_settings: Annotated[Settings, Depends(get_settings)]) ->
             "clerk": current_settings.clerk_configured,
             "openai": current_settings.openai_configured,
             "persistence_mode": current_settings.persistence_mode,
+        },
+        "deployment": {
+            "commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA", "local"),
+            "service": os.getenv("RAILWAY_SERVICE_NAME", "local"),
         },
     }
 

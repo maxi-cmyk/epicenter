@@ -20,13 +20,11 @@ from app.domain.models import (
     FormsConfirmRequest,
     IdentityConfirmRequest,
     KioskCheckInRequest,
-    MedicationDispense,
-    MedicationDispenseRequest,
     Metric,
-    PackageConfirmRequest,
     MockPaymentRequest,
     OnboardingAdvanceRequest,
     OnboardingStep,
+    PackageConfirmRequest,
     PatientAppointmentSummary,
     PatientCoverageStatus,
     PatientCreateRequest,
@@ -45,14 +43,14 @@ from app.domain.models import (
     PatientSubmissionOutcome,
     PatientSummary,
     PatientUpdateRequest,
-    PhysicalFormsReceivedRequest,
     PatientVisitHistory,
     PatientVisitRecord,
+    PhysicalFormsReceivedRequest,
     PreArrivalSubmissionRequest,
     PreArrivalSubmissionResult,
     PriorCoverageSummary,
-    QueueTicket,
     QuestionnaireSaveRequest,
+    QueueTicket,
     RecommendationDecisionRequest,
     RecordChecklist,
     RegistrationValidationRequest,
@@ -61,8 +59,6 @@ from app.domain.models import (
     SimulatorSnapshot,
     SingpassProfileField,
     TicketTransitionRequest,
-    TpaSubmission,
-    TpaSubmissionConfirmRequest,
     UploadLinkSession,
     VisitPhase,
 )
@@ -171,16 +167,6 @@ class OperationsRepository(Protocol):
         occurred_from: datetime | None = None,
         occurred_to: datetime | None = None,
     ) -> list[AuditRecord]: ...
-
-    def record_medication_dispense(
-        self, ticket_id: str, request: MedicationDispenseRequest, actor: str
-    ) -> MedicationDispense: ...
-
-    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission: ...
-
-    def confirm_tpa_submission(
-        self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str
-    ) -> TpaSubmission: ...
 
     def confirm_document(
         self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
@@ -966,26 +952,6 @@ class SupabaseOperationsRepository:
             },
         )
         return _ticket_from_row(row)
-
-    def record_medication_dispense(
-        self, ticket_id: str, request: MedicationDispenseRequest, actor: str
-    ) -> MedicationDispense:
-        raise NotImplementedError(
-            "Pharmacist medication dispensing is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
-        )
-
-    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission:
-        raise NotImplementedError(
-            "TPA submission drafting is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
-        )
-
-    def confirm_tpa_submission(self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str) -> TpaSubmission:
-        raise NotImplementedError(
-            "TPA submission confirmation is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
-        )
 
     def confirm_document(
         self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str

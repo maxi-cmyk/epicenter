@@ -367,7 +367,7 @@ The nurse primary navigation keeps routine work separate from **Database** and *
 
 The Database area provides an allowlisted patient-record interface with search, filter, sort, pagination, record detail, and role-scoped create/read/update/recoverable-delete capability. It is not a raw SQL console. All access goes through the shared backend, which applies field validation, role/clinic scope, RLS-compatible authorization, optimistic concurrency, idempotency, and immutable audit logging.
 
-- Database reads require an authenticated, clinic-scoped staff session. Nurse/administrator accounts may create patient records without a second password prompt; pharmacists may view the allowlisted patient reference/contact surface but cannot alter patient records.
+- Database reads require an authenticated, clinic-scoped staff session. Nurse/administrator accounts may create patient records without a second password prompt.
 - Database Update and Delete require a fresh Clerk password verification immediately before the backend commit. Draft edits do not mutate data, and cancelling or failing verification preserves the draft and deletion reason.
 - Clicking a row exposes View, Update, and Delete where the role permits them. Update and Delete open a centered password dialog at commit; Delete defaults to a recoverable soft delete and hard delete is unavailable in the demo.
 - The backend independently validates the fresh reverification state. A frontend modal alone is never treated as authorization.
@@ -476,7 +476,7 @@ Patient's coverage document (chit/voucher/referral letter)
 | Patient Notification & Audit Log | Sends the curated issue-category/reminder message to the patient (§4.4) and immutably logs every send | Log entry captures visit ticket ID, category shown (never the raw internal reason), channel, timestamp, delivery outcome, and whether it led to a resubmission, token reuse, or no action; entries are append-only and staff-readable but not patient-editable |
 | Operational Intelligence and Allocation Advisor | Aggregates flow events, estimates near-term stage demand, and proposes qualified staff/station changes with constraints, rationale, expiry, and expected effect | Supports continuous improvement and human-approved load balancing without crossing role boundaries, using raw documents, ranking staff, or changing clinical priority |
 | Nurse Simulator | Replays versioned synthetic Supabase snapshots for allocation, administrative-urgency, and manual identity-check scenarios | Nurse-panel only; isolated simulation tables/types; never mutates operational state |
-| Controlled Data Administration | Separate allowlisted Database tabs for nurse and pharmacy panels | Reads and creates use role/clinic authorization; patient updates and deletions require backend-verified fresh reverification and immutable audit |
+| Controlled Data Administration | Allowlisted Database tab for the nurse panel | Reads and creates use role/clinic authorization; patient updates and deletions require backend-verified fresh reverification and immutable audit |
 
 ### 6.3 Data Sources (Demo)
 

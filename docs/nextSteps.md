@@ -246,7 +246,7 @@ Navigation and daily workflow:
 - [x] Limit nurse primary navigation to `Today`, `Database`, and `Audit trail`; keep visit work contextual instead of exposing a second review queue.
 - [x] Open each actionable Today card directly into its next incomplete nurse step, with source evidence expanded only when the visit has an administrative exception.
 - [x] Keep the original `Q-*` ticket, ordering timestamp, waiting age, readiness state, and visit phase together through the nurse workflow.
-- [x] Keep the Audit destination read-only for active nurse and pharmacist demo accounts.
+- [x] Keep the Audit destination read-only for active nurse demo accounts.
 
 Single visit task:
 
@@ -262,7 +262,7 @@ Deferred nurse-panel extensions (not required for this demo close-out): date his
 
 Nurse validation and workload:
 
-- [ ] Verify registration staff, nurse, operations administrator, auditor, billing, and pharmacy roles see only permitted facts/actions and that sensitive reveals/mutations require current reverification. The demo has no doctor role.
+- [ ] Verify registration staff, nurse, operations administrator, auditor, and billing roles see only permitted facts/actions and that sensitive reveals/mutations require current reverification. The demo has no doctor role.
 - [ ] Test empty/loading/permission/stale/offline/conflict/duplicate/retry/session-expiry states; failed commits must preserve input, queue state, and the patient's original position.
 - [ ] Measure end-to-end administrative time, touches, repeated entries, corrections, errors, and perceived workload for representative registration/nurse tasks; compare against the documented 23–32-minute manual baseline without treating the estimate as measured clinic performance.
 - [x] Keep physical clinical escalation separate from administrative readiness and never create a second patient queue for review.
@@ -277,13 +277,13 @@ Pharmacy queue (incoming/outgoing TPA checklist) — scoped, not started:
 
 ### 7. Add intentional staff database access
 
-**Status: Complete for the approved patient-record demo scope — nurse management and pharmacy read access delivered**
+**Status: Complete for the approved patient-record demo scope — nurse management access delivered**
 
 - [x] Add allowlisted patient list, detail, create, update, and recoverable soft-delete endpoints through FastAPI.
 - [x] Add search, pagination, optimistic concurrency, idempotency, and audit attribution at the backend boundary.
-- [x] Add a separate Database tab to both nurse and pharmacy navigation; keep Audit as its own independent, read-only tab.
+- [x] Add a Database tab to nurse navigation; keep Audit as its own independent, read-only tab.
 - [x] Build the patient browser with a top search bar, contact filters, sorting, pagination, loading, empty, error, and responsive states.
-- [x] Make a row click expose View, Update, and Delete for authorised nurse/administrator accounts; pharmacists receive View only for patient identity/contact records.
+- [x] Make a row click expose View, Update, and Delete for authorised nurse/administrator accounts.
 - [x] Allow authenticated nurse/administrator Create and View without an extra password prompt.
 - [x] Require password reverification only when committing Update or Delete, using a centered modal with the copy “Enter password to make this change”.
 - [x] Submit the password directly to Clerk's session-verification flow, clear it from UI state, refresh the signed session proof, and retain backend freshness enforcement before the mutation.
@@ -291,7 +291,7 @@ Pharmacy queue (incoming/outgoing TPA checklist) — scoped, not started:
 - [x] Keep hard delete unavailable; deletion remains recoverable, version-checked, idempotent, and audit-attributed.
 - [x] Test role permissions, create-without-step-up, update-with-step-up, stale writes, duplicate protection, and the separate Database/Audit route contract.
 
-Deferred beyond this task: a generic medication/TPA/payment data editor. Pharmacists continue to commit those records through the dedicated pharmacy workflow; the Database tab must not become a raw SQL or unrestricted operational-table console.
+Deferred beyond this task: a generic medication/TPA/payment data editor. The Database tab must not become a raw SQL or unrestricted operational-table console.
 
 ### 8. Build the immutable, read-only Audit panel
 
@@ -301,8 +301,8 @@ Task 8 is closed against the approved demo boundary. Audit is a separate, read-o
 
 Completed scope:
 
-- [x] Allow nurse (`registration`) and pharmacist demo accounts to open the clinic-scoped Audit panel; the demo has no doctor role.
-- [x] Add the Audit destination to both nurse and pharmacy navigation while retaining operations-administrator and auditor API access.
+- [x] Allow nurse (`registration`) demo accounts to open the clinic-scoped Audit panel; the demo has no doctor role.
+- [x] Add the Audit destination to nurse navigation while retaining operations-administrator and auditor API access.
 - [x] Keep audit history read-only in both applications and expose no general audit mutation endpoint.
 - [x] Store append-only audit records with server-generated identifiers/timestamps, actor reference and event-time demo role, action, target, structured details, and clinic scope.
 - [x] Reject `UPDATE` and `DELETE` on `audit_log` and `operational_events` with database triggers, and keep operational tables unavailable to browser database roles.
@@ -317,14 +317,14 @@ Completed scope:
 - [x] Provide bounded newest-first pagination, clear/no-results behavior, structured event details, and CSV/JSON export of the visible authorized filtered page.
 - [x] Provide distinct loading, empty, permission/API failure, retry, and session-bound states without leaking a prior user's history.
 - [x] Make the table and detail view responsive, keyboard accessible, screen-reader labelled, and understandable without colour alone.
-- [x] Seed deterministic synthetic nurse, pharmacist, and system history so the demo does not open to an unexplained empty panel.
+- [x] Seed deterministic synthetic nurse and system history so the demo does not open to an unexplained empty panel.
 - [x] Add API role, field-coverage, idempotency, defensive-copy, date-filter, redaction-boundary, and missing-mutation-route tests.
 - [x] Regenerate and verify the OpenAPI/TypeScript contract and update both frontend API clients.
-- [x] Pass focused backend tests and lint, the non-MCP backend suite, frontend tests/type checks/builds, contract checks, Markdown rendering, desktop/mobile nurse and pharmacy visual QA, design checks, and `git diff --check`.
+- [x] Pass focused backend tests and lint, the non-MCP backend suite, frontend tests/type checks/builds, contract checks, Markdown rendering, desktop/mobile nurse visual QA, design checks, and `git diff --check`.
 
 Production follow-ons, outside Task 8's demo scope:
 
-- Provision a distinct least-privileged audit-read permission instead of granting access from nurse or pharmacist job titles.
+- Provision a distinct least-privileged audit-read permission instead of granting access from nurse job titles.
 - Move medication, TPA, payment, and visit-completion demo persistence to Supabase while preserving the field contract above.
 - Add cursor pagination, stable action-taxonomy versioning, retention/backup/restore policy, audit-read/export security telemetry, and a new-event refresh indicator.
 - Reconcile the fresh-install schema snapshot, immutable grants/triggers/indexes, query plans, and service-role tamper tests as part of the backend release gate.
@@ -417,33 +417,33 @@ Before any field extraction runs, an uploaded/scanned document must first be cla
 - [x] **Step 3 — template fingerprint match**: match approved layout fingerprints to a known issuer/family and category after the keyword pass.
 - [x] **Step 4 — category-specific extraction**: select a category/family-specific extractor before any OpenAI extraction call; generic unclassified extraction is not callable.
 
-This governs what reaches `QueueTicket.documents`: the nurse and pharmacist screens render only documents present in intake and successfully classified, with no placeholder for an undetected category. The deterministic classifier now implements steps 1–3, and the worker requires its category/family-specific extractor selection before step 4 can call OpenAI. Results are staged with evidence as `pending_review`; the seeded Q-020 records remain pre-classified fixtures so their existing demo presentation is stable.
+This governs what reaches `QueueTicket.documents`: the nurse screen renders only documents present in intake and successfully classified, with no placeholder for an undetected category. The deterministic classifier now implements steps 1–3, and the worker requires its category/family-specific extractor selection before step 4 can call OpenAI. Results are staged with evidence as `pending_review`; the seeded Q-020 records remain pre-classified fixtures so their existing demo presentation is stable.
 
 CHAS and corporate-insurance eligibility-to-package matching is a separate, already-implemented mechanism — see the note under Task 6/cross-panel workflow below; it does not go through this Document/DocumentCategory model at all.
 
 ### 11. Pass the backend release gate, then finalise visual design
 
-**Status: Partial — local automated checks pass; live, security, and browser gates remain**
+**Status: In progress — release-contract checks added; fresh database, hosted advisors, browser, and final visual gates remain**
 
 - [x] Run the current backend unit/API/SQL-contract suite.
 - [x] Run frontend tests, type checks, lint, contract checks, and production builds for both apps.
-- [ ] Verify fresh-install migration parity with `backend/persistence/schema.sql`.
+- [x] Verify the initial schema snapshot exactly matches its source migration and enforce unique migration versions. *(Automated in `backend/tests/test_release_gate.py`; a full `supabase db reset` still requires the CLI and Docker.)*
 - [x] Complete Task 2's live seed-integrity and RLS/grant checks.
 - [ ] Run Supabase security/performance advisors and resolve applicable findings.
-- [ ] Complete patient/nurse authorization, step-up CRUD, simulator-invariant, and MCP adversarial tests.
+- [x] Complete patient/nurse authorization, step-up CRUD, simulator-invariant, and MCP adversarial tests, including production machine-key rejection/acceptance boundaries.
 - [ ] Run complete browser journeys for success, failure, retry, and stale states.
 - [ ] Finalise palette, typography, status tokens, responsive layouts, WCAG AA contrast, colour-vision checks, and separate patient/nurse visual QA without changing workflow semantics.
 
 ### 12. Deploy and verify the complete system
 
-**Status: In progress — Procfile, document_jobs migration, and Railway service config documented; Vercel not yet deployed**
+**Status: In progress — deployment contracts, smoke tooling, and manual runbook are ready; hosted services are not yet verified**
 
 - [ ] Create separate Vercel projects for patient and nurse apps.
 - [x] Deploy the FastAPI/MCP service and private worker to Railway. *(Procfile added; two-service config documented: epicenter-api-mcp on web process, epicenter-worker on worker process, both rooted at `backend/`)*
 - [ ] Allowlist both exact Vercel origins.
 - [ ] Apply production-intended Supabase migrations and synthetic seed. *(document_jobs migration added: `20260812100000_document_jobs_and_worker_rpcs.sql`)*
 - [ ] Configure Clerk and the supported Supabase integration.
-- [x] Configure the server-side `OPENAI_API_KEY` and evaluated model identifier in Railway secrets without exposing either to the browser. *(env vars documented in .env.example; defaults pinned: OPENAI_MODEL=gpt-4.1-mini, OPENAI_EXTRACTION_MODEL=gpt-4.1)*
+- [ ] Configure the server-side `OPENAI_API_KEY` and evaluated model identifier in Railway secrets without exposing either to the browser. *(The environment contract is documented; Railway configuration remains manual.)*
 - [ ] Deploy and smoke-test the authenticated nurse assistant route against reviewed operations tools.
 - [x] Keep Insurance Format Registry tools restricted to the separate maker/reviewer workflow.
 - [ ] Add both public Streamable HTTP MCP endpoints to Copilot Studio and verify that only intended tools are discovered.
@@ -454,12 +454,15 @@ CHAS and corporate-insurance eligibility-to-package matching is a separate, alre
 - [ ] Run authenticated public-origin smoke tests through Railway to Supabase.
 - [ ] Verify health, restart behavior, audit persistence, remote Git refs, and rollback instructions.
 
+Follow [`deployment-runbook.md`](deployment-runbook.md) in order. It separates local checks from Supabase, Clerk, Railway, Vercel, and Copilot Studio actions that require account access, secrets, or a licensing decision.
+
 ## Immediate next actions
 
-1. Continue Tasks 5, 7, and 9 using the persistence and authorization foundations already completed; Tasks 6, 8, and 10 are complete for their approved local demo scope.
-2. Run the deployed Copilot Studio compatibility check only after Railway exposes the same two reviewed MCP endpoints over HTTPS.
-3. Deploy Railway/Vercel only after the backend release gate passes locally and against the synthetic Supabase project.
-4. Provision production nurse identities and distribute judge credentials outside the repository as part of Task 12.
+1. Complete the Task 11 local gate, beginning with a fresh `supabase db reset` after installing the CLI and starting Docker Desktop.
+2. Reconcile hosted Supabase migration history before pushing because SQL-editor changes may not have migration-history entries.
+3. Deploy Railway and both Vercel projects using the runbook, then run the public smoke scripts.
+4. Provision production nurse identities and distribute judge credentials outside the repository.
+5. Run the Copilot Studio compatibility check only after Railway exposes the two reviewed MCP endpoints over HTTPS.
 
 ## Open questions
 

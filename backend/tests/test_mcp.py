@@ -16,17 +16,19 @@ Covers:
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from starlette.requests import Request
 
 from app.ai.schemas import (
     ConfidenceLevel,
     ExtractedCoverage,
     FieldEvidence,
 )
-from app.mcp.auth import authorize_operations_tool, authorize_registry_tool
 from app.core.auth import StaffPrincipal
-
+from app.core.config import Settings
+from app.mcp.auth import authorize_operations_tool, authorize_registry_tool, require_mcp_identity
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -161,6 +163,39 @@ class TestAuthorizeRegistryTool:
         from fastapi import HTTPException
         with pytest.raises(HTTPException):
             authorize_registry_tool("registry_propose_mapping", _staff("auditor"))
+
+
+class TestMCPMachineAuthentication:
+    @staticmethod
+    def _request() -> Request:
+        return Request({"type": "http", "method": "POST", "path": "/mcp", "headers": []})
+
+    def test_configured_api_key_authenticates_in_production(self):
+        principal = require_mcp_identity(
+            self._request(),
+            Settings(demo_mode=False, EPICENTER_MCP_API_KEY="release-test-key", _env_file=None),
+            "release-test-key",
+        )
+        assert principal.source == "api_key"
+        assert principal.role == "operations_admin"
+
+    def test_wrong_api_key_fails_closed_in_production(self):
+        with pytest.raises(HTTPException) as exc_info:
+            require_mcp_identity(
+                self._request(),
+                Settings(demo_mode=False, EPICENTER_MCP_API_KEY="release-test-key", _env_file=None),
+                "wrong-key",
+            )
+        assert exc_info.value.status_code == 401
+
+    def test_configured_demo_key_cannot_be_omitted(self):
+        with pytest.raises(HTTPException) as exc_info:
+            require_mcp_identity(
+                self._request(),
+                Settings(demo_mode=True, EPICENTER_MCP_API_KEY="release-test-key", _env_file=None),
+                None,
+            )
+        assert exc_info.value.status_code == 401
 
 
 # ---------------------------------------------------------------------------

@@ -19,14 +19,11 @@ from app.domain.models import (
     IdentityConfirmRequest,
     IntakeType,
     KioskCheckInRequest,
-    MedicationDispense,
-    MedicationDispenseRequest,
-    MedicationItem,
     Metric,
-    PackageConfirmRequest,
     MockPaymentRequest,
     OnboardingAdvanceRequest,
     OnboardingStep,
+    PackageConfirmRequest,
     PatientAppointmentSummary,
     PatientCoverageStatus,
     PatientCreateRequest,
@@ -34,7 +31,6 @@ from app.domain.models import (
     PatientHome,
     PatientList,
     PatientNextAction,
-    PatientNotificationBanner,
     PatientOnboardingState,
     PatientPaymentStatus,
     PatientPaymentSummary,
@@ -42,17 +38,17 @@ from app.domain.models import (
     PatientQuestionnaireStatus,
     PatientQueueStatus,
     PatientRecord,
-    PatientSummary,
-    PhysicalFormsReceivedRequest,
     PatientSubmissionOutcome,
+    PatientSummary,
     PatientUpdateRequest,
     PatientVisitHistory,
     PatientVisitRecord,
+    PhysicalFormsReceivedRequest,
     PreArrivalSubmissionRequest,
     PreArrivalSubmissionResult,
     PriorCoverageSummary,
-    QueueTicket,
     QuestionnaireSaveRequest,
+    QueueTicket,
     ReadinessState,
     RecommendationDecisionRequest,
     RecordChecklist,
@@ -63,9 +59,6 @@ from app.domain.models import (
     SimulatorSnapshot,
     SingpassProfileField,
     TicketTransitionRequest,
-    TpaSubmission,
-    TpaSubmissionConfirmRequest,
-    TpaSubmissionStatus,
     UploadLinkSession,
     VisitPhase,
 )
@@ -522,37 +515,6 @@ class DemoRepository:
             },
             occurred_at=completed_visit.completed_at,
         )
-        self._medication_dispenses: dict[str, MedicationDispense] = {
-            "Q-020": MedicationDispense(
-                id="MED-Q-020",
-                ticket_id="Q-020",
-                items=[
-                    MedicationItem(name="Paracetamol 500mg", quantity=20, unit_cost=0.15),
-                    MedicationItem(name="Amoxicillin 250mg", quantity=15, unit_cost=0.40),
-                ],
-                total_cost=9.0,
-                dispensed_by="Pharmacist Nur Aisyah",
-                dispensed_at=_at(9, 55),
-            )
-        }
-        seeded_medication = self._medication_dispenses["Q-020"]
-        medication_visit = next(ticket for ticket in self._snapshot.tickets if ticket.id == "Q-020")
-        self._record_audit(
-            actor=seeded_medication.dispensed_by,
-            action_type="medication_dispensed",
-            target_table="medication_dispenses",
-            target_id=seeded_medication.id,
-            details={
-                "ticket_id": seeded_medication.ticket_id,
-                "medication": [item.model_dump(mode="json") for item in seeded_medication.items],
-                "total_cost": seeded_medication.total_cost,
-                "currency": "SGD",
-                "dispensed_at": seeded_medication.dispensed_at.isoformat(),
-                "visit_times": self._visit_times(medication_visit),
-                "version": seeded_medication.version,
-            },
-            occurred_at=seeded_medication.dispensed_at,
-        )
         self._record_audit(
             actor=completed_visit.billing_confirmed_by or "synthetic-system",
             action_type="payment_details_confirmed",
@@ -576,7 +538,6 @@ class DemoRepository:
             },
             occurred_at=completed_visit.billing_confirmed_at,
         )
-        self._tpa_submissions: dict[str, TpaSubmission] = {}
 
     @staticmethod
     def _visit_times(ticket: QueueTicket) -> dict[str, str | None]:
@@ -597,9 +558,7 @@ class DemoRepository:
         occurred_at: datetime | None = None,
     ) -> None:
         actor_value = actor.casefold()
-        if action_type in {"medication_dispensed", "tpa_submission_confirmed"}:
-            actor_role = "pharmacist"
-        elif "system" in actor_value or "worker" in actor_value:
+        if "system" in actor_value or "worker" in actor_value:
             actor_role = "system"
         elif "admin" in actor_value:
             actor_role = "administrator"
@@ -1056,130 +1015,6 @@ class DemoRepository:
             self._idempotent_results[key] = deepcopy(updated)
             return deepcopy(updated)
 
-    def record_medication_dispense(
-        self, ticket_id: str, request: MedicationDispenseRequest, actor: str = "synthetic-pharmacist"
-    ) -> MedicationDispense:
-        with self._lock:
-            key = ("medication_dispense", request.idempotency_key)
-            existing = self._idempotent_results.get(key)
-            if isinstance(existing, MedicationDispense):
-                return deepcopy(existing)
-            if not any(ticket.id == ticket_id for ticket in self._snapshot.tickets):
-                raise KeyError(ticket_id)
-            ticket = next(ticket for ticket in self._snapshot.tickets if ticket.id == ticket_id)
-            total_cost = sum(item.quantity * item.unit_cost for item in request.items)
-            dispensed_at = datetime.now(UTC)
-            dispense = MedicationDispense(
-                id=f"MED-{ticket_id}",
-                ticket_id=ticket_id,
-                items=list(request.items),
-                total_cost=total_cost,
-                dispensed_by=actor,
-                dispensed_at=dispensed_at,
-            )
-            self._medication_dispenses[ticket_id] = dispense
-            self._idempotent_results[key] = deepcopy(dispense)
-            self._record_audit(
-                actor=actor,
-                action_type="medication_dispensed",
-                target_table="medication_dispenses",
-                target_id=dispense.id,
-                details={
-                    "ticket_id": ticket_id,
-                    "medication": [item.model_dump(mode="json") for item in dispense.items],
-                    "total_cost": dispense.total_cost,
-                    "currency": "SGD",
-                    "dispensed_at": dispensed_at.isoformat(),
-                    "visit_times": self._visit_times(ticket),
-                    "version": dispense.version,
-                },
-                occurred_at=dispensed_at,
-            )
-            return deepcopy(dispense)
-
-    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission:
-        with self._lock:
-            ticket = next((ticket for ticket in self._snapshot.tickets if ticket.id == ticket_id), None)
-            if ticket is None:
-                raise KeyError(ticket_id)
-            if not ticket.documents:
-                raise KeyError(f"No documents on file for {ticket_id}")
-            existing = self._tpa_submissions.get(ticket_id)
-            if existing is not None and existing.status is TpaSubmissionStatus.SUBMITTED:
-                return deepcopy(existing)
-            checkup_summary = (
-                f"{ticket.record_checklist.items[2].detail} · {ticket.processing_stage}"
-                if ticket.record_checklist and len(ticket.record_checklist.items) > 2
-                else ticket.processing_stage
-            )
-            draft = TpaSubmission(
-                id=f"TPA-{ticket_id}",
-                ticket_id=ticket_id,
-                status=TpaSubmissionStatus.DRAFT,
-                documents=ticket.documents,
-                checkup_summary=checkup_summary,
-                medication=self._medication_dispenses.get(ticket_id),
-                version=existing.version if existing else 1,
-            )
-            self._tpa_submissions[ticket_id] = draft
-            return deepcopy(draft)
-
-    def confirm_tpa_submission(
-        self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str = "synthetic-pharmacist"
-    ) -> TpaSubmission:
-        with self._lock:
-            key = ("tpa_submission_confirm", request.idempotency_key)
-            existing_result = self._idempotent_results.get(key)
-            if isinstance(existing_result, TpaSubmission):
-                return deepcopy(existing_result)
-            submission = self._tpa_submissions.get(ticket_id)
-            if submission is None:
-                raise KeyError(ticket_id)
-            if submission.version != request.expected_version:
-                raise ValueError("The submission changed since it was loaded. Refresh and try again.")
-            external_reference = (
-                "CLAIM-" + sha256(f"{ticket_id}:{request.idempotency_key}".encode()).hexdigest()[:10].upper()
-            )
-            updated = submission.model_copy(
-                update={
-                    "status": TpaSubmissionStatus.SUBMITTED,
-                    "submitted_by": actor,
-                    "submitted_at": datetime.now(UTC),
-                    "external_reference": external_reference,
-                    "version": submission.version + 1,
-                }
-            )
-            self._tpa_submissions[ticket_id] = updated
-            self._idempotent_results[key] = deepcopy(updated)
-            ticket = next(ticket for ticket in self._snapshot.tickets if ticket.id == ticket_id)
-            self._record_audit(
-                actor=actor,
-                action_type="tpa_submission_confirmed",
-                target_table="tpa_submissions",
-                target_id=updated.id,
-                details={
-                    "ticket_id": ticket_id,
-                    "mode": "synthetic_demo",
-                    "status": updated.status.value,
-                    "external_reference": updated.external_reference,
-                    "submitted_at": updated.submitted_at.isoformat() if updated.submitted_at else None,
-                    "documents": [
-                        {
-                            "id": document.id,
-                            "category": document.category.value,
-                            "issuer_code": document.issuer_code,
-                            "document_type": document.document_type,
-                        }
-                        for document in updated.documents
-                    ],
-                    "medication_dispense_id": updated.medication.id if updated.medication else None,
-                    "visit_times": self._visit_times(ticket),
-                    "version": updated.version,
-                },
-                occurred_at=updated.submitted_at,
-            )
-            return deepcopy(updated)
-
     def decide_recommendation(
         self,
         recommendation_id: str,
@@ -1387,12 +1222,6 @@ class DemoRepository:
                 PatientCoverageStatus.SUBMITTED: "Coverage received for staff confirmation",
             }[coverage]
             questionnaire = self._journey["questionnaire_status"]
-            questionnaire_summary = {
-                PatientQuestionnaireStatus.NOT_STARTED: "General health questionnaire not started",
-                PatientQuestionnaireStatus.DRAFT: "Questionnaire draft saved — finish and submit",
-                PatientQuestionnaireStatus.SUBMITTED: "Questionnaire submitted",
-                PatientQuestionnaireStatus.NOT_REQUIRED: "No questionnaire required",
-            }[questionnaire]
             payment = self._journey["payment_status"]
             payment_summary = {
                 PatientPaymentStatus.NOT_READY: "Not ready — staff still finalising billing",
@@ -1442,7 +1271,9 @@ class DemoRepository:
                     has_prior_coverage=False,
                     issuer_name=None,
                     document_date=None,
-                    prompt="No coverage is on file yet. Upload your insurance or medical coverage document for this visit.",
+                    prompt=(
+                        "No coverage is on file yet. Upload your insurance or medical coverage document for this visit."
+                    ),
                     force_upload=True,
                 )
             notification = self._journey["notification"]

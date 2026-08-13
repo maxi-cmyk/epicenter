@@ -51,14 +51,5 @@ await mobile.page.screenshot({ fullPage: true, path: resolve(reviewDir, "databas
 assert.deepEqual(mobile.errors, []);
 await mobile.page.close();
 
-const pharmacy = await preparePage("http://localhost:3002", { width: 1440, height: 1000 });
-await pharmacy.page.getByText("Tan Kai Xuan", { exact: true }).click();
-assert.equal(await pharmacy.page.getByRole("menuitem", { name: "View" }).count(), 1);
-assert.equal(await pharmacy.page.getByRole("menuitem", { name: "Update" }).count(), 0);
-assert.equal(await pharmacy.page.getByRole("menuitem", { name: "Delete" }).count(), 0);
-await pharmacy.page.screenshot({ fullPage: true, path: resolve(reviewDir, "database-pharmacy-desktop.png") });
-assert.deepEqual(pharmacy.errors, []);
-await pharmacy.page.close();
-
 await browser.close();
 console.log(`Database visual QA passed. Screenshots saved in ${reviewDir}`);
