@@ -353,6 +353,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 readiness_reason="completed",
                 scheduled_at=_at(8, 30),
                 checked_in_at=_at(8, 22),
+                completed_at=_at(9, 8),
                 original_ordering_at=_at(8, 30),
                 waiting_minutes=0,
                 actual_room="Room 1 · Dr Tan",
@@ -474,6 +475,20 @@ class DemoRepository:
             )
         }
         self._audit_records: list[AuditRecord] = []
+        completed_visit = next(ticket for ticket in self._snapshot.tickets if ticket.id == "Q-011")
+        self._record_audit(
+            actor="synthetic-system",
+            action_type="visit_completed",
+            target_table="queue_entries",
+            target_id=completed_visit.id,
+            details={
+                "ticket_id": completed_visit.id,
+                "visit_phase": completed_visit.visit_phase.value,
+                "outcome": "completed",
+                "visit_times": self._visit_times(completed_visit),
+            },
+            occurred_at=completed_visit.completed_at,
+        )
         self._medication_dispenses: dict[str, MedicationDispense] = {
             "Q-020": MedicationDispense(
                 id="MED-Q-020",
@@ -487,7 +502,90 @@ class DemoRepository:
                 dispensed_at=_at(9, 55),
             )
         }
+        seeded_medication = self._medication_dispenses["Q-020"]
+        medication_visit = next(ticket for ticket in self._snapshot.tickets if ticket.id == "Q-020")
+        self._record_audit(
+            actor=seeded_medication.dispensed_by,
+            action_type="medication_dispensed",
+            target_table="medication_dispenses",
+            target_id=seeded_medication.id,
+            details={
+                "ticket_id": seeded_medication.ticket_id,
+                "medication": [item.model_dump(mode="json") for item in seeded_medication.items],
+                "total_cost": seeded_medication.total_cost,
+                "currency": "SGD",
+                "dispensed_at": seeded_medication.dispensed_at.isoformat(),
+                "visit_times": self._visit_times(medication_visit),
+                "version": seeded_medication.version,
+            },
+            occurred_at=seeded_medication.dispensed_at,
+        )
+        self._record_audit(
+            actor=completed_visit.billing_confirmed_by or "synthetic-system",
+            action_type="payment_details_confirmed",
+            target_table="queue_entries",
+            target_id=completed_visit.id,
+            details={
+                "ticket_id": completed_visit.id,
+                "payment": {
+                    "mode": "synthetic_demo",
+                    "status": "amount_due_confirmed",
+                    "currency": "SGD",
+                    "billing_code": completed_visit.billing_code,
+                    "amount_due": completed_visit.uncovered_cost,
+                    "queue_number": completed_visit.queue_number,
+                    "confirmed_at": completed_visit.billing_confirmed_at.isoformat()
+                    if completed_visit.billing_confirmed_at
+                    else None,
+                },
+                "visit_times": self._visit_times(completed_visit),
+                "version": completed_visit.version,
+            },
+            occurred_at=completed_visit.billing_confirmed_at,
+        )
         self._tpa_submissions: dict[str, TpaSubmission] = {}
+
+    @staticmethod
+    def _visit_times(ticket: QueueTicket) -> dict[str, str | None]:
+        return {
+            "scheduled_at": ticket.scheduled_at.isoformat() if ticket.scheduled_at else None,
+            "checked_in_at": ticket.checked_in_at.isoformat() if ticket.checked_in_at else None,
+            "completed_at": ticket.completed_at.isoformat() if ticket.completed_at else None,
+        }
+
+    def _record_audit(
+        self,
+        *,
+        actor: str,
+        action_type: str,
+        target_table: str,
+        target_id: str,
+        details: dict[str, object],
+        occurred_at: datetime | None = None,
+    ) -> None:
+        actor_value = actor.casefold()
+        if action_type in {"medication_dispensed", "tpa_submission_confirmed"}:
+            actor_role = "pharmacist"
+        elif "system" in actor_value or "worker" in actor_value:
+            actor_role = "system"
+        elif "admin" in actor_value:
+            actor_role = "administrator"
+        else:
+            actor_role = "nurse"
+        next_id = max((record.id for record in self._audit_records), default=0) + 1
+        self._audit_records.append(
+            AuditRecord(
+                id=next_id,
+                actor_reference=actor,
+                actor_role=actor_role,
+                action_type=action_type,
+                target_table=target_table,
+                target_id=target_id,
+                details=details,
+                occurred_at=occurred_at or datetime.now(UTC),
+            )
+        )
+        self._audit_records.sort(key=lambda record: (record.occurred_at, record.id), reverse=True)
 
     def snapshot(self) -> DashboardSnapshot:
         with self._lock:
@@ -614,6 +712,20 @@ class DemoRepository:
             self._snapshot.tickets.insert(0, ticket)
             self._snapshot.generated_at = datetime.now(UTC)
             self._idempotent_results[key] = deepcopy(ticket)
+            self._record_audit(
+                actor=actor,
+                action_type="visit_checked_in",
+                target_table="queue_entries",
+                target_id=ticket.id,
+                details={
+                    "ticket_id": ticket.id,
+                    "intake_type": ticket.intake_type.value,
+                    "nurse_supervisor": request.nurse_supervisor,
+                    "clinical_escalation": request.clinical_escalation,
+                    "visit_times": self._visit_times(ticket),
+                },
+                occurred_at=ticket.checked_in_at,
+            )
             return deepcopy(ticket)
 
     def process_document(
@@ -723,6 +835,7 @@ class DemoRepository:
             )
             if not has_billing and not has_correction:
                 raise KeyError(f"No billing/queue information on file for {ticket_id}")
+            confirmed_at = datetime.now(UTC)
             updated = current.model_copy(
                 update={
                     "billing_code": request.corrected_billing_code or current.billing_code,
@@ -734,12 +847,38 @@ class DemoRepository:
                     "queue_number": request.corrected_queue_number or current.queue_number,
                     "billing_confirmed": True,
                     "billing_confirmed_by": actor,
-                    "billing_confirmed_at": datetime.now(UTC),
+                    "billing_confirmed_at": confirmed_at,
                     "version": current.version + 1,
                 }
             )
             self._snapshot.tickets[index] = updated
             self._idempotent_results[key] = deepcopy(updated)
+            self._record_audit(
+                actor=actor,
+                action_type="payment_details_confirmed",
+                target_table="queue_entries",
+                target_id=updated.id,
+                details={
+                    "ticket_id": updated.id,
+                    "payment": {
+                        "mode": "synthetic_demo",
+                        "status": "amount_due_confirmed",
+                        "currency": "SGD",
+                        "billing_code": updated.billing_code,
+                        "amount_due": updated.uncovered_cost,
+                        "queue_number": updated.queue_number,
+                        "confirmed_at": confirmed_at.isoformat(),
+                    },
+                    "before": {
+                        "billing_code": current.billing_code,
+                        "amount_due": current.uncovered_cost,
+                        "queue_number": current.queue_number,
+                    },
+                    "visit_times": self._visit_times(updated),
+                    "version": updated.version,
+                },
+                occurred_at=confirmed_at,
+            )
             return deepcopy(updated)
 
     def record_medication_dispense(
@@ -752,17 +891,35 @@ class DemoRepository:
                 return deepcopy(existing)
             if not any(ticket.id == ticket_id for ticket in self._snapshot.tickets):
                 raise KeyError(ticket_id)
+            ticket = next(ticket for ticket in self._snapshot.tickets if ticket.id == ticket_id)
             total_cost = sum(item.quantity * item.unit_cost for item in request.items)
+            dispensed_at = datetime.now(UTC)
             dispense = MedicationDispense(
                 id=f"MED-{ticket_id}",
                 ticket_id=ticket_id,
                 items=list(request.items),
                 total_cost=total_cost,
                 dispensed_by=actor,
-                dispensed_at=datetime.now(UTC),
+                dispensed_at=dispensed_at,
             )
             self._medication_dispenses[ticket_id] = dispense
             self._idempotent_results[key] = deepcopy(dispense)
+            self._record_audit(
+                actor=actor,
+                action_type="medication_dispensed",
+                target_table="medication_dispenses",
+                target_id=dispense.id,
+                details={
+                    "ticket_id": ticket_id,
+                    "medication": [item.model_dump(mode="json") for item in dispense.items],
+                    "total_cost": dispense.total_cost,
+                    "currency": "SGD",
+                    "dispensed_at": dispensed_at.isoformat(),
+                    "visit_times": self._visit_times(ticket),
+                    "version": dispense.version,
+                },
+                occurred_at=dispensed_at,
+            )
             return deepcopy(dispense)
 
     def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission:
@@ -805,17 +962,47 @@ class DemoRepository:
                 raise KeyError(ticket_id)
             if submission.version != request.expected_version:
                 raise ValueError("The submission changed since it was loaded. Refresh and try again.")
+            external_reference = (
+                "CLAIM-" + sha256(f"{ticket_id}:{request.idempotency_key}".encode()).hexdigest()[:10].upper()
+            )
             updated = submission.model_copy(
                 update={
                     "status": TpaSubmissionStatus.SUBMITTED,
                     "submitted_by": actor,
                     "submitted_at": datetime.now(UTC),
-                    "external_reference": f"CLAIM-{sha256(f'{ticket_id}:{request.idempotency_key}'.encode()).hexdigest()[:10].upper()}",
+                    "external_reference": external_reference,
                     "version": submission.version + 1,
                 }
             )
             self._tpa_submissions[ticket_id] = updated
             self._idempotent_results[key] = deepcopy(updated)
+            ticket = next(ticket for ticket in self._snapshot.tickets if ticket.id == ticket_id)
+            self._record_audit(
+                actor=actor,
+                action_type="tpa_submission_confirmed",
+                target_table="tpa_submissions",
+                target_id=updated.id,
+                details={
+                    "ticket_id": ticket_id,
+                    "mode": "synthetic_demo",
+                    "status": updated.status.value,
+                    "external_reference": updated.external_reference,
+                    "submitted_at": updated.submitted_at.isoformat() if updated.submitted_at else None,
+                    "documents": [
+                        {
+                            "id": document.id,
+                            "category": document.category.value,
+                            "issuer_code": document.issuer_code,
+                            "document_type": document.document_type,
+                        }
+                        for document in updated.documents
+                    ],
+                    "medication_dispense_id": updated.medication.id if updated.medication else None,
+                    "visit_times": self._visit_times(ticket),
+                    "version": updated.version,
+                },
+                occurred_at=updated.submitted_at,
+            )
             return deepcopy(updated)
 
     def decide_recommendation(
@@ -918,9 +1105,59 @@ class DemoRepository:
             self._idempotent_results[key] = deepcopy(deleted)
             return deepcopy(deleted)
 
-    def list_audit(self, *, limit: int) -> list[AuditRecord]:
+    def list_audit(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        search: str | None = None,
+        actor: str | None = None,
+        actor_role: str | None = None,
+        outcome: str | None = None,
+        action_type: str | None = None,
+        target_table: str | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+    ) -> list[AuditRecord]:
         with self._lock:
-            return deepcopy(self._audit_records[:limit])
+            records = self._audit_records
+            if action_type:
+                records = [record for record in records if record.action_type == action_type]
+            if target_table:
+                records = [record for record in records if record.target_table == target_table]
+            if occurred_from:
+                records = [record for record in records if record.occurred_at >= occurred_from]
+            if occurred_to:
+                records = [record for record in records if record.occurred_at <= occurred_to]
+            if search:
+                needle = search.casefold()
+                records = [
+                    record
+                    for record in records
+                    if needle
+                    in " ".join(
+                        (
+                            record.actor_reference,
+                            record.action_type,
+                            record.target_table,
+                            record.target_id,
+                            str(record.details),
+                        )
+                    ).casefold()
+                ]
+            if actor:
+                records = [record for record in records if actor.casefold() in record.actor_reference.casefold()]
+            if actor_role:
+                role = actor_role.casefold()
+                records = [record for record in records if record.actor_role == role]
+            if outcome:
+                records = [
+                    record
+                    for record in records
+                    if outcome.casefold()
+                    in str(record.details.get("outcome") or record.details.get("status") or "committed").casefold()
+                ]
+            return deepcopy(records[offset : offset + limit])
 
 
 demo_repository = DemoRepository()

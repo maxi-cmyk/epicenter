@@ -458,11 +458,44 @@ def test_registration_role_cannot_decide_operations_recommendations() -> None:
     assert response.json()["detail"] == "Staff role is not permitted for this action."
 
 
-def test_registration_role_cannot_read_audit_or_simulator() -> None:
-    app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
+@pytest.mark.parametrize("role", ["registration", "pharmacist"])
+def test_demo_nurse_and_pharmacist_roles_can_read_audit_but_not_simulator(role: str) -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal(role)
 
-    assert client.get("/api/v1/audit").status_code == 403
+    assert client.get("/api/v1/audit").status_code == 200
     assert client.get("/api/v1/simulator/snapshots").status_code == 403
+
+
+def test_audit_is_no_store_searchable_filterable_paginated_and_read_only() -> None:
+    response = client.get(
+        "/api/v1/audit",
+        params={"search": "medication", "action_type": "medication_dispensed", "limit": 1, "offset": 0},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert len(response.json()) == 1
+    assert response.json()[0]["action_type"] == "medication_dispensed"
+    assert response.json()[0]["actor_role"] == "pharmacist"
+    assert client.patch("/api/v1/audit/1", json={"details": {"tampered": True}}).status_code == 404
+    assert client.delete("/api/v1/audit/1").status_code == 404
+
+    completed = client.get(
+        "/api/v1/audit",
+        params={"actor_role": "system", "outcome": "completed", "target_table": "queue_entries"},
+    )
+    assert completed.status_code == 200
+    assert [row["action_type"] for row in completed.json()] == ["visit_completed"]
+
+
+def test_audit_rejects_an_inverted_date_range() -> None:
+    response = client.get(
+        "/api/v1/audit",
+        params={"occurred_from": "2026-08-13T00:00:00Z", "occurred_to": "2026-08-12T00:00:00Z"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Start date must be before end date."
 
 
 def test_operations_admin_can_read_audit_and_simulator() -> None:
@@ -470,6 +503,91 @@ def test_operations_admin_can_read_audit_and_simulator() -> None:
 
     assert client.get("/api/v1/audit").status_code == 200
     assert client.get("/api/v1/simulator/snapshots").status_code == 200
+
+
+def test_audit_records_medication_tpa_payment_and_visit_times_once() -> None:
+    medication_payload = {
+        "items": [{"name": "Ibuprofen 200mg", "quantity": 10, "unit_cost": 0.2}],
+        "idempotency_key": "audit-medication-test",
+    }
+    first_medication = client.post("/api/v1/tickets/Q-020/medication", json=medication_payload)
+    replayed_medication = client.post("/api/v1/tickets/Q-020/medication", json=medication_payload)
+    assert first_medication.status_code == replayed_medication.status_code == 201
+
+    draft = client.get("/api/v1/tickets/Q-020/tpa-submission").json()
+    tpa_payload = {"expected_version": draft["version"], "idempotency_key": "audit-tpa-test"}
+    first_tpa = client.post("/api/v1/tickets/Q-020/tpa-submission/confirm", json=tpa_payload)
+    replayed_tpa = client.post("/api/v1/tickets/Q-020/tpa-submission/confirm", json=tpa_payload)
+    assert first_tpa.status_code == replayed_tpa.status_code == 200
+
+    ticket = next(item for item in client.get("/api/v1/dashboard").json()["tickets"] if item["id"] == "Q-019")
+    payment_payload = {"expected_version": ticket["version"], "idempotency_key": "audit-payment-test"}
+    first_payment = client.post("/api/v1/tickets/Q-019/billing/confirm", json=payment_payload)
+    replayed_payment = client.post("/api/v1/tickets/Q-019/billing/confirm", json=payment_payload)
+    assert first_payment.status_code == replayed_payment.status_code == 200
+
+    audit_rows = client.get("/api/v1/audit").json()
+
+    medication_rows = [
+        row
+        for row in audit_rows
+        if row["action_type"] == "medication_dispensed" and row["details"]["medication"][0]["name"] == "Ibuprofen 200mg"
+    ]
+    assert len(medication_rows) == 1
+    assert medication_rows[0]["details"]["medication"] == [
+        {"name": "Ibuprofen 200mg", "quantity": 10, "unit_cost": 0.2}
+    ]
+    assert medication_rows[0]["details"]["total_cost"] == 2.0
+    assert medication_rows[0]["details"]["dispensed_at"]
+    assert medication_rows[0]["details"]["visit_times"]["checked_in_at"] == "2026-08-12T09:20:00+00:00"
+
+    tpa_rows = [row for row in audit_rows if row["action_type"] == "tpa_submission_confirmed"]
+    assert len(tpa_rows) == 1
+    assert tpa_rows[0]["details"]["mode"] == "synthetic_demo"
+    assert tpa_rows[0]["details"]["status"] == "submitted"
+    assert tpa_rows[0]["details"]["external_reference"].startswith("CLAIM-")
+    assert {document["category"] for document in tpa_rows[0]["details"]["documents"]} == {
+        "form",
+        "authorisation_letter",
+        "benefit_structure",
+        "coding_scheme",
+    }
+    assert tpa_rows[0]["details"]["medication_dispense_id"] == "MED-Q-020"
+    assert tpa_rows[0]["details"]["submitted_at"]
+
+    payment_rows = [
+        row
+        for row in audit_rows
+        if row["action_type"] == "payment_details_confirmed" and row["details"]["ticket_id"] == "Q-019"
+    ]
+    assert len(payment_rows) == 1
+    assert payment_rows[0]["details"]["payment"] == {
+        "mode": "synthetic_demo",
+        "status": "amount_due_confirmed",
+        "currency": "SGD",
+        "billing_code": "PEE226-CHAS",
+        "amount_due": 8.5,
+        "queue_number": "Q019",
+        "confirmed_at": payment_rows[0]["details"]["payment"]["confirmed_at"],
+    }
+    assert payment_rows[0]["details"]["visit_times"]["checked_in_at"] == "2026-08-12T09:37:00+00:00"
+
+    visit_rows = [row for row in audit_rows if row["action_type"] == "visit_completed"]
+    assert len(visit_rows) == 1
+    assert visit_rows[0]["details"]["visit_times"] == {
+        "scheduled_at": "2026-08-12T08:30:00+00:00",
+        "checked_in_at": "2026-08-12T08:22:00+00:00",
+        "completed_at": "2026-08-12T09:08:00+00:00",
+    }
+
+
+def test_demo_audit_reads_cannot_mutate_stored_history() -> None:
+    repository = DemoRepository()
+    returned = repository.list_audit(limit=50)
+    returned[0].details["tampered"] = True
+
+    stored = repository.list_audit(limit=50)
+    assert "tampered" not in stored[0].details
 
 
 def test_stale_factor_returns_clerk_reverification_hint_before_mutation() -> None:

@@ -34,7 +34,7 @@ test("the patient pre-check preserves the registration and identity boundary", (
 test("the dashboard labels all demo data honestly", () => {
   const navigation = read("nurse/components/layout/SideNavigation.tsx");
   const dashboard = read("nurse/components/dashboard/DashboardView.tsx");
-  assert.match(navigation, /Nurse panel/);
+  assert.match(navigation, /Clinic readiness/);
   assert.match(dashboard, /Local synthetic fallback/);
 });
 
@@ -72,7 +72,7 @@ test("staff authorization and mutation reverification fail closed", () => {
   const provider = read("nurse/components/providers/AuthProvider.tsx");
   const api = read("nurse/lib/api.ts");
   const review = read("nurse/components/review/ReviewWorkspace.tsx");
-  const allocation = read("nurse/components/dashboard/AllocationDecision.tsx");
+  const task = read("nurse/components/tasks/TaskWorkspace.tsx");
   const kiosk = read("nurse/components/kiosk/KioskWorkspace.tsx");
 
   assert.match(provider, /fetchStaffSession/);
@@ -80,9 +80,9 @@ test("staff authorization and mutation reverification fail closed", () => {
   assert.match(api, /reverification-error/);
   assert.match(api, /error\.status === 401 \|\| error\.status === 403/);
   assert.match(review, /useReverification\(transitionTicket\)/);
-  assert.match(allocation, /useReverification\(decideRecommendation\)/);
+  assert.match(task, /useReverification\(confirmPackage\)/);
   assert.match(kiosk, /useReverification\(checkInWalkIn\)/);
-  assert.doesNotMatch(allocation, /Demo fallback: recommendation/);
+  assert.doesNotMatch(task, /Demo fallback/);
 });
 
 test("the shared workspace contains contracts and presentation primitives only", () => {
@@ -92,9 +92,21 @@ test("the shared workspace contains contracts and presentation primitives only",
     "./contracts/generated",
     "./database",
     "./styles/globals.css",
+    "./ui/AuditPanel",
     "./ui/Button",
     "./ui/LoadingBoard",
     "./ui/PageHeader",
     "./ui/StatusBadge",
   ]);
+});
+
+test("audit is a shared read-only surface for nurse and pharmacy", () => {
+  const auditPanel = read("shared/src/ui/AuditPanel.tsx");
+  assert.match(read("nurse/app/audit/page.tsx"), /AuditPanel/);
+  assert.match(read("pharmacy/app/audit/page.tsx"), /AuditPanel/);
+  assert.match(read("nurse/components/layout/SideNavigation.tsx"), /Audit trail/);
+  assert.match(read("pharmacy/components/layout/SideNavigation.tsx"), /Audit trail/);
+  assert.doesNotMatch(auditPanel, /Immutable · read only/);
+  assert.match(auditPanel, /Search audit trail/);
+  assert.doesNotMatch(auditPanel, /editAudit|deleteAudit|updateAudit/);
 });

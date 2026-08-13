@@ -581,6 +581,8 @@ export interface components {
             action_type: string;
             /** Actor Reference */
             actor_reference: string;
+            /** Actor Role */
+            actor_role?: string | null;
             /** Details */
             details: {
                 [key: string]: unknown;
@@ -1000,6 +1002,8 @@ export interface components {
              * @default false
              */
             clinical_escalation: boolean;
+            /** Completed At */
+            completed_at?: string | null;
             /**
              * Documents
              * @default []
@@ -1274,7 +1278,16 @@ export interface operations {
     list_audit_api_v1_audit_get: {
         parameters: {
             query?: {
+                action_type?: string | null;
+                actor?: string | null;
+                actor_role?: string | null;
                 limit?: number;
+                occurred_from?: string | null;
+                occurred_to?: string | null;
+                offset?: number;
+                outcome?: string | null;
+                search?: string | null;
+                target_table?: string | null;
             };
             header?: never;
             path?: never;

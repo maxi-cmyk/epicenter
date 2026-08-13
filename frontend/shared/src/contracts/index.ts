@@ -3,6 +3,7 @@ import type { components } from "./api.generated";
 export type ActionResult = components["schemas"]["ActionResult"];
 export type ActivityEvent = components["schemas"]["ActivityEvent"];
 export type AllocationRecommendation = components["schemas"]["AllocationRecommendation"];
+export type AuditRecord = components["schemas"]["AuditRecord"];
 export type BillingConfirmRequest = components["schemas"]["BillingConfirmRequest"];
 export type ChecklistItem = components["schemas"]["ChecklistItem"];
 export type ChecklistStatus = components["schemas"]["ChecklistStatus"];

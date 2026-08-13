@@ -61,9 +61,7 @@ class OperationsRepository(Protocol):
 
     def add_walk_in(self, request: KioskCheckInRequest, actor: str) -> QueueTicket: ...
 
-    def process_document(
-        self, ticket_id: str, request: DocumentProcessingRequest, actor: str
-    ) -> QueueTicket: ...
+    def process_document(self, ticket_id: str, request: DocumentProcessingRequest, actor: str) -> QueueTicket: ...
 
     def decide_recommendation(
         self,
@@ -82,7 +80,20 @@ class OperationsRepository(Protocol):
 
     def delete_patient(self, patient_id: int, request: PatientDeleteRequest, actor: str) -> PatientRecord: ...
 
-    def list_audit(self, *, limit: int) -> list[AuditRecord]: ...
+    def list_audit(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        search: str | None = None,
+        actor: str | None = None,
+        actor_role: str | None = None,
+        outcome: str | None = None,
+        action_type: str | None = None,
+        target_table: str | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+    ) -> list[AuditRecord]: ...
 
     def record_medication_dispense(
         self, ticket_id: str, request: MedicationDispenseRequest, actor: str
@@ -114,6 +125,7 @@ def _ticket_from_row(row: dict[str, object]) -> QueueTicket:
         readiness_reason=str(row["readiness_reason"]),
         scheduled_at=row.get("scheduled_at"),
         checked_in_at=row.get("checked_in_at"),
+        completed_at=row.get("completed_at"),
         original_ordering_at=row["original_ordering_at"],
         waiting_minutes=int(row.get("waiting_minutes") or 0),
         expected_room=row.get("expected_counter_number"),
@@ -560,9 +572,7 @@ class SupabaseOperationsRepository:
         )
         return _ticket_from_row(row)
 
-    def process_document(
-        self, ticket_id: str, request: DocumentProcessingRequest, actor: str
-    ) -> QueueTicket:
+    def process_document(self, ticket_id: str, request: DocumentProcessingRequest, actor: str) -> QueueTicket:
         row = self.api.rpc(
             "epicenter_process_document",
             {
@@ -595,9 +605,7 @@ class SupabaseOperationsRepository:
             "pending the deferred production migration (task #13)."
         )
 
-    def confirm_tpa_submission(
-        self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str
-    ) -> TpaSubmission:
+    def confirm_tpa_submission(self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str) -> TpaSubmission:
         raise NotImplementedError(
             "TPA submission confirmation is only available in the demo repository "
             "pending the deferred production migration (task #13)."
@@ -717,12 +725,69 @@ class SupabaseOperationsRepository:
         )
         return _patient_from_row(row)
 
-    def list_audit(self, *, limit: int) -> list[AuditRecord]:
+    def list_audit(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        search: str | None = None,
+        actor: str | None = None,
+        actor_role: str | None = None,
+        outcome: str | None = None,
+        action_type: str | None = None,
+        target_table: str | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+    ) -> list[AuditRecord]:
+        filters = {"clinic_id": f"eq.{self.clinic_id}"}
+        if action_type:
+            filters["action_type"] = f"eq.{action_type}"
+        if target_table:
+            filters["target_table"] = f"eq.{target_table}"
+        if occurred_from:
+            filters["occurred_at"] = f"gte.{occurred_from.isoformat()}"
+        # PostgREST cannot express two constraints for the same mapping key, so
+        # apply the upper date bound after the clinic-scoped query.
+        fetch_limit = min(500, limit + offset + (200 if search or occurred_to else 0))
         rows = self.api.select(
             "audit_log",
             "id,actor_reference,action_type,target_table,target_id,details,occurred_at",
-            filters={"clinic_id": f"eq.{self.clinic_id}"},
-            order="occurred_at.desc",
-            limit=limit,
+            filters=filters,
+            order="occurred_at.desc,id.desc",
+            limit=fetch_limit,
         )
-        return [AuditRecord(**row) for row in rows]
+        records = [AuditRecord(**row) for row in rows]
+        if occurred_to:
+            records = [record for record in records if record.occurred_at <= occurred_to]
+        if search:
+            needle = search.casefold()
+            records = [
+                record
+                for record in records
+                if needle
+                in " ".join(
+                    (
+                        record.actor_reference,
+                        record.action_type,
+                        record.target_table,
+                        record.target_id,
+                    )
+                ).casefold()
+            ]
+        if actor:
+            records = [record for record in records if actor.casefold() in record.actor_reference.casefold()]
+        if actor_role:
+            role = actor_role.casefold()
+            records = [
+                record
+                for record in records
+                if record.actor_role == role or str(record.details.get("actor_role", "")).casefold() == role
+            ]
+        if outcome:
+            records = [
+                record
+                for record in records
+                if outcome.casefold()
+                in str(record.details.get("outcome") or record.details.get("status") or "committed").casefold()
+            ]
+        return records[offset : offset + limit]

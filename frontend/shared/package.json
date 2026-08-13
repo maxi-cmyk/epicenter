@@ -8,6 +8,7 @@
     "./database": "./src/contracts/database.types.ts",
     "./styles/globals.css": "./src/styles/globals.css",
     "./ui/Button": "./src/ui/Button.tsx",
+    "./ui/AuditPanel": "./src/ui/AuditPanel.tsx",
     "./ui/LoadingBoard": "./src/ui/LoadingBoard.tsx",
     "./ui/PageHeader": "./src/ui/PageHeader.tsx",
     "./ui/StatusBadge": "./src/ui/StatusBadge.tsx"
