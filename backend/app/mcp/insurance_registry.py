@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Insurance Format Registry MCP — Streamable HTTP endpoint.
 
 Exposed at /mcp/insurance-registry. Isolated maker/checker server that operates
@@ -36,17 +37,20 @@ from pydantic import ValidationError
 from app.core.auth import StaffPrincipal
 from app.core.config import Settings, get_settings
 from app.mcp.auth import authorize_registry_tool, require_mcp_identity
+from app.mcp.protocol import PROTOCOL_VERSION, governed_tool, jsonrpc_error, jsonrpc_result, tool_result
 from app.mcp.schemas import (
     CompareMappingVersionsInput,
     EvidenceRequirementsOutput,
     GetEvidenceRequirementsInput,
     GetRegressionStatusInput,
     GetSchemaInput,
-    MCPError,
     MappingProposalOutput,
+    MappingReviewOutput,
     MappingVersionComparisonOutput,
+    MCPError,
     ProposeMappingInput,
     RegressionStatusOutput,
+    ReviewMappingInput,
     SchemaOutput,
 )
 
@@ -63,7 +67,20 @@ _SERVER_INFO = {
     ),
 }
 
-_PROTOCOL_VERSION = "2024-11-05"
+_PROTOCOL_VERSION = PROTOCOL_VERSION
+
+_PROPOSALS: dict[str, dict[str, Any]] = {}
+_REGISTRY_AUDIT: list[dict[str, Any]] = []
+_PROHIBITED_FIXTURE_KEYS = {"nric", "fin", "patient_id", "patient_name", "date_of_birth", "phone", "email"}
+
+_GOVERNANCE = {
+    "registry_get_schema": {"title": "Registry schema", "owner": "Epicenter format governance", "capability": "Read one approved format schema", "least_privilege": "operations_admin", "data_boundary": "approved synthetic schema metadata", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove when the format family is retired"},
+    "registry_propose_mapping": {"title": "Propose format mapping", "owner": "Epicenter format governance", "capability": "Stage one mapping from an approved fixture", "least_privilege": "operations_admin maker", "data_boundary": "synthetic or formally de-identified fixture only", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if mappings become code-only"},
+    "registry_review_mapping": {"title": "Review format mapping", "owner": "Epicenter format governance", "capability": "Approve or reject one staged mapping", "least_privilege": "different operations_admin checker", "data_boundary": "proposal metadata only; no patient or eligibility writes", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if mappings become code-only"},
+    "registry_get_evidence_requirements": {"title": "Evidence requirements", "owner": "Epicenter format governance", "capability": "Read required evidence for one family", "least_privilege": "operations_admin", "data_boundary": "approved schema metadata", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove with corresponding family"},
+    "registry_compare_mapping_versions": {"title": "Compare mapping versions", "owner": "Epicenter format governance", "capability": "Compare two mapping versions", "least_privilege": "operations_admin", "data_boundary": "synthetic mapping metadata", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if versioning is retired"},
+    "registry_get_regression_status": {"title": "Mapping regression status", "owner": "Epicenter format governance", "capability": "Read fixture regression status", "least_privilege": "operations_admin", "data_boundary": "synthetic test results only", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if fixture regression is retired"},
+}
 
 
 def _now_iso() -> str:
@@ -175,8 +192,7 @@ def initialize(request_body: dict[str, Any]) -> dict[str, Any]:
 @router.get("/tools/list")
 @router.post("/tools/list")
 def list_tools() -> dict[str, Any]:
-    return {
-        "tools": [
+    tools = [
             {
                 "name": "registry_get_schema",
                 "description": "Retrieve an approved document-family schema and checkbox conventions.",
@@ -204,12 +220,29 @@ def list_tools() -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "form_id": {"type": "string"},
+                        "fixture_classification": {"type": "string", "enum": ["synthetic", "formally_deidentified"]},
+                        "approval_reference": {"type": "string"},
                         "synthetic_fixture": {
                             "type": "object",
                             "description": "Approved synthetic or de-identified fixture data.",
                         },
                     },
-                    "required": ["form_id", "synthetic_fixture"],
+                    "required": ["form_id", "fixture_classification", "approval_reference", "synthetic_fixture"],
+                    "additionalProperties": False,
+                },
+            },
+            {
+                "name": "registry_review_mapping",
+                "description": "Approve or reject a pending mapping. The checker must differ from the maker.",
+                "readOnly": False,
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "proposal_id": {"type": "string"},
+                        "decision": {"type": "string", "enum": ["approved", "rejected"]},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["proposal_id", "decision", "reason"],
                     "additionalProperties": False,
                 },
             },
@@ -254,7 +287,40 @@ def list_tools() -> dict[str, Any]:
                 },
             },
         ]
-    }
+    return {"tools": [governed_tool(tool, _GOVERNANCE[tool["name"]]) for tool in tools]}
+
+
+@router.post("")
+async def streamable_http(
+    raw_body: dict[str, Any],
+    principal: Annotated[StaffPrincipal, Depends(require_mcp_identity)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> JSONResponse:
+    request_id = raw_body.get("id")
+    if raw_body.get("jsonrpc") != "2.0":
+        return jsonrpc_error(request_id, -32600, "Invalid JSON-RPC request.")
+    method = raw_body.get("method")
+    if method == "initialize":
+        return jsonrpc_result(request_id, initialize(raw_body.get("params", {})))
+    if method == "notifications/initialized":
+        return JSONResponse(status_code=202, content=None, headers={"MCP-Protocol-Version": _PROTOCOL_VERSION})
+    if method == "tools/list":
+        return jsonrpc_result(request_id, list_tools())
+    if method != "tools/call":
+        return jsonrpc_error(request_id, -32601, "Method not found.")
+    params = raw_body.get("params") or {}
+    name = params.get("name")
+    try:
+        authorize_registry_tool(name, principal)
+        result = _dispatch_tool(name, params.get("arguments") or {}, principal)
+        return jsonrpc_result(request_id, tool_result(result))
+    except ValidationError as exc:
+        return jsonrpc_result(request_id, tool_result({"error": "invalid_input", "message": f"Input validation failed: {exc.error_count()} error(s)."}, is_error=True))
+    except HTTPException as exc:
+        return jsonrpc_result(request_id, tool_result({"error": "tool_error", "message": str(exc.detail)}, is_error=True))
+    except Exception:
+        logger.exception("Registry MCP JSON-RPC tool failure")
+        return jsonrpc_result(request_id, tool_result({"error": "tool_error", "message": "An internal error occurred."}, is_error=True))
 
 
 @router.post("/tools/call")
@@ -272,7 +338,7 @@ async def call_tool(
 
     try:
         authorize_registry_tool(tool_name, principal)
-        result = _dispatch_tool(tool_name, tool_input)
+        result = _dispatch_tool(tool_name, tool_input, principal)
         return JSONResponse(content={"result": result})
     except HTTPException as exc:
         http_status = exc.status_code
@@ -290,13 +356,16 @@ async def call_tool(
 # ---------------------------------------------------------------------------
 
 
-def _dispatch_tool(tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+def _dispatch_tool(tool_name: str, tool_input: dict[str, Any], principal: StaffPrincipal) -> dict[str, Any]:
     if tool_name == "registry_get_schema":
         inp = GetSchemaInput.model_validate(tool_input)
         return _get_schema(inp)
     elif tool_name == "registry_propose_mapping":
         inp = ProposeMappingInput.model_validate(tool_input)
-        return _propose_mapping(inp)
+        return _propose_mapping(inp, principal)
+    elif tool_name == "registry_review_mapping":
+        inp = ReviewMappingInput.model_validate(tool_input)
+        return _review_mapping(inp, principal)
     elif tool_name == "registry_get_evidence_requirements":
         inp = GetEvidenceRequirementsInput.model_validate(tool_input)
         return _get_evidence_requirements(inp)
@@ -330,7 +399,11 @@ def _get_schema(inp: GetSchemaInput) -> dict[str, Any]:
     return output.model_dump()
 
 
-def _propose_mapping(inp: ProposeMappingInput) -> dict[str, Any]:
+def _propose_mapping(inp: ProposeMappingInput, principal: StaffPrincipal) -> dict[str, Any]:
+    fixture_keys = {str(key).lower() for key in inp.synthetic_fixture}
+    prohibited = sorted(fixture_keys & _PROHIBITED_FIXTURE_KEYS)
+    if prohibited:
+        raise HTTPException(status_code=422, detail=f"Fixture contains prohibited patient fields: {', '.join(prohibited)}")
     proposal_id = f"proposal-{uuid.uuid4().hex[:12]}"
     # Derive proposed fields from the fixture keys — never from live patient data
     proposed_fields = {
@@ -353,7 +426,36 @@ def _propose_mapping(inp: ProposeMappingInput) -> dict[str, Any]:
         ),
         synthetic=True,
     )
+    _PROPOSALS[proposal_id] = {
+        **output.model_dump(),
+        "maker_reference": principal.subject,
+        "fixture_classification": inp.fixture_classification,
+        "approval_reference": inp.approval_reference,
+        "created_at": _now_iso(),
+    }
+    _REGISTRY_AUDIT.append({"action": "mapping_proposed", "proposal_id": proposal_id, "actor": principal.subject, "at": _now_iso()})
     return output.model_dump()
+
+
+def _review_mapping(inp: ReviewMappingInput, principal: StaffPrincipal) -> dict[str, Any]:
+    proposal = _PROPOSALS.get(inp.proposal_id)
+    if proposal is None:
+        raise HTTPException(status_code=404, detail="Mapping proposal not found.")
+    if proposal["status"] != "pending_review":
+        raise HTTPException(status_code=409, detail="Mapping proposal has already been reviewed.")
+    if proposal["maker_reference"] == principal.subject:
+        raise HTTPException(status_code=403, detail="Maker/checker separation requires a different reviewer.")
+    reviewed_at = _now_iso()
+    proposal.update(status=inp.decision, checker_reference=principal.subject, reviewed_at=reviewed_at, review_reason=inp.reason)
+    _REGISTRY_AUDIT.append({"action": f"mapping_{inp.decision}", "proposal_id": inp.proposal_id, "actor": principal.subject, "at": reviewed_at})
+    return MappingReviewOutput(
+        proposal_id=inp.proposal_id,
+        status=inp.decision,
+        maker_reference=proposal["maker_reference"],
+        checker_reference=principal.subject,
+        reviewed_at=reviewed_at,
+        reason=inp.reason,
+    ).model_dump()
 
 
 def _get_evidence_requirements(inp: GetEvidenceRequirementsInput) -> dict[str, Any]:
@@ -389,11 +491,12 @@ def _compare_mapping_versions(inp: CompareMappingVersionsInput) -> dict[str, Any
 
 
 def _get_regression_status(inp: GetRegressionStatusInput) -> dict[str, Any]:
+    proposal = _PROPOSALS.get(inp.mapping_id)
     output = RegressionStatusOutput(
         mapping_id=inp.mapping_id,
         regression_status="pending",
         test_results=[],
-        review_status="pending_review",
+        review_status=str(proposal["status"]) if proposal else "pending_review",
         synthetic=True,
     )
     return output.model_dump()

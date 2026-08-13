@@ -1,13 +1,11 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
-import Link from "next/link";
 import { useState } from "react";
 
 import { transitionTicket } from "@/lib/api";
 import type { QueueTicket, ReviewCase } from "@epicenter/shared/contracts";
 
-import { EvidencePanel } from "../review/EvidencePanel";
+import { EvidencePanel, type ReviewResolution } from "../review/EvidencePanel";
 import styles from "./Task.module.css";
 
 export function ReviewGate({
@@ -21,15 +19,19 @@ export function ReviewGate({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [confirmation, setConfirmation] = useState("");
 
-  const reverifiedTransition = useReverification(transitionTicket);
-
-  const confirmReview = async () => {
+  const confirmReview = async (resolution: ReviewResolution) => {
     setPending(true);
     setError("");
+    setConfirmation("");
     try {
-      await reverifiedTransition(ticket.id, ticket.version, "ready", "all_prerequisites_passed", true);
+      const reason = `review_resolved:${resolution.method.toLowerCase().replaceAll(" ", "_")}${
+        resolution.note ? `:${resolution.note}` : ""
+      }`;
+      await transitionTicket(ticket.id, ticket.version, "needs_review", reason, true);
       await refresh();
+      setConfirmation("Resolution recorded. This visit stays in review until its readiness prerequisites pass.");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not confirm the record.");
     } finally {
@@ -44,16 +46,15 @@ export function ReviewGate({
         This ticket has an administrative exception that must be resolved before the nurse workflow can begin.
       </p>
       {reviewCase ? (
-        <EvidencePanel onConfirm={() => void confirmReview()} reviewCase={reviewCase} />
+        <EvidencePanel onConfirm={(resolution) => void confirmReview(resolution)} reviewCase={reviewCase} />
       ) : (
         <div className={styles.notice}>
           <p>No review evidence found for this ticket.</p>
-          <Link className={styles.backLink} href="/review">
-            Open the review worklist
-          </Link>
+          <p>Return to Dashboard and refresh the visit before trying again.</p>
         </div>
       )}
       {pending ? <p className={styles.hint}>Confirming…</p> : null}
+      {confirmation ? <p className={styles.success}>{confirmation}</p> : null}
       {error ? <p className={styles.error}>{error}</p> : null}
     </section>
   );

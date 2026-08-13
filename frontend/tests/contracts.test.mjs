@@ -6,9 +6,11 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("routes stay split into focused workspaces", () => {
   assert.match(read("nurse/app/page.tsx"), /DashboardView/);
-  assert.match(read("nurse/app/review/page.tsx"), /ReviewWorkspace/);
+  assert.match(read("nurse/app/review/page.tsx"), /redirect\("\/"\)/);
   assert.match(read("nurse/app/kiosk/page.tsx"), /KioskWorkspace/);
-  assert.match(read("patient/app/page.tsx"), /PreArrivalWorkspace/);
+  assert.match(read("patient/app/page.tsx"), /HomeWorkspace/);
+  assert.match(read("patient/app/onboarding/page.tsx"), /OnboardingWorkspace/);
+  assert.match(read("patient/app/queue/page.tsx"), /QueueWorkspace/);
   assert.throws(() => read("patient/app/review/page.tsx"));
   assert.throws(() => read("patient/app/kiosk/page.tsx"));
   assert.throws(() => read("nurse/app/pre-arrival/page.tsx"));
@@ -35,7 +37,37 @@ test("the dashboard labels all demo data honestly", () => {
   const navigation = read("nurse/components/layout/SideNavigation.tsx");
   const dashboard = read("nurse/components/dashboard/DashboardView.tsx");
   assert.match(navigation, /Clinic readiness/);
-  assert.match(dashboard, /Local synthetic fallback/);
+  assert.match(dashboard, /Demo data only — confirmations are disabled/);
+  assert.doesNotMatch(dashboard, /Clinic API connected/);
+  assert.ok(dashboard.indexOf("styles.contextBar") < dashboard.indexOf("{loading ?"));
+  assert.match(read("nurse\/lib\/api.ts"), /Reconnect to live clinic data before recording a confirmation/);
+});
+
+test("the desktop board elevates exceptions without removing the three visit phases", () => {
+  const board = read("nurse/components/dashboard/PatientFlowBoard.tsx");
+  const ticket = read("nurse/components/dashboard/TicketRow.tsx");
+
+  assert.match(board, /Incoming/);
+  assert.match(board, /Ongoing/);
+  assert.match(board, /Finished/);
+  assert.doesNotMatch(board, /Open next exception/);
+  assert.doesNotMatch(board, /aria-keyshortcuts/);
+  assert.match(ticket, /Needs confirmation/);
+  assert.match(ticket, /card_finished/);
+  assert.doesNotMatch(ticket, />Docs</);
+});
+
+test("review exceptions stay contextual and patient-specific", () => {
+  const evidence = read("nurse/components/review/EvidencePanel.tsx");
+  const gate = read("nurse/components/tasks/ReviewGate.tsx");
+
+  assert.match(evidence, /reviewCase\.evidence_summary/);
+  assert.match(evidence, /reviewCase\.next_action/);
+  assert.match(evidence, /onConfirm\(\{ method:/);
+  assert.doesNotMatch(evidence, /Bluepeak|S••••451A|Executive screening/);
+  assert.match(gate, /review_resolved:/);
+  assert.match(gate, /"needs_review", reason/);
+  assert.doesNotMatch(gate, /"ready", reason/);
 });
 
 test("each deployable app validates its own environment", () => {
@@ -65,24 +97,28 @@ test("patient signup and nurse provisioning stay separate", () => {
   assert.match(patientAuth, /activatePatientAccount/);
   assert.doesNotMatch(patientAuth, /role selector/i);
   assert.match(nurseSignIn, /withSignUp=\{false\}/);
+  assert.match(nurseSignIn, /Self-service sign-up is unavailable/);
   assert.doesNotMatch(nurseSignIn, /<SignUp/);
 });
 
-test("staff authorization and mutation reverification fail closed", () => {
+test("staff authorization remains while manual confirmations do not require step-up", () => {
   const provider = read("nurse/components/providers/AuthProvider.tsx");
   const api = read("nurse/lib/api.ts");
-  const review = read("nurse/components/review/ReviewWorkspace.tsx");
-  const task = read("nurse/components/tasks/TaskWorkspace.tsx");
+  const review = read("nurse/components/tasks/ReviewGate.tsx");
+  const packageStep = read("nurse/components/tasks/PackageStep.tsx");
   const kiosk = read("nurse/components/kiosk/KioskWorkspace.tsx");
 
   assert.match(provider, /fetchStaffSession/);
   assert.match(provider, /Nurse access required/);
   assert.match(api, /reverification-error/);
   assert.match(api, /error\.status === 401 \|\| error\.status === 403/);
-  assert.match(review, /useReverification\(transitionTicket\)/);
-  assert.match(task, /useReverification\(confirmPackage\)/);
-  assert.match(kiosk, /useReverification\(checkInWalkIn\)/);
-  assert.doesNotMatch(task, /Demo fallback/);
+  assert.match(review, /await transitionTicket\(/);
+  assert.match(packageStep, /await confirmPackage\(/);
+  assert.match(kiosk, /await checkInWalkIn\(/);
+  assert.doesNotMatch(review, /useReverifiedMutation|useReverification/);
+  assert.doesNotMatch(packageStep, /useReverifiedMutation|useReverification/);
+  assert.doesNotMatch(kiosk, /useReverifiedMutation|useReverification/);
+  assert.doesNotMatch(packageStep, /Demo fallback/);
 });
 
 test("the shared workspace contains contracts and presentation primitives only", () => {
@@ -118,6 +154,7 @@ test("database is separate from audit and protects only update and delete", () =
   assert.match(database, /pendingMutation\.kind/);
   assert.doesNotMatch(database, /verifyPassword\(.*create/i);
   assert.doesNotMatch(database, /AuditPanel|fetchAudit/);
+  assert.doesNotMatch(database, /Search and maintain approved patient records/);
 });
 
 test("audit is a shared read-only surface for nurse and pharmacy", () => {
@@ -128,5 +165,6 @@ test("audit is a shared read-only surface for nurse and pharmacy", () => {
   assert.match(read("pharmacy/components/layout/SideNavigation.tsx"), /Audit trail/);
   assert.doesNotMatch(auditPanel, /Immutable · read only/);
   assert.match(auditPanel, /Search audit trail/);
+  assert.match(auditPanel, /Audit entries cannot be edited or deleted, for viewing purposes only\./);
   assert.doesNotMatch(auditPanel, /editAudit|deleteAudit|updateAudit/);
 });

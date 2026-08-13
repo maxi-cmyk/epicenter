@@ -20,12 +20,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 from openai import AsyncOpenAI, OpenAIError
 
 from app.ai.client import create_response
-from app.ai.schemas import AssistantMessage
+from app.ai.schemas import AssistantMessage, AssistantUsage
 from app.core.auth import StaffPrincipal
 from app.core.config import Settings
 
@@ -51,6 +51,11 @@ Rules:
 
 # Role-to-allowed-tool mapping (conservative — tools expand with task context)
 _ROLE_TOOL_ALLOWLIST: dict[str, set[str]] = {
+    "registration": {
+        "epicenter_get_visit_ticket",
+        "epicenter_get_extraction_status",
+        "epicenter_preview_eligibility",
+    },
     "registration_staff": {
         "epicenter_get_visit_ticket",
         "epicenter_get_extraction_status",
@@ -73,9 +78,43 @@ _ROLE_TOOL_ALLOWLIST: dict[str, set[str]] = {
 }
 
 
+def _usage_for(response: Any) -> AssistantUsage:
+    usage = getattr(response, "usage", None)
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+    total_tokens = int(getattr(usage, "total_tokens", input_tokens + output_tokens) or 0)
+    return AssistantUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+    )
+
+
 def _allowed_tools_for_role(role: str) -> set[str]:
     """Return the set of MCP tool names permitted for this role."""
     return _ROLE_TOOL_ALLOWLIST.get(role, set())
+
+
+def _task_relevant_tools(role: str, message: str) -> set[str]:
+    """Intersect role permissions with the smallest useful intent-specific set."""
+    role_tools = _allowed_tools_for_role(role)
+    text = message.casefold()
+    relevant: set[str] = set()
+    intent_groups = [
+        (("ticket", "visit", "patient", "readiness"), {"epicenter_get_visit_ticket"}),
+        (("document", "extract", "coverage"), {"epicenter_get_extraction_status", "epicenter_preview_eligibility"}),
+        (("queue", "wait", "waiting"), {"epicenter_get_queue_snapshot"}),
+        (("summary", "metric", "throughput", "operation"), {"epicenter_get_operational_summary"}),
+        (("allocation", "resource", "counter"), {"epicenter_get_allocation_recommendation"}),
+        (("simulate", "simulation", "scenario"), {"epicenter_run_simulation"}),
+        (("compare", "baseline"), {"epicenter_compare_simulation_runs"}),
+    ]
+    for keywords, tools in intent_groups:
+        if any(keyword in text for keyword in keywords):
+            relevant.update(tools)
+    if not relevant:
+        relevant = {"epicenter_get_queue_snapshot", "epicenter_get_operational_summary"}
+    return role_tools & relevant
 
 
 def _build_tool_definitions(allowed: set[str]) -> list[dict[str, Any]]:
@@ -222,7 +261,7 @@ async def run_nurse_assistant(
     settings: Settings,
     principal: StaffPrincipal,
     user_message: str,
-    tool_dispatcher: "ToolDispatcher",
+    tool_dispatcher: ToolDispatcher,
 ) -> AssistantMessage:
     """Run one nurse assistant turn.
 
@@ -236,12 +275,13 @@ async def run_nurse_assistant(
     Returns:
         AssistantMessage with grounded content and source labels.
     """
-    allowed = _allowed_tools_for_role(principal.role)
-    if not allowed:
+    role_allowed = _allowed_tools_for_role(principal.role)
+    if not role_allowed:
         return AssistantMessage(
             content="Your role does not have access to assistant tools for this query.",
             source_labels=[],
         )
+    allowed = _task_relevant_tools(principal.role, user_message)
 
     tools = _build_tool_definitions(allowed)
     input_messages: list[dict[str, Any]] = [
@@ -252,6 +292,7 @@ async def run_nurse_assistant(
     source_labels: list[str] = []
     snapshot_time: str | None = None
     response_id: str | None = None
+    usage = AssistantUsage()
 
     try:
         response = await create_response(
@@ -265,8 +306,10 @@ async def run_nurse_assistant(
                 "clinic_id": principal.clinic_id,
                 "assistant_prompt_version": ASSISTANT_PROMPT_VERSION,
             },
+            max_output_tokens=settings.openai_max_output_tokens,
         )
         response_id = getattr(response, "id", None)
+        usage = _usage_for(response)
 
         # Process any tool calls the model requested
         tool_results: list[dict[str, Any]] = []
@@ -309,8 +352,15 @@ async def run_nurse_assistant(
                 model=settings.openai_model,
                 input_messages=input_messages,
                 store=False,
+                max_output_tokens=settings.openai_max_output_tokens,
             )
             response_id = getattr(response, "id", None)
+            follow_up_usage = _usage_for(response)
+            usage = AssistantUsage(
+                input_tokens=usage.input_tokens + follow_up_usage.input_tokens,
+                output_tokens=usage.output_tokens + follow_up_usage.output_tokens,
+                total_tokens=usage.total_tokens + follow_up_usage.total_tokens,
+            )
 
         content = getattr(response, "output_text", "")
         if not content:
@@ -332,15 +382,14 @@ async def run_nurse_assistant(
         snapshot_time=snapshot_time,
         synthetic=True,
         openai_response_id=response_id,
+        model=settings.openai_model,
+        usage=usage,
     )
 
 
 # ---------------------------------------------------------------------------
 # Type alias for the tool dispatcher injected from FastAPI
 # ---------------------------------------------------------------------------
-
-from typing import Protocol, Tuple
-
 
 class ToolDispatcher(Protocol):
     """Execute a named MCP tool after re-authorizing the actor."""
@@ -350,6 +399,6 @@ class ToolDispatcher(Protocol):
         tool_name: str,
         args: dict[str, Any],
         principal: StaffPrincipal,
-    ) -> Tuple[Any, str, str | None]:
+    ) -> tuple[Any, str, str | None]:
         """Returns (result_dict, source_label, snapshot_time_or_None)."""
         ...

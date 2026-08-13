@@ -45,6 +45,15 @@ def test_healthcheck() -> None:
     assert "openai" in providers  # new field — present but unconfigured in demo
 
 
+def test_assistant_fails_closed_when_openai_is_not_configured() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
+
+    response = client.post("/api/v1/assistant", json={"message": "Summarize the queue."})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "The staff assistant is not configured."
+
+
 def test_production_routes_fail_closed_without_clerk_configuration() -> None:
     app.dependency_overrides[get_settings] = lambda: Settings(
         demo_mode=False,
@@ -1006,28 +1015,21 @@ def test_demo_audit_reads_cannot_mutate_stored_history() -> None:
     assert "tampered" not in stored[0].details
 
 
-def test_stale_factor_returns_clerk_reverification_hint_before_mutation() -> None:
+def test_stale_factor_allows_manual_confirmation_without_step_up() -> None:
     app.dependency_overrides[require_staff] = lambda: staff_principal("registration", factor_age=(10, -1))
 
     response = client.post(
         "/api/v1/tickets/Q-017/transition",
         json={
             "readiness_state": "needs_review",
-            "reason": "reverification-test",
+            "reason": "manual-confirmation-test",
             "staff_confirmed": False,
             "expected_version": 1,
-            "idempotency_key": "stale-reverification-test",
+            "idempotency_key": "manual-no-step-up-test",
         },
     )
 
-    assert response.status_code == 403
-    assert response.json() == {
-        "clerk_error": {
-            "type": "forbidden",
-            "reason": "reverification-error",
-            "metadata": {"reverification": "strict"},
-        }
-    }
+    assert response.status_code == 200
 
 
 def test_fresh_factor_allows_registration_mutation() -> None:

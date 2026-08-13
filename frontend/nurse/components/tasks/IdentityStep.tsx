@@ -1,6 +1,5 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
 import { IdCard } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -27,15 +26,13 @@ function IdentityStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const reverifiedConfirmIdentity = useReverification(confirmIdentity);
-
   const canSubmit = identityChecked && ecardChecked;
 
   const submit = async () => {
     setPending(true);
     setError("");
     try {
-      await reverifiedConfirmIdentity(ticket.id, ticket.version);
+      await confirmIdentity(ticket.id, ticket.version);
       await refresh();
       router.push(`/tasks/${ticket.id}/forms`);
     } catch (submitError) {

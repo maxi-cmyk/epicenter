@@ -27,8 +27,8 @@ async function capture(viewport, filename, url, heading) {
   await page.close();
 }
 
-await capture({ width: 1440, height: 1000 }, "nurse-desktop.png", "http://localhost:3001", "Today’s clinic flow");
-await capture({ width: 390, height: 844 }, "nurse-mobile.png", "http://localhost:3001", "Today’s clinic flow");
+await capture({ width: 1440, height: 1000 }, "nurse-desktop.png", "http://localhost:3001", "Patient readiness board");
+await capture({ width: 390, height: 844 }, "nurse-mobile.png", "http://localhost:3001", "Patient readiness board");
 await capture({ width: 1440, height: 1000 }, "audit-nurse-desktop.png", "http://localhost:3001/audit", "Audit trail");
 await capture({ width: 390, height: 844 }, "audit-nurse-mobile.png", "http://localhost:3001/audit", "Audit trail");
 await capture({ width: 1440, height: 1000 }, "audit-pharmacy-desktop.png", "http://localhost:3002/audit", "Audit trail");
@@ -37,10 +37,11 @@ await capture({ width: 1440, height: 1000 }, "patient-desktop.png", "http://loca
 await capture({ width: 390, height: 844 }, "patient-mobile.png", "http://localhost:3000", "Pre-arrival check");
 
 const interactionPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-await interactionPage.goto("http://localhost:3001/review", { waitUntil: "networkidle" });
+await interactionPage.goto("http://localhost:3001/tasks/Q-018/identity", { waitUntil: "networkidle" });
 const checkbox = interactionPage.getByRole("checkbox", { name: /I reviewed the source/ });
 await checkbox.check();
-assert.equal(await interactionPage.getByRole("button", { name: "Confirm and mark ready" }).isEnabled(), true);
+await interactionPage.getByRole("radio", { name: "Replacement document provided" }).check();
+assert.equal(await interactionPage.getByRole("button", { name: "Record resolution" }).isEnabled(), true);
 
 await interactionPage.goto("http://localhost:3001/kiosk", { waitUntil: "networkidle" });
 await interactionPage.getByLabel("Patient name").fill("Jamie Tan");

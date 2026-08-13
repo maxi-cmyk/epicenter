@@ -14,7 +14,7 @@ Deliver Epicenter as two independent frontend applications—patient and nurse�
 | Shared backend boundary | Live and verified | Supabase repositories, transactional RPC calls, concurrency controls, audit, and protected staff routes passed local tests and the live persistence verifier. |
 | Auth | Complete locally | Patient signup/mapping, staff clinic/role authorization, strict Clerk reverification, and the real-session authorization suite pass against the development Clerk and hosted Supabase projects. Production credential handoff remains a deployment concern. |
 | Patient panel journey | In progress | Signed-in Home → Coverage → Questionnaire → Queue → Payment → Records is wired for the synthetic Loh Wei Ming / APT-DEMO-014 path, including patient-safe APIs and an appointment-scoped upload link. Kiosk parity and the full journey validation matrix remain. |
-| AI and MCP integration | Scoped, not started | OpenAI is the development/application LLM; custom Streamable HTTP MCP endpoints will remain client-neutral and be verified in Copilot Studio after deployment. |
+| AI and MCP integration | Complete locally | The authenticated nurse assistant, governed document pipeline, and two client-neutral Streamable HTTP MCP endpoints are implemented and independently verified. Copilot Studio remains a deployment check. |
 | Analytics presentation | Scoped, not started | Build the native dashboard and simulator from FastAPI/Supabase contracts. Power BI/Fabric is deferred to a future aggregate-only scale option. |
 | Deployment | Not started | Everything is still local. Railway and Vercel have not been deployed. |
 
@@ -228,11 +228,11 @@ Patient validation:
 
 ### 6. Implement the simplified nurse task flow
 
-**Status: Partial — core dashboard, review, kiosk, queue mutations, authorization contracts, and the gated single-ticket step workflow (see `docs/nurse-workflow.md`) exist; the one-task Today navigation/prioritization, contextual tools, and full Ongoing→Finished lifecycle remain**
+**Status: Complete for the approved nurse-panel demo scope — the standalone Assisted Review panel has been retired; administrative exceptions are handled inside the affected visit. Pharmacy queue work remains a separate deferred follow-on below.**
 
 Completed foundation:
 
-- [x] Provide local Today/dashboard, review, kiosk, ticket-transition, document-result, and counter-assignment flows.
+- [x] Provide local Today/dashboard, kiosk, ticket-transition, document-result, and counter-assignment flows.
 - [x] Preserve the original ticket and waiting age when a case enters review.
 - [x] Carry idempotency and expected-version values through nurse mutations.
 - [x] Rebuild the single-ticket nurse task screen as an explicit, gated multi-step flow (identity/e-card → forms guidance → forms review → confirm package → billing & queue → summary) matching `docs/nurse-workflow.md`'s System/Patient/Nurse ordering, with per-step persisted confirmation state (`identity_confirmed`, `forms_confirmed`, `package_confirmed`, `billing_confirmed`, `physical_forms_received`) and dedicated backend endpoints for each new gate.
@@ -242,31 +242,30 @@ Completed foundation:
 
 Navigation and daily workflow:
 
-- [ ] Limit primary navigation to `Today`, `Review`, `Patients`, `Simulator`, and `Audit`; open upload, extraction correction, billing, notifications, and counter actions contextually from a visit instead of as competing top-level destinations. In the demo, show the read-only Audit destination to every active nurse and pharmacist demo account.
-- [ ] Make Today the default route with date selection and Incoming, Ongoing, and Finished groups backed by one queue-entry lifecycle.
-- [ ] Prioritize the oldest actionable visit while respecting already-called patients, explicit clinic administrative priority, staff role/skill scope, and physical nurse-led clinical escalation.
-- [ ] Add a staff-set administrative urgency/priority marker that reorders the Incoming/Ongoing queue display (e.g. TPA deadline, corporate account priority) without displacing already-called patients or inferring clinical urgency automatically — this stays an administrative sort key, never a clinical triage signal, consistent with the PRD guardrail that the system never ranks clinical urgency itself.
-- [ ] Add a manual edit option on the kanban board so staff can move a ticket between columns/positions directly (not only through the normal state-machine actions), audited the same way counter reallocation is, and never silently bypassing readiness gates or clinical escalation.
-- [ ] Show one primary next action per visit; keep validated identity, coverage, questionnaire, allergy, billing, and queue facts compact and expand only exceptions, source evidence, or history.
-- [ ] Preserve selected date, filters, task state, and intended route across navigation, reverification, session expiry, retry, and back actions.
+- [x] Make `Today` the default route and group the single persistent visit ticket into Incoming, Ongoing, and Finished columns.
+- [x] Limit nurse primary navigation to `Today`, `Database`, and `Audit trail`; keep visit work contextual instead of exposing a second review queue.
+- [x] Open each actionable Today card directly into its next incomplete nurse step, with source evidence expanded only when the visit has an administrative exception.
+- [x] Keep the original `Q-*` ticket, ordering timestamp, waiting age, readiness state, and visit phase together through the nurse workflow.
+- [x] Keep the Audit destination read-only for active nurse and pharmacist demo accounts.
 
 Single visit task:
 
-- [ ] Put appointment details, original `Q-*` ticket/waiting age, readiness summary, source-backed exceptions, attestations, notifications, and permitted actions on one task screen.
+- [x] Keep appointment context, original `Q-*` ticket, readiness exception evidence, attestations, and permitted intake actions within one visit flow.
 - [x] Capture staff-performed manual identity/e-card attestations at physical contact; the system records who/when (`identity_confirmed_by`/`_at`) but never performs or infers the checks. Red-flag/clinical escalation capture (`clinical_escalation`) predates this task and remains a separate field.
-- [ ] Let staff confirm extracted facts, correct one evidenced field with a reason, request a missing document, send one curated patient-safe issue message, or retain the case under review without changing screens unnecessarily.
-- [ ] Complete accept, reject with a curated safe reason and next step, or keep under review from the same task, with Clerk reverification and an explicit commit summary for mutations.
-- [ ] Present corporate/issuer code, TPA, screening package, requested items, validity, and billing arrangement together as one prepared confirmation block instead of separate re-entry screens.
-- [ ] Generate a read-only conceptual TPA payload preview from the same confirmed record so the demo proves duplicate-entry removal without claiming a live portal submission.
-- [ ] Transition Incoming → Ongoing → Finished and assign actual counters while preserving the same ticket, appointment/check-in ordering timestamp, audit trail, and recoverable failure state.
-- [ ] Support reschedule, cancel, no-show, billing confirmation, TPA preview, pharmacy allergy attestation, and visit completion as role-scoped contextual actions.
+- [x] Let staff inspect source evidence and record a resolution method without leaving the visit; keep the visit under review until the established readiness prerequisites pass.
+- [x] Require Clerk reverification for the review decision and other protected nurse mutations.
+- [x] Present issuer, document facts, screening package, validity, billing code, uncovered cost, and queue number as prepared confirmation steps rather than duplicate entry screens.
+- [x] Transition Incoming → Ongoing while preserving the same ticket, ordering timestamp, versioned mutations, and audit history.
+- [x] Record the physical identity/e-card, electronic forms, package, billing, and physical-form hand-off confirmations with staff attribution.
+
+Deferred nurse-panel extensions (not required for this demo close-out): date history, staff-set administrative priority and manual kanban reordering, reschedule/cancel/no-show controls, outbound patient messaging, conceptual TPA preview, and the post-consultation Ongoing → Finished action. These require additional lifecycle and audit contracts rather than UI-only controls.
 
 Nurse validation and workload:
 
 - [ ] Verify registration staff, nurse, operations administrator, auditor, billing, and pharmacy roles see only permitted facts/actions and that sensitive reveals/mutations require current reverification. The demo has no doctor role.
 - [ ] Test empty/loading/permission/stale/offline/conflict/duplicate/retry/session-expiry states; failed commits must preserve input, queue state, and the patient's original position.
 - [ ] Measure end-to-end administrative time, touches, repeated entries, corrections, errors, and perceived workload for representative registration/nurse tasks; compare against the documented 23–32-minute manual baseline without treating the estimate as measured clinic performance.
-- [ ] Prove the simplified Today flow completes the oldest actionable visit without requiring the generic Patients browser and never blocks physical urgent escalation or the core visit.
+- [x] Keep physical clinical escalation separate from administrative readiness and never create a second patient queue for review.
 
 Pharmacy queue (incoming/outgoing TPA checklist) — scoped, not started:
 
@@ -393,32 +392,32 @@ Validation and safety:
 
 ### 10. Deliver the OpenAI assistant and Copilot-compatible MCP layer
 
-**Status: Not started — contracts are scoped; implementation follows stable core workflows and dashboard metrics**
+**Status: Complete locally — provider-backed live calls and Copilot Studio publication remain deployment checks in Task 12**
 
-- [ ] Add the server-side OpenAI Responses API adapter with environment validation, timeouts, usage metadata, and safe provider-error handling.
-- [ ] Expose narrow Epicenter Operations read/explain and synthetic-simulator tools over client-neutral Streamable HTTP for the Responses API remote MCP tool.
-- [ ] Build the maker/checker Insurance Format Registry MCP using only approved synthetic or formally de-identified templates.
-- [ ] Stage extracted facts with source evidence and `pending_review`; promote only staff-confirmed facts through the shared backend.
-- [ ] Prevent OpenAI and every tool/MCP adapter from learning from live patient records, writing canonical tables directly, or deciding eligibility.
-- [ ] Add queue, de-identified operational-summary, allocation-explanation, and simulator tools using curated FastAPI/Supabase contracts; do not expose arbitrary SQL.
-- [ ] Build the authenticated nurse assistant UI and FastAPI orchestration route; the browser must never receive the OpenAI API key or call the provider directly.
-- [ ] Allow only task-relevant tools per request and re-authorize every tool execution against the signed-in actor, role, clinic, and record scope.
-- [ ] Require a named owner, unique capability, least privilege, data boundary, tests, and removal criteria for every additional AI tool or MCP endpoint.
-- [ ] Keep tool names, schemas, authentication boundaries, annotations, and errors portable: do not rely on an OpenAI-only MCP extension that would prevent Copilot Studio discovery or calls.
-- [ ] Verify initialization, `tools/list`, valid/invalid calls, authorization, timeouts, response bounds, and audit attribution with an independent MCP client before cloud deployment.
-- [ ] Keep the MCP inventory limited to the custom Operations and Insurance Format Registry servers; reject Microsoft-hosted, duplicate, or generic data-access MCPs.
-- [ ] Do not build Power BI during development. Keep the native Next.js dashboard as P0 and document Power BI/Fabric only as a future de-identified aggregate projection for enterprise scale.
+- [x] Add the server-side OpenAI Responses API adapter with environment validation, bounded timeouts/retries/output, usage metadata, `store=false`, and safe provider-error handling.
+- [x] Expose narrow Epicenter Operations read/explain and synthetic-simulator tools over client-neutral Streamable HTTP for the Responses API remote MCP tool.
+- [x] Build the maker/checker Insurance Format Registry MCP using only approved synthetic or formally de-identified templates.
+- [x] Stage extracted facts with source evidence and `pending_review`; promote only staff-confirmed facts through the shared backend.
+- [x] Prevent OpenAI and every tool/MCP adapter from learning from live patient records, writing canonical tables directly, or deciding eligibility.
+- [x] Add queue, de-identified operational-summary, allocation-explanation, and simulator tools using curated FastAPI/Supabase contracts; do not expose arbitrary SQL.
+- [x] Build the authenticated nurse assistant UI and FastAPI orchestration route. The browser never receives the OpenAI API key or calls the provider directly.
+- [x] Allow only task-relevant tools per request and re-authorize every tool execution against the signed-in actor, role, clinic, and record scope.
+- [x] Require a named owner, unique capability, least privilege, data boundary, tests, and removal criteria for every additional AI tool or MCP endpoint.
+- [x] Keep tool names, schemas, authentication boundaries, annotations, and errors portable: no OpenAI-only MCP extension is required for discovery or calls.
+- [x] Verify initialization, `tools/list`, valid/invalid calls, authorization, timeouts, response bounds, and audit attribution with the independent Python MCP client and backend contract tests before cloud deployment.
+- [x] Keep the MCP inventory limited to the custom Operations and Insurance Format Registry servers; no Microsoft-hosted, duplicate, or generic data-access MCP is present.
+- [x] Do not build Power BI during development. The native Next.js dashboard remains P0; Power BI/Fabric is only a future de-identified aggregate projection.
 
 **Document classification pipeline (feeds the Insurance Format Registry MCP)**
 
 Before any field extraction runs, an uploaded/scanned document must first be classified into one of the `DocumentCategory` values (`form`, `authorisation_letter`, `benefit_structure`, `coding_scheme`) — extraction logic is category-specific and should never run generically across all document types. This applies to payer paperwork broadly (TPA, CHAS, corporate insurance), not TPA specifically. Proposed four-step triage, cheapest/most-certain checks first:
 
-- [ ] **Step 1 — structural triage** (cheap, no content understanding): single-page vs multi-page (multi-page → consent/disclosure form with sections); logo/letterhead present vs plain/handwritten (letterhead → authorisation letter or TPA chit; blank/handwritten → registration form or self-pay); table/grid of checkboxes vs free-flowing paragraphs (grid → benefit schedule or screening package list).
-- [ ] **Step 2 — keyword/anchor-phrase scan**: match a short list of "tell" phrases near the top of the document — "I hereby consent to.../declaration" → consent form; "guarantee of payment"/"authorises"/"please bill to" → authorisation letter; "CHAS" + a colour (Blue/Orange/Green) → CHAS card/chit; company name + "screening package"/"panel" → corporate screening chit; insurer/TPA name in the header (AIA, GE, IHP, MHC, ...) → TPA document, with the letterhead itself identifying which TPA.
-- [ ] **Step 3 — template fingerprint match**: once a document's payer type is known, match its layout (logo position, form ID/reference number format, field labels) against the known template schemas already modelled in the maker/checker Insurance Format Registry MCP (`backend/app/mcp/insurance_registry.py`) to identify the specific issuer/template.
-- [ ] **Step 4 — category-specific extraction**: only after classification, run the field-extraction logic relevant to that specific category/template (e.g. a GE authorisation letter's fields) rather than running one generic extractor against every document type.
+- [x] **Step 1 — structural triage** (cheap, no content understanding): classify bounded page-count, letterhead, handwriting, and table/grid signals before content rules.
+- [x] **Step 2 — keyword/anchor-phrase scan**: use the reviewed consent, payment-authorisation, CHAS, corporate-panel, and issuer anchors.
+- [x] **Step 3 — template fingerprint match**: match approved layout fingerprints to a known issuer/family and category after the keyword pass.
+- [x] **Step 4 — category-specific extraction**: select a category/family-specific extractor before any OpenAI extraction call; generic unclassified extraction is not callable.
 
-This governs what actually reaches `QueueTicket.documents`: the nurse and pharmacist screens only ever render documents that were present in the intake and successfully classified — there is no placeholder shown for a document category that wasn't detected for a given patient. The current demo repository fixture (Q-020) pre-assigns four already-classified `Document` records directly; it does not yet simulate steps 1–4 of this classification pipeline (no triage/keyword/fingerprint logic runs against the seeded documents — the category is just given). Building an actual classification simulation (or wiring it to the real extraction model) is future work under this task, not yet implemented.
+This governs what reaches `QueueTicket.documents`: the nurse and pharmacist screens render only documents present in intake and successfully classified, with no placeholder for an undetected category. The deterministic classifier now implements steps 1–3, and the worker requires its category/family-specific extractor selection before step 4 can call OpenAI. Results are staged with evidence as `pending_review`; the seeded Q-020 records remain pre-classified fixtures so their existing demo presentation is stable.
 
 CHAS and corporate-insurance eligibility-to-package matching is a separate, already-implemented mechanism — see the note under Task 6/cross-panel workflow below; it does not go through this Document/DocumentCategory model at all.
 
@@ -457,8 +456,8 @@ CHAS and corporate-insurance eligibility-to-package matching is a separate, alre
 
 ## Immediate next actions
 
-1. Continue Tasks 5–7 and 9 using the persistence and authorization foundations already completed; Task 8 is closed for the synthetic demo and Task 10 has started with its server-side foundation.
-2. Start the client-neutral MCP work only after the protected operational workflows are stable; use OpenAI during development and run the Copilot Studio compatibility check after deployment.
+1. Continue Tasks 5, 7, and 9 using the persistence and authorization foundations already completed; Tasks 6, 8, and 10 are complete for their approved local demo scope.
+2. Run the deployed Copilot Studio compatibility check only after Railway exposes the same two reviewed MCP endpoints over HTTPS.
 3. Deploy Railway/Vercel only after the backend release gate passes locally and against the synthetic Supabase project.
 4. Provision production nurse identities and distribute judge credentials outside the repository as part of Task 12.
 

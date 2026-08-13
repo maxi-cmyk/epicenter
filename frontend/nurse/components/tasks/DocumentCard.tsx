@@ -1,6 +1,5 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
 import { useState } from "react";
 
 import { confirmDocument } from "@/lib/api";
@@ -36,8 +35,6 @@ export function DocumentCard({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
-  const reverifiedConfirm = useReverification(confirmDocument);
-
   const updateFact = (key: string, value: string) => {
     setFacts((current) => ({ ...current, [key]: value }));
   };
@@ -46,7 +43,7 @@ export function DocumentCard({
     setPending(true);
     setError("");
     try {
-      await reverifiedConfirm(ticketId, clinicDocument.id, ticketVersion, { facts, referenceNumber });
+      await confirmDocument(ticketId, clinicDocument.id, ticketVersion, { facts, referenceNumber });
       await onConfirmed();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not confirm this document.");

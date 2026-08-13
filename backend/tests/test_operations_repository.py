@@ -1,5 +1,6 @@
 from app.data.operations_repository import SupabaseOperationsRepository
 from app.domain.models import (
+    IdentityConfirmRequest,
     KioskCheckInRequest,
     OnboardingAdvanceRequest,
     OnboardingStep,
@@ -99,6 +100,9 @@ class FakeApi:
                 "status": "submitted" if parameters["p_submit"] else "draft",
                 "version": int(parameters["p_expected_version"]) + 1,
             }
+        if function_name == "epicenter_confirm_identity":
+            row = self.select("queue_entries")[0]
+            return {**row, "identity_confirmed": True, "ecard_verified": True, "version": 2}
         raise AssertionError(function_name)
 
 
@@ -209,3 +213,31 @@ def test_questionnaire_save_uses_supabase_rpc_after_local_validation() -> None:
     )
     assert saved.status.value == "submitted"
     assert api.rpc_calls[-1][0] == "epicenter_save_questionnaire"
+
+
+def test_identity_confirmation_uses_supabase_rpc() -> None:
+    api = FakeApi()
+    repository = SupabaseOperationsRepository(api)  # type: ignore[arg-type]
+    request = IdentityConfirmRequest(
+        expected_version=1,
+        idempotency_key="identity-017-test",
+    )
+
+    ticket = repository.confirm_identity("Q-017", request, "nurse-demo")
+
+    assert ticket.identity_confirmed is True
+    assert ticket.ecard_verified is True
+    assert ticket.version == 2
+    assert api.rpc_calls == [
+        (
+            "epicenter_confirm_identity",
+            {
+                "p_ticket_id": "Q-017",
+                "p_expected_version": 1,
+                "p_ecard_not_applicable": False,
+                "p_ecard_na_reason": None,
+                "p_actor_reference": "nurse-demo",
+                "p_idempotency_key": "identity-017-test",
+            },
+        )
+    ]

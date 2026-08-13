@@ -1,6 +1,5 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -27,7 +26,6 @@ function PackageStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const reverifiedConfirmPackage = useReverification(confirmPackage);
   const packageValue = packageEdit ?? ticket.matched_package ?? "";
   const skip = !hasDocuments(ticket);
 
@@ -43,7 +41,7 @@ function PackageStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
     try {
       const trimmed = packageValue.trim();
       const corrected = trimmed !== (ticket.matched_package ?? "").trim() ? trimmed : undefined;
-      await reverifiedConfirmPackage(ticket.id, ticket.version, corrected);
+      await confirmPackage(ticket.id, ticket.version, corrected);
       setPackageEdit(null);
       await refresh();
       router.push(`/tasks/${ticket.id}/billing`);

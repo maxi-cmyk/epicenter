@@ -11,7 +11,6 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ---------------------------------------------------------------------------
 # Extraction schemas — used as the Structured Output JSON Schema
 # ---------------------------------------------------------------------------
@@ -22,6 +21,37 @@ class ConfidenceLevel(StrEnum):
     MEDIUM = "medium"
     LOW = "low"
     ABSENT = "absent"
+
+
+class ApprovedDocumentDataClass(StrEnum):
+    SYNTHETIC = "synthetic"
+    FORMALLY_DEIDENTIFIED = "formally_deidentified"
+
+
+class ClassificationInput(BaseModel):
+    """Bounded OCR/layout signals; never accepts raw live-patient identifiers."""
+
+    model_config = ConfigDict(extra="forbid")
+    page_count: int = Field(ge=1, le=100)
+    has_letterhead: bool = False
+    handwritten: bool = False
+    has_table_grid: bool = False
+    top_text: str = Field(default="", max_length=2_000)
+    field_labels: list[Annotated[str, Field(max_length=120)]] = Field(default_factory=list, max_length=40)
+    layout_fingerprint: str | None = Field(default=None, max_length=160)
+    data_classification: ApprovedDocumentDataClass
+
+
+class DocumentClassification(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    category: str
+    document_family: str | None = None
+    structural_signals: list[str]
+    keyword_hits: list[str]
+    template_fingerprint: str | None = None
+    extractor: str
+    review_status: str = "pending_review"
+    synthetic: bool = True
 
 
 class FieldEvidence(BaseModel):
@@ -103,6 +133,8 @@ class ExtractionResult(BaseModel):
     document_id: str
     model_used: str
     prompt_version: str
+    classification: DocumentClassification
+    review_status: str = "pending_review"
     synthetic: bool = True
     coverage: ExtractedCoverage
     raw_response_id: str | None = None  # OpenAI response ID for audit
@@ -111,6 +143,24 @@ class ExtractionResult(BaseModel):
 # ---------------------------------------------------------------------------
 # Nurse assistant schemas
 # ---------------------------------------------------------------------------
+
+
+class AssistantRequest(BaseModel):
+    """One bounded staff question sent to the server-side assistant."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(min_length=2, max_length=1_500)
+
+
+class AssistantUsage(BaseModel):
+    """Provider usage returned without exposing prompts, tool payloads, or credentials."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)
 
 
 class AssistantMessage(BaseModel):
@@ -129,3 +179,5 @@ class AssistantMessage(BaseModel):
     )
     synthetic: bool = True
     openai_response_id: str | None = None
+    model: str | None = None
+    usage: AssistantUsage | None = None

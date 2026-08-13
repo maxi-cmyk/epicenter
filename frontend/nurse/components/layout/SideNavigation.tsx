@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton, useUser } from "@clerk/nextjs";
-import { ClipboardCheck, Database, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Database, LayoutDashboard, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -16,8 +16,7 @@ function capitalize(value: string) {
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
 
 const NAVIGATION: NavItem[] = [
-  { href: "/", label: "Readiness board", icon: LayoutDashboard },
-  { href: "/review", label: "Assisted review", icon: ClipboardCheck },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/database", label: "Database", icon: Database },
   { href: "/audit", label: "Audit trail", icon: ShieldCheck },
 ];

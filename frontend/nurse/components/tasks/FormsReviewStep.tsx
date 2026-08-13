@@ -1,6 +1,5 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -26,8 +25,6 @@ function FormsReviewContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const reverifiedConfirmForms = useReverification(confirmForms);
-
   const electronicDocuments = ticket.documents.filter((clinicDocument) => clinicDocument.category !== "form");
   const allElectronicConfirmed = electronicDocuments.every((clinicDocument) => clinicDocument.confirmed);
 
@@ -35,7 +32,7 @@ function FormsReviewContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
     setPending(true);
     setError("");
     try {
-      await reverifiedConfirmForms(ticket.id, ticket.version);
+      await confirmForms(ticket.id, ticket.version);
       await refresh();
       router.push(`/tasks/${ticket.id}/${hasDocuments(ticket) ? "package" : "billing"}`);
     } catch (submitError) {

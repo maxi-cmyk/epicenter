@@ -4,7 +4,11 @@ from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from app.ai.assistant import run_nurse_assistant
+from app.ai.client import get_openai_client
+from app.ai.schemas import AssistantMessage, AssistantRequest
 from app.core.auth import StaffPrincipal, require_reverified_staff, require_staff
+from app.core.config import Settings, get_settings
 from app.data.dependencies import get_operations_repository
 from app.data.operations_repository import OperationsRepository
 from app.data.supabase_client import SupabaseDataError
@@ -36,6 +40,7 @@ from app.domain.models import (
 )
 from app.services.allocation import InvalidDecision, normalize_decision
 from app.services.readiness import InvalidTransition
+from app.mcp.operations import _dispatch_tool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,6 +48,7 @@ logger = logging.getLogger(__name__)
 Repository = Annotated[OperationsRepository, Depends(get_operations_repository)]
 Principal = Annotated[StaffPrincipal, Depends(require_staff)]
 ReverifiedPrincipal = Annotated[StaffPrincipal, Depends(require_reverified_staff)]
+CurrentSettings = Annotated[Settings, Depends(get_settings)]
 
 _AUDIT_REDACTED_KEYS = {
     "access_token",
@@ -113,6 +119,48 @@ def get_staff_session(principal: Principal) -> StaffSession:
     return StaffSession(role=principal.role, clinic_id=principal.clinic_id)
 
 
+@router.post("/assistant", response_model=AssistantMessage)
+async def ask_nurse_assistant(
+    request: AssistantRequest,
+    repository: Repository,
+    principal: Principal,
+    settings: CurrentSettings,
+) -> AssistantMessage:
+    """Answer one bounded staff question through the server-side Responses API."""
+    _require_roles(principal, "registration", "operations_admin", "auditor")
+    if not settings.openai_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The staff assistant is not configured.",
+        )
+
+    async def dispatch(
+        tool_name: str,
+        arguments: dict[str, object],
+        actor: StaffPrincipal,
+    ) -> tuple[object, str, str | None]:
+        result = await _dispatch_tool(tool_name, arguments, actor, settings, repository)
+        snapshot_time = str(result.get("snapshot_time")) if result.get("snapshot_time") else None
+        label = tool_name.removeprefix("epicenter_").replace("_", " ")
+        return result, label, snapshot_time
+
+    try:
+        client = get_openai_client(settings)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The staff assistant is not configured.",
+        ) from exc
+
+    return await run_nurse_assistant(
+        client,
+        settings=settings,
+        principal=principal,
+        user_message=request.message,
+        tool_dispatcher=dispatch,
+    )
+
+
 @router.get("/simulator/snapshots", response_model=list[SimulatorSnapshot])
 def get_simulator_snapshots(repository: Repository, principal: Principal) -> list[SimulatorSnapshot]:
     _require_roles(principal, "operations_admin", "auditor")
@@ -127,7 +175,7 @@ def process_document(
     ticket_id: str,
     request: DocumentProcessingRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -147,7 +195,7 @@ def confirm_document(
     document_id: str,
     request: DocumentConfirmRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -166,7 +214,7 @@ def confirm_package(
     ticket_id: str,
     request: PackageConfirmRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -185,7 +233,7 @@ def confirm_billing(
     ticket_id: str,
     request: BillingConfirmRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -208,7 +256,7 @@ def confirm_identity(
     ticket_id: str,
     request: IdentityConfirmRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -227,7 +275,7 @@ def confirm_forms(
     ticket_id: str,
     request: FormsConfirmRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -246,7 +294,7 @@ def mark_physical_forms_received(
     ticket_id: str,
     request: PhysicalFormsReceivedRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -265,7 +313,7 @@ def update_ticket(
     ticket_id: str,
     request: TicketTransitionRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:
@@ -352,7 +400,7 @@ def confirm_tpa_submission(
 def kiosk_check_in(
     request: KioskCheckInRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> ActionResult:
     _require_roles(principal, "registration", "operations_admin")
     try:

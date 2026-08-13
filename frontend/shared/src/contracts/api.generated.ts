@@ -2,6 +2,26 @@
 // Run `npm run contracts:generate` from frontend/ after changing the API schema.
 
 export interface paths {
+    "/api/v1/assistant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Nurse Assistant
+         * @description Answer one bounded staff question through the server-side Responses API.
+         */
+        post: operations["ask_nurse_assistant_api_v1_assistant_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -604,6 +624,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp/insurance-registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Streamable Http */
+        post: operations["streamable_http_mcp_insurance_registry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mcp/insurance-registry/healthz": {
         parameters: {
             query?: never;
@@ -670,6 +707,26 @@ export interface paths {
         put?: never;
         /** List Tools */
         post: operations["list_tools_mcp_insurance_registry_tools_list_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Streamable Http
+         * @description Stateless Streamable HTTP JSON-RPC endpoint for independent MCP clients.
+         */
+        post: operations["streamable_http_mcp_operations_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -816,6 +873,66 @@ export interface components {
              * @default 1
              */
             version: number;
+        };
+        /**
+         * AssistantMessage
+         * @description A single grounded assistant reply returned to the nurse panel.
+         */
+        AssistantMessage: {
+            /**
+             * Content
+             * @description Grounded, plain-language reply from the assistant.
+             */
+            content: string;
+            /** Model */
+            model?: string | null;
+            /** Openai Response Id */
+            openai_response_id?: string | null;
+            /**
+             * Snapshot Time
+             * @description ISO timestamp of the most recent data snapshot used.
+             */
+            snapshot_time?: string | null;
+            /**
+             * Source Labels
+             * @description Human-readable labels identifying the tool results used (e.g. 'queue snapshot 09:42').
+             */
+            source_labels?: string[];
+            /**
+             * Synthetic
+             * @default true
+             */
+            synthetic: boolean;
+            usage?: components["schemas"]["AssistantUsage"] | null;
+        };
+        /**
+         * AssistantRequest
+         * @description One bounded staff question sent to the server-side assistant.
+         */
+        AssistantRequest: {
+            /** Message */
+            message: string;
+        };
+        /**
+         * AssistantUsage
+         * @description Provider usage returned without exposing prompts, tool payloads, or credentials.
+         */
+        AssistantUsage: {
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
         };
         /** AuditRecord */
         AuditRecord: {
@@ -2044,6 +2161,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    ask_nurse_assistant_api_v1_assistant_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantMessage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_api_v1_audit_get: {
         parameters: {
             query?: {
@@ -3217,6 +3367,41 @@ export interface operations {
             };
         };
     };
+    streamable_http_mcp_insurance_registry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     healthcheck_mcp_insurance_registry_healthz_get: {
         parameters: {
             query?: never;
@@ -3351,6 +3536,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    streamable_http_mcp_operations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

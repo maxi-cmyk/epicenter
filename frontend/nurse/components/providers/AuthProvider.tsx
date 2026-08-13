@@ -1,7 +1,7 @@
 "use client";
 
 import { ClerkLoaded, ClerkLoading, ClerkProvider, Show, UserButton, useAuth } from "@clerk/nextjs";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { ApiError, fetchStaffSession, setAccessTokenProvider } from "@/lib/api";
 
@@ -75,30 +75,37 @@ function ClerkTokenBridge({ children }: AuthProviderProps) {
   const [message, setMessage] = useState("Confirming your clinic role…");
   const [role, setRole] = useState<string | null>(null);
 
+  const verifyAccess = useCallback(async () => {
+    setState("checking");
+    setMessage("Confirming your clinic role…");
+    try {
+      const session = await fetchStaffSession();
+      setRole(session.role);
+      setState("authorized");
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 403) {
+        setMessage(
+          "This account is not mapped to an active nurse role. Contact your clinic administrator, then try again.",
+        );
+        setState("denied");
+        return;
+      }
+      setMessage("Clinic authorization could not be verified. Check the API connection, then try again.");
+      setState("error");
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     setAccessTokenProvider(getToken);
-    void fetchStaffSession()
-      .then((session) => {
-        if (!active) return;
-        setRole(session.role);
-        setState("authorized");
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        if (error instanceof ApiError && error.status === 403) {
-          setMessage("This Clerk account is not mapped to an active staff role for this clinic.");
-          setState("denied");
-          return;
-        }
-        setMessage(error instanceof Error ? error.message : "Staff authorization could not be verified.");
-        setState("error");
-      });
+    queueMicrotask(() => {
+      if (active) void verifyAccess();
+    });
     return () => {
       active = false;
       setAccessTokenProvider(null);
     };
-  }, [getToken]);
+  }, [getToken, verifyAccess]);
 
   if (state !== "authorized") {
     return (
@@ -106,7 +113,14 @@ function ClerkTokenBridge({ children }: AuthProviderProps) {
         <span>{state === "checking" ? "Staff authorization" : "Access denied"}</span>
         <h1>{state === "checking" ? "Checking clinic access" : "Nurse access required"}</h1>
         <p>{message}</p>
-        <UserButton showName />
+        <div className={styles.staffAccessActions}>
+          {state !== "checking" ? (
+            <button className={styles.retryAccessButton} onClick={() => void verifyAccess()} type="button">
+              Try again
+            </button>
+          ) : null}
+          <UserButton showName />
+        </div>
       </main>
     );
   }

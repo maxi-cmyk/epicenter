@@ -160,11 +160,7 @@ export function DatabasePanel({
             </button>
           ) : undefined
         }
-        description={
-          audience === "pharmacy"
-            ? "Clinic-scoped patient references and contact details for dispensing support. Pharmacy access is view only."
-            : "Search and maintain approved patient records without interrupting the readiness workflow."
-        }
+        description={audience === "pharmacy" ? "Clinic-scoped patient references and contact details for dispensing support. Pharmacy access is view only." : undefined}
         title="Database"
       />
 

@@ -17,22 +17,29 @@ logger = logging.getLogger(__name__)
 
 # Module-level client — created once per process, shared across requests.
 _client: AsyncOpenAI | None = None
+_client_configuration: tuple[str, float, int] | None = None
 
 
 def get_openai_client(settings: Settings) -> AsyncOpenAI:
     """Return the module-level AsyncOpenAI client, initialising it on first call."""
-    global _client
-    if _client is None:
-        if not settings.openai_api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY is not configured. "
-                "Set it as a server-side environment variable."
-            )
+    global _client, _client_configuration
+    if not settings.openai_api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not configured. "
+            "Set it as a server-side environment variable."
+        )
+    configuration = (
+        settings.openai_api_key,
+        settings.openai_timeout_seconds,
+        settings.openai_max_retries,
+    )
+    if _client is None or _client_configuration != configuration:
         _client = AsyncOpenAI(
             api_key=settings.openai_api_key,
-            timeout=60.0,
-            max_retries=2,
+            timeout=settings.openai_timeout_seconds,
+            max_retries=settings.openai_max_retries,
         )
+        _client_configuration = configuration
     return _client
 
 
@@ -45,6 +52,7 @@ async def create_response(
     tools: list[dict[str, Any]] | None = None,
     store: bool = False,
     metadata: dict[str, str] | None = None,
+    max_output_tokens: int | None = None,
 ) -> Any:
     """Thin wrapper around the OpenAI Responses API.
 
@@ -65,6 +73,8 @@ async def create_response(
         kwargs["tools"] = tools
     if metadata is not None:
         kwargs["metadata"] = metadata
+    if max_output_tokens is not None:
+        kwargs["max_output_tokens"] = max_output_tokens
 
     try:
         response = await client.responses.create(**kwargs)

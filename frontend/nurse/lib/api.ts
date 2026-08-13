@@ -38,6 +38,13 @@ function isReverificationHint(value: unknown): value is ReverificationHint {
 }
 
 let accessTokenProvider: AccessTokenProvider | null = null;
+let operationalSource: "unknown" | "api" | "fallback" = "unknown";
+
+function requireLiveOperationalData() {
+  if (operationalSource === "fallback") {
+    throw new ApiError("Reconnect to live clinic data before recording a confirmation.", 503);
+  }
+}
 
 export function setAccessTokenProvider(provider: AccessTokenProvider | null) {
   accessTokenProvider = provider;
@@ -67,15 +74,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function fetchDashboard(): Promise<{ data: DashboardSnapshot; source: "api" | "fallback" }> {
   try {
-    return { data: await request<DashboardSnapshot>("/dashboard"), source: "api" };
+    const data = await request<DashboardSnapshot>("/dashboard");
+    operationalSource = "api";
+    return { data, source: "api" };
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) throw error;
+    operationalSource = "fallback";
     return { data: demoSnapshot, source: "fallback" };
   }
 }
 
 export function fetchStaffSession() {
   return request<{ role: string; clinic_id: string }>("/staff/session");
+}
+
+export type AssistantReply = {
+  content: string;
+  source_labels: string[];
+  snapshot_time: string | null;
+  synthetic: boolean;
+  model: string | null;
+  usage: { input_tokens: number; output_tokens: number; total_tokens: number } | null;
+};
+
+export function askAssistant(message: string) {
+  return request<AssistantReply>("/assistant", {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
 }
 
 export function fetchAudit(query: AuditQuery) {
@@ -119,6 +145,7 @@ export function transitionTicket(
   staffConfirmed: boolean,
   visitPhase?: VisitPhase,
 ) {
+  requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/transition`, {
     method: "POST",
     body: JSON.stringify({
@@ -140,6 +167,7 @@ export function decideRecommendation(recommendationId: string, expectedVersion: 
 }
 
 export function checkInWalkIn(patientName: string, nurseSupervisor: string, clinicalEscalation: boolean, isCheckup = false) {
+  requireLiveOperationalData();
   return request<ActionResult>("/kiosk/check-in", {
     method: "POST",
     body: JSON.stringify({
@@ -158,6 +186,7 @@ export function confirmDocument(
   expectedVersion: number,
   corrections: { facts: Record<string, string>; referenceNumber: string },
 ) {
+  requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/documents/${documentId}/confirm`, {
     method: "POST",
     body: JSON.stringify({
@@ -170,6 +199,7 @@ export function confirmDocument(
 }
 
 export function confirmPackage(ticketId: string, expectedVersion: number, correctedPackage?: string) {
+  requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/package/confirm`, {
     method: "POST",
     body: JSON.stringify({
@@ -185,6 +215,7 @@ export function confirmBilling(
   expectedVersion: number,
   corrections: { billingCode?: string; uncoveredCost?: number; queueNumber?: string },
 ) {
+  requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/billing/confirm`, {
     method: "POST",
     body: JSON.stringify({
@@ -198,6 +229,7 @@ export function confirmBilling(
 }
 
 export function confirmIdentity(ticketId: string, expectedVersion: number, ecardNotApplicable = false, ecardNaReason?: string) {
+  requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/identity/confirm`, {
     method: "POST",
     body: JSON.stringify({
@@ -210,6 +242,7 @@ export function confirmIdentity(ticketId: string, expectedVersion: number, ecard
 }
 
 export function confirmForms(ticketId: string, expectedVersion: number) {
+  requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/forms/confirm`, {
     method: "POST",
     body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
@@ -217,6 +250,7 @@ export function confirmForms(ticketId: string, expectedVersion: number) {
 }
 
 export function markPhysicalFormsReceived(ticketId: string, expectedVersion: number) {
+  requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/physical-forms/received`, {
     method: "POST",
     body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),

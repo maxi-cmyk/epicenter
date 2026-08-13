@@ -13,7 +13,7 @@ import { validateNurseEnvironment } from "@/lib/env";
 
 export const metadata: Metadata = {
   title: "Epicenter · Nurse panel",
-  description: "Synthetic clinic readiness, review, and supervised walk-in operations.",
+  description: "Synthetic clinic readiness and supervised walk-in operations.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

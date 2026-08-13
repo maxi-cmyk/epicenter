@@ -155,7 +155,7 @@ export function AuditPanel({ loadAudit }: Props) {
   return (
     <section className={styles.workspace}>
       <PageHeader
-        description="A clinic-scoped record of committed actions. Audit entries cannot be edited or deleted."
+        description="Audit entries cannot be edited or deleted, for viewing purposes only."
         title="Audit trail"
       />
 

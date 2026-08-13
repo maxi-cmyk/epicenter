@@ -4,7 +4,7 @@ import styles from "./Shared.module.css";
 
 interface PageHeaderProps {
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
 }
 
@@ -13,7 +13,7 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
     <header className={styles.pageHeader}>
       <div>
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
       </div>
       {actions ? <div className={styles.pageActions}>{actions}</div> : null}
     </header>

@@ -104,6 +104,22 @@ async def _process_one_job(settings: "Settings", client: "AsyncOpenAI") -> bool:
 
         # Run extraction
         from app.ai.extraction import extract_document, ExtractionError
+        from app.ai.schemas import ApprovedDocumentDataClass, ClassificationInput
+        from app.services.document_classification import classify_document
+
+        data_classification = ApprovedDocumentDataClass(str(job.get("data_classification") or "synthetic"))
+        classification = classify_document(
+            ClassificationInput(
+                page_count=int(job.get("page_count") or 1),
+                has_letterhead=bool(job.get("has_letterhead")),
+                handwritten=bool(job.get("handwritten")),
+                has_table_grid=bool(job.get("has_table_grid")),
+                top_text=str(job.get("classification_text") or ""),
+                field_labels=list(job.get("field_labels") or []),
+                layout_fingerprint=job.get("layout_fingerprint"),
+                data_classification=data_classification,
+            )
+        )
 
         result = await extract_document(
             client,
@@ -113,16 +129,49 @@ async def _process_one_job(settings: "Settings", client: "AsyncOpenAI") -> bool:
             file_bytes=file_bytes,
             file_name=file_path.split("/")[-1],
             mime_type=mime_type,
+            classification=classification,
+            data_classification=data_classification,
         )
 
-        # Write result to Supabase
+        ticket_id = job.get("ticket_id")
+        if ticket_id:
+            classification_payload = result.classification.model_dump()
+            classification_payload["data_classification"] = data_classification.value
+            coverage_payload = result.coverage.model_dump()
+            source_evidence = {
+                key: value
+                for key, value in coverage_payload.items()
+                if key.endswith("_evidence") and value is not None
+            }
+            facts = {
+                key: value
+                for key, value in coverage_payload.items()
+                if not key.endswith("_evidence")
+            }
+            api.rpc(
+                "epicenter_stage_document_extraction",
+                {
+                    "p_ticket_id": str(ticket_id),
+                    "p_document_id": document_id,
+                    "p_classification": classification_payload,
+                    "p_facts": facts,
+                    "p_source_evidence": source_evidence,
+                    "p_actor_reference": f"worker:{os.getpid()}",
+                    "p_idempotency_key": f"stage-extraction:{job_id}",
+                },
+            )
+        # Mark ready only after pending-review staging succeeds.
         api.patch(
             "document_jobs",
             {
                 "status": "ready",
                 "model_used": result.model_used,
                 "prompt_version": result.prompt_version,
-                "extraction_result": result.coverage.model_dump(),
+                "extraction_result": {
+                    "facts": result.coverage.model_dump(),
+                    "classification": result.classification.model_dump(),
+                    "review_status": result.review_status,
+                },
                 "overall_confidence": result.coverage.overall_confidence,
                 "raw_response_id": result.raw_response_id,
                 "completed_at": datetime.now(UTC).isoformat(),

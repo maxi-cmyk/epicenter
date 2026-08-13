@@ -13,6 +13,8 @@ from app.domain.models import (
     ChecklistItem,
     ChecklistStatus,
     DashboardSnapshot,
+    Document,
+    DocumentCategory,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
     FormsConfirmRequest,
@@ -217,6 +219,49 @@ def _ticket_from_row(row: dict[str, object]) -> QueueTicket:
         service_target=str(row.get("service_target") or "on_track"),
         staff_confirmed=bool(row.get("staff_confirmed")),
         clinical_escalation=bool(row.get("clinical_escalation")),
+        version=int(row.get("version") or 1),
+        matched_package=row.get("matched_package"),
+        package_confirmed=bool(row.get("package_confirmed")),
+        package_confirmed_by=row.get("package_confirmed_by"),
+        package_confirmed_at=row.get("package_confirmed_at"),
+        billing_code=row.get("billing_code"),
+        uncovered_cost=float(row["uncovered_cost"]) if row.get("uncovered_cost") is not None else None,
+        queue_number=row.get("queue_number"),
+        billing_confirmed=bool(row.get("billing_confirmed")),
+        billing_confirmed_by=row.get("billing_confirmed_by"),
+        billing_confirmed_at=row.get("billing_confirmed_at"),
+        identity_confirmed=bool(row.get("identity_confirmed")),
+        identity_confirmed_by=row.get("identity_confirmed_by"),
+        identity_confirmed_at=row.get("identity_confirmed_at"),
+        ecard_verified=bool(row.get("ecard_verified")),
+        ecard_not_applicable=bool(row.get("ecard_not_applicable")),
+        ecard_na_reason=row.get("ecard_na_reason"),
+        is_checkup=bool(row.get("is_checkup")),
+        forms_confirmed=bool(row.get("forms_confirmed")),
+        forms_confirmed_by=row.get("forms_confirmed_by"),
+        forms_confirmed_at=row.get("forms_confirmed_at"),
+        physical_forms_received=bool(row.get("physical_forms_received")),
+        physical_forms_received_by=row.get("physical_forms_received_by"),
+        physical_forms_received_at=row.get("physical_forms_received_at"),
+    )
+
+
+def _document_from_row(row: dict[str, object]) -> Document:
+    raw_facts = row.get("extracted_facts") or {}
+    assert isinstance(raw_facts, dict)
+    return Document(
+        id=str(row["id"]),
+        category=DocumentCategory(str(row.get("document_category") or "benefit_structure")),
+        issuer_code=str(row.get("issuer_code") or "UNKNOWN"),
+        issuer_name=str(row.get("issuer_name") or "Unknown issuer"),
+        document_type=str(row["document_type"]),
+        reference_number=row.get("reference_number"),
+        valid_from=row.get("validity_start"),
+        valid_to=row.get("validity_end"),
+        facts={str(key): str(value) for key, value in raw_facts.items()},
+        confirmed=str(row.get("review_status")) == "confirmed",
+        confirmed_by=row.get("confirmed_by_reference"),
+        confirmed_at=row.get("confirmed_at"),
         version=int(row.get("version") or 1),
     )
 
@@ -629,7 +674,11 @@ class SupabaseOperationsRepository:
         coverage_rows = (
             self.api.select(
                 "coverage_documents",
-                "id,appointment_id,issuer_name,document_type,updated_at",
+                (
+                    "id,appointment_id,issuer_code,issuer_name,document_type,document_category,"
+                    "reference_number,validity_start,validity_end,extracted_facts,review_status,"
+                    "confirmed_by_reference,confirmed_at,version,updated_at"
+                ),
                 filters={"appointment_id": f"in.({','.join(appointment_ids)})", "deleted_at": "is.null"},
                 order="updated_at.desc",
             )
@@ -637,8 +686,10 @@ class SupabaseOperationsRepository:
             else []
         )
         coverage_by_appointment: dict[str, dict[str, object]] = {}
+        documents_by_appointment: dict[str, list[Document]] = {}
         for row in coverage_rows:
             coverage_by_appointment.setdefault(str(row["appointment_id"]), row)
+            documents_by_appointment.setdefault(str(row["appointment_id"]), []).append(_document_from_row(row))
 
         eligibility_rows = (
             self.api.select(
@@ -688,9 +739,11 @@ class SupabaseOperationsRepository:
                 questionnaires_by_patient=questionnaires_by_patient,
             )
             appointment_id = row.get("appointment_id")
+            ticket.documents = documents_by_appointment.get(str(appointment_id), []) if appointment_id else []
             eligibility_row = eligibility_by_appointment.get(str(appointment_id)) if appointment_id else None
             matched_rule = rules_by_id.get(str(eligibility_row.get("matched_rule_id"))) if eligibility_row else None
-            ticket.matched_package = str(matched_rule["package_name"]) if matched_rule else None
+            if ticket.matched_package is None:
+                ticket.matched_package = str(matched_rule["package_name"]) if matched_rule else None
 
         review_cases = []
         for row in review_rows:
@@ -937,42 +990,89 @@ class SupabaseOperationsRepository:
     def confirm_document(
         self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
     ) -> QueueTicket:
-        raise NotImplementedError(
-            "Document confirmation is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
+        row = self.api.rpc(
+            "epicenter_confirm_document",
+            {
+                "p_ticket_id": ticket_id,
+                "p_document_id": document_id,
+                "p_expected_version": request.expected_version,
+                "p_facts": request.facts,
+                "p_reference_number": request.reference_number,
+                "p_valid_from": request.valid_from.isoformat() if request.valid_from else None,
+                "p_valid_to": request.valid_to.isoformat() if request.valid_to else None,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
         )
+        return _ticket_from_row(row)
 
     def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket:
-        raise NotImplementedError(
-            "Package confirmation is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
+        row = self.api.rpc(
+            "epicenter_confirm_package",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_corrected_package": request.corrected_package,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
         )
+        return _ticket_from_row(row)
 
     def confirm_billing(self, ticket_id: str, request: BillingConfirmRequest, actor: str) -> QueueTicket:
-        raise NotImplementedError(
-            "Billing/queue confirmation is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
+        row = self.api.rpc(
+            "epicenter_confirm_billing",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_corrected_billing_code": request.corrected_billing_code,
+                "p_corrected_uncovered_cost": request.corrected_uncovered_cost,
+                "p_corrected_queue_number": request.corrected_queue_number,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
         )
+        return _ticket_from_row(row)
 
     def confirm_identity(self, ticket_id: str, request: IdentityConfirmRequest, actor: str) -> QueueTicket:
-        raise NotImplementedError(
-            "Identity confirmation is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
+        row = self.api.rpc(
+            "epicenter_confirm_identity",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_ecard_not_applicable": request.ecard_not_applicable,
+                "p_ecard_na_reason": request.ecard_na_reason,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
         )
+        return _ticket_from_row(row)
 
     def confirm_forms(self, ticket_id: str, request: FormsConfirmRequest, actor: str) -> QueueTicket:
-        raise NotImplementedError(
-            "Forms confirmation is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
+        row = self.api.rpc(
+            "epicenter_confirm_forms",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
         )
+        return _ticket_from_row(row)
 
     def mark_physical_forms_received(
         self, ticket_id: str, request: PhysicalFormsReceivedRequest, actor: str
     ) -> QueueTicket:
-        raise NotImplementedError(
-            "Physical forms receipt is only available in the demo repository "
-            "pending the deferred production migration (task #13)."
+        row = self.api.rpc(
+            "epicenter_mark_physical_forms_received",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
         )
+        return _ticket_from_row(row)
 
     def decide_recommendation(
         self,

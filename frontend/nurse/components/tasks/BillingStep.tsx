@@ -1,6 +1,5 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -27,8 +26,6 @@ function BillingStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const reverifiedConfirmBilling = useReverification(confirmBilling);
-
   const billingCodeValue = billingCodeEdit ?? ticket.billing_code ?? "";
   const uncoveredCostValue = uncoveredCostEdit ?? (ticket.uncovered_cost != null ? String(ticket.uncovered_cost) : "");
   const queueNumberValue = queueNumberEdit ?? ticket.queue_number ?? "";
@@ -40,7 +37,7 @@ function BillingStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
       const trimmedCode = billingCodeValue.trim();
       const trimmedQueue = queueNumberValue.trim();
       const parsedCost = uncoveredCostValue.trim() === "" ? undefined : Number(uncoveredCostValue);
-      await reverifiedConfirmBilling(ticket.id, ticket.version, {
+      await confirmBilling(ticket.id, ticket.version, {
         billingCode: trimmedCode !== (ticket.billing_code ?? "").trim() ? trimmedCode : undefined,
         uncoveredCost: parsedCost !== undefined && parsedCost !== ticket.uncovered_cost ? parsedCost : undefined,
         queueNumber: trimmedQueue !== (ticket.queue_number ?? "").trim() ? trimmedQueue : undefined,

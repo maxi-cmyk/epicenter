@@ -284,7 +284,8 @@ class TestRegistryMCPEndpoints:
         names = [t["name"] for t in r.json()["tools"]]
         assert "registry_get_schema" in names
         assert "registry_propose_mapping" in names
-        assert len(names) == 5
+        assert "registry_review_mapping" in names
+        assert len(names) == 6
 
     def test_get_schema_known_family(self, client):
         r = client.post(
@@ -325,6 +326,8 @@ class TestRegistryMCPEndpoints:
                 "name": "registry_propose_mapping",
                 "input": {
                     "form_id": "test-form-001",
+                    "fixture_classification": "synthetic",
+                    "approval_reference": "fixture-approval-001",
                     "synthetic_fixture": {"issuer_code": "TEST", "valid_from": "2026-01-01"},
                 },
             },

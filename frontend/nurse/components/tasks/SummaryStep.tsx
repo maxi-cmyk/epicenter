@@ -1,6 +1,5 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -24,16 +23,13 @@ function SummaryStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const reverifiedMarkPhysicalFormsReceived = useReverification(markPhysicalFormsReceived);
-  const reverifiedTransition = useReverification(transitionTicket);
-
   const finish = async () => {
     setPending(true);
     setError("");
     try {
-      const afterForms = await reverifiedMarkPhysicalFormsReceived(ticket.id, ticket.version);
+      const afterForms = await markPhysicalFormsReceived(ticket.id, ticket.version);
       const updatedVersion = afterForms.ticket?.version ?? ticket.version;
-      await reverifiedTransition(ticket.id, updatedVersion, ticket.readiness_state, ticket.readiness_reason, true, "ongoing");
+      await transitionTicket(ticket.id, updatedVersion, ticket.readiness_state, ticket.readiness_reason, true, "ongoing");
       await refresh();
       router.push("/");
     } catch (submitError) {
