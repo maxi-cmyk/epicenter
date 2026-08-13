@@ -33,6 +33,16 @@ test("the patient pre-check preserves the registration and identity boundary", (
   assert.match(read("patient/lib/api.ts"), /\/patient\/pre-arrival\/submit/);
 });
 
+test("questionnaire loading recovers without repeated manual retries", () => {
+  const api = read("patient/lib/api.ts");
+  const questionnaire = read("patient/components/questionnaire/QuestionnaireWorkspace.tsx");
+  assert.match(api, /attempt < 3/);
+  assert.match(api, /error\.status === 409/);
+  assert.match(api, /error\.status >= 500/);
+  assert.match(questionnaire, /The questionnaire could not be loaded automatically/);
+  assert.match(questionnaire, /styles\.errorBox/);
+});
+
 test("the dashboard labels all demo data honestly", () => {
   const navigation = read("nurse/components/layout/SideNavigation.tsx");
   const dashboard = read("nurse/components/dashboard/DashboardView.tsx");

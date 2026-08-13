@@ -1291,6 +1291,21 @@ class SupabaseOperationsRepository:
         self, row: dict[str, object], *, subject: str, patient_id: int
     ) -> PatientOnboardingState:
         state = _onboarding_from_row(row, allow_manual_singpass=not self.use_synthetic_singpass)
+        if state.appointment_id != "pending-booking":
+            owned_appointment = self.api.select(
+                "appointments",
+                "id",
+                filters={
+                    "appointment_reference": f"eq.{state.appointment_id}",
+                    "patient_id": f"eq.{patient_id}",
+                    "deleted_at": "is.null",
+                },
+                limit=1,
+            )
+            if not owned_appointment:
+                # Old onboarding rows could inherit the seeded demo appointment.
+                # Never send an unowned appointment reference to patient APIs.
+                state = state.model_copy(update={"appointment_id": "pending-booking"})
         if state.completed or not (state.singpass_authenticated and state.insurance_completed):
             return state
         responses = self.api.select(

@@ -173,6 +173,7 @@ def test_onboarding_state_uses_supabase_rpc() -> None:
     )
     assert advanced.current_step is OnboardingStep.INSURANCE
     assert advanced.singpass_authenticated is True
+    assert advanced.appointment_id == "pending-booking"
     assert api.rpc_calls[-1][0] == "epicenter_advance_onboarding"
     assert api.rpc_calls[-1][1]["p_clerk_user_id"] == "clerk_user_abc"
 

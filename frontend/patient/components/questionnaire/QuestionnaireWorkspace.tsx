@@ -187,6 +187,11 @@ export function QuestionnaireWorkspace({
     return (
       <div className={embedded ? undefined : styles.page} role="alert">
         {!embedded ? <PageHeader description={error ?? "Questionnaire unavailable."} title="Questionnaire" /> : null}
+        {embedded ? (
+          <div className={styles.errorBox}>
+            {error ?? "The questionnaire could not be loaded automatically."}
+          </div>
+        ) : null}
         <Button onClick={() => void load()}>Retry</Button>
       </div>
     );
