@@ -171,11 +171,19 @@ class TestAuthorizeRegistryTool:
 @pytest.fixture(scope="module")
 def client():
     """FastAPI TestClient in demo mode (default env)."""
-    import os
-    os.environ.setdefault("EPICENTER_DEMO_MODE", "true")
+    from app.core.config import Settings, get_settings
     from app.main import app
-    with TestClient(app) as c:
-        yield c
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        demo_mode=True,
+        mcp_api_key=None,
+        persistence_mode="demo",
+        _env_file=None,
+    )
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
 
 
 class TestOperationsMCPEndpoints:

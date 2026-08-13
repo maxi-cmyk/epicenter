@@ -2,6 +2,7 @@
 
 import { ClerkLoaded, ClerkLoading, ClerkProvider, Show, SignIn, SignUp, UserButton, useAuth } from "@clerk/nextjs";
 import { ShieldCheck } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { activatePatientAccount, setAccessTokenProvider } from "@/lib/api";
@@ -16,8 +17,10 @@ export function PatientAuthProvider({ children }: PatientAuthProviderProps) {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   const visualQaBypass =
     process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "true";
+  const pathname = usePathname();
+  const uploadLinkRoute = pathname?.startsWith("/upload/");
 
-  if (visualQaBypass) return children;
+  if (visualQaBypass || uploadLinkRoute) return children;
   if (!publishableKey) {
     return (
       <main className={styles.configurationError}>
@@ -60,7 +63,7 @@ function PatientAccess() {
         <div className={styles.brand}><span aria-hidden="true">E</span><strong>Epicenter</strong></div>
         <div>
           <h1>Prepare before your clinic visit</h1>
-          <p>Create a patient account to open the assigned synthetic booking. Staff access is provisioned separately and cannot be selected here.</p>
+          <p>Create a patient account to open onboarding for your first visit. Staff access is provisioned separately and cannot be selected here.</p>
         </div>
         <small><ShieldCheck aria-hidden="true" size={16} /> Synthetic demonstration · no live patient data</small>
       </section>
@@ -83,6 +86,8 @@ function PatientAccess() {
 
 function PatientSession({ children }: PatientAuthProviderProps) {
   const { getToken } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [state, setState] = useState<"activating" | "ready" | "error">("activating");
   const [message, setMessage] = useState("Linking your assigned synthetic booking…");
 
@@ -90,7 +95,13 @@ function PatientSession({ children }: PatientAuthProviderProps) {
     let active = true;
     setAccessTokenProvider(getToken);
     void activatePatientAccount()
-      .then(() => { if (active) setState("ready"); })
+      .then((session) => {
+        if (!active) return;
+        setState("ready");
+        if (!session.onboarding_completed && pathname !== "/onboarding") {
+          router.replace("/onboarding");
+        }
+      })
       .catch((error: unknown) => {
         if (!active) return;
         setMessage(error instanceof Error ? error.message : "Patient activation failed.");
@@ -100,7 +111,7 @@ function PatientSession({ children }: PatientAuthProviderProps) {
       active = false;
       setAccessTokenProvider(null);
     };
-  }, [getToken]);
+  }, [getToken, pathname, router]);
 
   if (state !== "ready") {
     return (

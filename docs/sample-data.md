@@ -47,6 +47,10 @@ npx supabase db push --include-seed
 
 `db push --include-seed` applies pending migrations and the idempotent seed without resetting the linked database. Always inspect the project reference and the CLI dry run before applying it to a shared environment.
 
+Patient first-time signup persistence lives in `supabase/migrations/20260812120000_patient_onboarding.sql` (`patient_onboarding_states`, `appointment_questionnaire_responses`, and the `epicenter_*_onboarding` / `epicenter_*_questionnaire` RPCs). Apply it with the same `npx supabase db push` flow before enabling `EPICENTER_PERSISTENCE_MODE=supabase` for onboarding.
+
+Signed-in home / queue / payment / records use `supabase/migrations/20260813010000_patient_journey_persistence.sql` (`payments` plus `epicenter_get_patient_*` / `epicenter_submit_mock_payment`). Clerk sign-in links through `patient_accounts` (email cached when available); demo mode still resolves the seeded `registration:0107` patient for the journey fixture.
+
 The Supabase URL and API keys used by the running FastAPI service cannot apply
 DDL. A linked CLI session (or the SQL Editor) must apply the migration before
 the local API can select `EPICENTER_PERSISTENCE_MODE=supabase`. Railway is a

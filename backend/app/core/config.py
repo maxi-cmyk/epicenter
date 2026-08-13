@@ -14,7 +14,11 @@ class Settings(BaseSettings):
     # patient screen (port 3000), the nurse/staff screen (port 3001), and the
     # pharmacy screen (port 3002).
     frontend_origins: str = Field(
-        default="http://localhost:3000,http://localhost:3001,http://localhost:3002",
+        default=(
+            "http://localhost:3000,http://127.0.0.1:3000,"
+            "http://localhost:3001,http://127.0.0.1:3001,"
+            "http://localhost:3002,http://127.0.0.1:3002"
+        ),
         validation_alias=AliasChoices("EPICENTER_FRONTEND_ORIGINS", "EPICENTER_FRONTEND_ORIGIN"),
     )
     demo_mode: bool = True

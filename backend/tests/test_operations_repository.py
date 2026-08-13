@@ -1,5 +1,12 @@
 from app.data.operations_repository import SupabaseOperationsRepository
-from app.domain.models import KioskCheckInRequest, ReadinessState, TicketTransitionRequest
+from app.domain.models import (
+    KioskCheckInRequest,
+    OnboardingAdvanceRequest,
+    OnboardingStep,
+    QuestionnaireSaveRequest,
+    ReadinessState,
+    TicketTransitionRequest,
+)
 
 
 class FakeApi:
@@ -46,6 +53,52 @@ class FakeApi:
         if function_name == "epicenter_create_walk_in_ticket":
             row = self.select("queue_entries")[0]
             return {**row, "id": "Q-100", "patient_name_snapshot": parameters["p_patient_name"]}
+        if function_name == "epicenter_get_onboarding":
+            return {
+                "clerk_user_id": parameters["p_clerk_user_id"],
+                "patient_id": parameters["p_patient_id"],
+                "appointment_id": parameters.get("p_appointment_reference") or "",
+                "current_step": "singpass",
+                "completed": False,
+                "singpass_authenticated": False,
+                "insurance_completed": False,
+                "questionnaire_completed": False,
+                "singpass_profile": [],
+                "version": 1,
+            }
+        if function_name == "epicenter_advance_onboarding":
+            return {
+                "clerk_user_id": parameters["p_clerk_user_id"],
+                "patient_id": parameters["p_patient_id"],
+                "appointment_id": "APT-DEMO-014",
+                "current_step": "insurance",
+                "completed": False,
+                "singpass_authenticated": True,
+                "insurance_completed": False,
+                "questionnaire_completed": False,
+                "singpass_profile": parameters["p_singpass_profile"],
+                "version": 2,
+            }
+        if function_name == "epicenter_get_questionnaire":
+            return {
+                "appointment_id": parameters["p_appointment_reference"],
+                "appointment_db_id": "appointment_014",
+                "patient_id": parameters["p_patient_id"],
+                "answers": {"gender": "Male"},
+                "declaration_acknowledged": False,
+                "status": "draft",
+                "version": 1,
+            }
+        if function_name == "epicenter_save_questionnaire":
+            return {
+                "appointment_id": parameters["p_appointment_reference"],
+                "appointment_db_id": "appointment_014",
+                "patient_id": parameters["p_patient_id"],
+                "answers": parameters["p_answers"],
+                "declaration_acknowledged": parameters["p_declaration_acknowledged"],
+                "status": "submitted" if parameters["p_submit"] else "draft",
+                "version": int(parameters["p_expected_version"]) + 1,
+            }
         raise AssertionError(function_name)
 
 
@@ -94,3 +147,65 @@ def test_walk_in_uses_transactional_rpc_and_preserves_one_ticket() -> None:
     assert ticket.id == "Q-100"
     assert len(api.rpc_calls) == 1
     assert api.rpc_calls[0][0] == "epicenter_create_walk_in_ticket"
+
+
+def test_onboarding_state_uses_supabase_rpc() -> None:
+    api = FakeApi()
+    repository = SupabaseOperationsRepository(api)  # type: ignore[arg-type]
+
+    state = repository.get_onboarding_state("clerk_user_abc", patient_id=14)
+    assert state.current_step is OnboardingStep.SINGPASS
+    assert state.completed is False
+    assert state.appointment_id == "pending-booking"
+
+    advanced = repository.advance_onboarding(
+        OnboardingAdvanceRequest(
+            step=OnboardingStep.SINGPASS,
+            singpass_authenticated=True,
+            idempotency_key="onboard-singpass-supabase",
+        ),
+        "clerk_user_abc",
+        patient_id=14,
+    )
+    assert advanced.current_step is OnboardingStep.INSURANCE
+    assert advanced.singpass_authenticated is True
+    assert api.rpc_calls[-1][0] == "epicenter_advance_onboarding"
+    assert api.rpc_calls[-1][1]["p_clerk_user_id"] == "clerk_user_abc"
+
+
+def test_questionnaire_save_uses_supabase_rpc_after_local_validation() -> None:
+    api = FakeApi()
+    repository = SupabaseOperationsRepository(api)  # type: ignore[arg-type]
+
+    draft = repository.get_patient_questionnaire("APT-DEMO-014", patient_id=14)
+    assert draft.status.value == "draft"
+    assert any(field.field_id == "gender" for field in draft.fields)
+
+    saved = repository.save_patient_questionnaire(
+        QuestionnaireSaveRequest(
+            appointment_id="APT-DEMO-014",
+            answers={
+                "screening_provider": "Parkway Shenton Medical Clinic",
+                "screening_location": "Harbourfront Tower One",
+                "ethnicity": "Chinese",
+                "gender": "Male",
+                "drug_allergies": "No",
+                "recent_vaccination": "No",
+                "flu_vaccination": "No",
+                "exercise_frequency": "Between 100 to 150 mins/week",
+                "smoking_status": "No",
+                "drinks_alcohol": "No",
+                "stress_frequency": "Rarely",
+                "chronic_pain": "No",
+                "share_sexual_history": "No",
+            },
+            declaration_acknowledged=True,
+            submit=True,
+            expected_version=1,
+            idempotency_key="questionnaire-supabase-1",
+        ),
+        "clerk_user_abc",
+        patient_id=14,
+    )
+    assert saved.status.value == "submitted"
+    assert api.rpc_calls[-1][0] == "epicenter_save_questionnaire"

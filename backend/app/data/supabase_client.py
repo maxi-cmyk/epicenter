@@ -101,3 +101,13 @@ class SupabaseDataApi:
         """Call a Postgres function via PostgREST. Returns whatever the function returns."""
         result = self._request("POST", f"rpc/{function_name}", payload=parameters)
         return result
+
+    def update(
+        self,
+        table: str,
+        payload: dict[str, Any],
+        *,
+        filters: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        """Compatibility alias for callers that describe PATCH as update."""
+        return self.patch(table, payload, filters=filters)
