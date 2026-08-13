@@ -4,13 +4,12 @@ Epicenter is a synthetic outpatient administrative-readiness demo. It turns vari
 
 ## What the demo shows
 
-Three independently built Next.js applications share one FastAPI contract:
+Two independently built Next.js applications share one FastAPI contract:
 
 | App | Port | What it covers |
 | --- | --- | --- |
 | Patient | 3000 | Home, coverage upload, questionnaire, queue (number + assigned counter), payment, records |
 | Nurse | 3001 | Today board (Incoming / Ongoing / Finished), gated registration tasks, walk-in kiosk, Database, Audit, Simulator |
-| Pharmacy | 3002 | Medication queue, Database (view-only patient records), Audit |
 
 **Registration routing.** Walk-ins always go to slow counters (`S1`–`S4`). Only booked patients with no outstanding issues (`intake_type` `booked` and `readiness_state` `ready`) go to fast counters (`F1`–`F2`). The assigned queue number and counter are visible on both the patient queue screen and the nurse dashboard.
 
@@ -22,8 +21,7 @@ Three independently built Next.js applications share one FastAPI contract:
 
 - `frontend/patient/` — independently built Next.js patient registration and pre-arrival experience with public patient-only Clerk enrollment.
 - `frontend/nurse/` — independently built Next.js staff operations, gated task flow, walk-in kiosk, Database, Audit, and Simulator, with Clerk authentication.
-- `frontend/pharmacy/` — independently built Next.js pharmacy queue, Database, and Audit experience with Clerk staff authentication.
-- `frontend/shared/` — generated data contracts, design tokens and safe presentation primitives shared by the apps.
+- `frontend/shared/` — generated data contracts, design tokens and safe presentation primitives shared by both apps.
 - `backend/` — FastAPI domain services, Clerk JWT-protected HTTP API, and the server-side OpenAI integration for document intelligence and reviewed assistant tools.
 - `docs/` — PRD, design, architecture, simulator, nurse workflow, pitch and supporting research.
 
@@ -31,20 +29,25 @@ See [`docs/openai_integration.md`](docs/openai_integration.md) for the native an
 
 ## OpenAI configuration
 
-OpenAI requests originate from FastAPI or the private worker, never from a browser application. Supply the API key only through an ignored local backend environment file or the Railway secret manager:
+OpenAI requests originate from FastAPI or the private worker, never from either browser application. Supply the API key only through an ignored local backend environment file or the Railway secret manager:
 
 ```text
 OPENAI_API_KEY=...
 OPENAI_MODEL=...
 ```
 
-Do not create a `NEXT_PUBLIC_OPENAI_API_KEY` variable, commit the key, paste it into documentation, or return it through an API/tool response. The exact model is pinned only after the document fixtures and assistant tasks are evaluated for correctness, latency, and cost. Normal patient, nurse, and pharmacy workflows, the native dashboard, and the deterministic simulator must continue to work when OpenAI is unavailable.
+Do not create a `NEXT_PUBLIC_OPENAI_API_KEY` variable, commit the key, paste it into documentation, or return it through an API/tool response. The exact model is pinned only after the document fixtures and assistant tasks are evaluated for correctness, latency, and cost. Normal patient/nurse workflows, the native dashboard, and the deterministic simulator must continue to work when OpenAI is unavailable.
 
 Copilot Studio and Power BI are not required for local development. Epicenter uses only its custom Operations and Insurance Format Registry MCP servers. Their Railway endpoints use client-neutral Streamable HTTP so the same reviewed tools can be connected to Copilot Studio at deployment/publication time without forking the business logic. Microsoft-hosted MCPs are not dependencies. The built-in Next.js dashboard remains the P0 analytics surface.
 
 ## Run locally
 
-The core demo runs as three processes: the patient app, the nurse app, and the backend API. Pharmacy is a fourth optional process. The Next.js apps are separate workspace packages with separate route trees, builds, environment validation and Vercel roots. They share only the backend contract and safe presentation primitives; patient routes are not compiled into the nurse or pharmacy deployments, and the reverse is also true.
+The app runs as three processes in three terminals: the patient app, the
+nurse app, and the backend API. The two Next.js apps are separate workspace
+packages with separate route trees, builds, environment validation and Vercel
+roots. They share only the backend contract and safe presentation primitives;
+patient routes are not compiled into the nurse deployment and nurse routes are
+not compiled into the patient deployment.
 
 Terminal 1 — backend:
 
@@ -70,12 +73,6 @@ hosted Supabase project. Set `EPICENTER_PERSISTENCE_MODE=demo` when you want an
 isolated in-memory run. Set it to `supabase` to fail closed if the server
 credentials are missing.
 
-Include pharmacy in CORS when that app is running:
-
-```text
-EPICENTER_FRONTEND_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002
-```
-
 Terminal 2 — patient screen (port 3000):
 
 ```bash
@@ -91,30 +88,22 @@ cd frontend
 npm run nurse
 ```
 
-Optional — pharmacy screen (port 3002):
+Open `http://localhost:3000` for the patient screen and `http://localhost:3001` for the nurse screen. Both frontends use the same local API. The nurse board can show its clearly labelled synthetic fallback when the API is unavailable; patient submissions fail visibly, preserve the selection, and offer retry rather than pretending the action completed.
 
-```bash
-cd frontend
-npm run pharmacy
-```
-
-Open `http://localhost:3000` for the patient screen, `http://localhost:3001` for the nurse screen, and `http://localhost:3002` for the pharmacy screen. All frontends use the same local API. The nurse board can show its clearly labelled synthetic fallback when the API is unavailable; patient submissions fail visibly, preserve the selection, and offer retry rather than pretending the action completed.
-
-The frontend commands are independent: any app can run by itself, and starting one does not start or require another frontend process.
+The two commands are independent: either app can run by itself, and starting one does not start or require the other frontend process.
 
 Walk-in kiosk (nurse app): `http://localhost:3001/kiosk`.
 
 ## Sign-in and account roles
 
-Clerk proves who is signed in; FastAPI and Supabase decide what that identity may access. Patient and staff accounts use separate enrollment paths even when the panels use the same Clerk application.
+Clerk proves who is signed in; FastAPI and Supabase decide what that identity may access. Patient and nurse accounts use separate enrollment paths even when both panels use the same Clerk application.
 
 | Flow | Where | How access is granted |
 | --- | --- | --- |
 | Patient | `http://localhost:3000` | The patient may create an account or sign in. FastAPI verifies the Clerk session and maps its immutable `sub` to one configured synthetic `patient_accounts` record. There is no role selector. |
 | Nurse/staff | `http://localhost:3001` | Sign-in only. A clinic administrator creates the Clerk user and attaches its Clerk User ID to one active `staff_accounts` record with the required clinic and role. Public nurse enrollment is never enabled. |
-| Pharmacy/staff | `http://localhost:3002` | Sign-in only, using the same administrator-provisioned `staff_accounts` mapping. Pharmacists may view allowlisted patient identity/contact records; they cannot create, update, or delete them. |
-| Local demo bypass | FastAPI with `EPICENTER_DEMO_MODE=true` | Uses synthetic principals so local fixture workflows and automated tests can run without provider sessions. This does not prove real patient/staff isolation. |
-| Clerk CLI developer | Terminal | `clerk auth login` authenticates a developer to manage Clerk applications. It does not sign a patient or staff member into Epicenter. |
+| Local demo bypass | FastAPI with `EPICENTER_DEMO_MODE=true` | Uses synthetic principals so local fixture workflows and automated tests can run without provider sessions. This does not prove real patient/nurse isolation. |
+| Clerk CLI developer | Terminal | `clerk auth login` authenticates a developer to manage Clerk applications. It does not sign a patient or nurse into Epicenter. |
 
 ### Patient sign-up and sign-in
 
@@ -154,7 +143,7 @@ where id = 'staff_noor';
 
 Keep provider-specific Clerk User IDs out of the seed SQL and repository. Re-running `supabase/operational_seed.sql` preserves existing mappings because its staff upsert does not overwrite `clerk_user_id`.
 
-On every protected request, FastAPI requires a valid Clerk session and exactly one active staff mapping for `EPICENTER_CLINIC_ID`. Patient, unmapped, disabled, and wrong-clinic identities receive `403` instead of staff access. An email address alone never grants a nurse or pharmacist role.
+On every protected request, FastAPI requires a valid Clerk session and exactly one active staff mapping for `EPICENTER_CLINIC_ID`. Patient, unmapped, disabled, and wrong-clinic identities receive `403` instead of staff access. An email address alone never grants a nurse role.
 
 Every currently implemented staff mutation also requires a recent Clerk verification. If the strongest configured factor is older than ten minutes, Clerk opens its verification prompt and automatically retries the action after verification succeeds. Database Update and Delete require password reverification in the UI. In the development instance, choose **Use another method → Email code** when needed and enter `424242` for a `+clerk_test` account.
 
@@ -162,11 +151,11 @@ Every currently implemented staff mutation also requires a recent Clerk verifica
 
 Use `EPICENTER_DEMO_MODE=true` only for fixture-only flows and automated tests that intentionally bypass provider sessions. The ignored local `backend/.env` now uses `EPICENTER_DEMO_MODE=false` because the development nurse mappings exist. In real-session mode:
 
-1. Keep the local frontend origins in `EPICENTER_FRONTEND_ORIGINS`.
-2. Start the backend and the frontends you need again after changing authentication settings.
+1. Keep both local frontend origins in `EPICENTER_FRONTEND_ORIGINS`.
+2. Start all three processes again after changing authentication settings.
 3. A patient signs up publicly and is attached to the configured synthetic patient only after FastAPI verifies the Clerk session.
-4. A nurse or pharmacist signs in with a pre-provisioned identity and receives only the clinic-scoped role stored in `staff_accounts`.
-5. Test patient-to-staff denial, nurse sign-in, unmapped/disabled staff denial, and audit attribution before deployment.
+4. A nurse signs in with a pre-provisioned identity and receives only the clinic-scoped role stored in `staff_accounts`.
+5. Test patient-to-nurse denial, nurse sign-in, unmapped/disabled staff denial, and audit attribution before deployment.
 
 The repeatable development-provider check covers those paths, the Clerk verification prompt, and a real audited Supabase mutation:
 
@@ -189,11 +178,11 @@ clerk doctor --json
 clerk users list --instance dev --email-address nurse.noor+clerk_test@example.com --json
 ```
 
-`clerk doctor --json` verifies the developer login and linked Clerk application. CLI login is separate from application sign-in flows: it authorizes account administration, not access to any Epicenter panel. Preview user mutations with `--dry-run`, target `--instance dev` explicitly, and do not commit CLI sessions, patient credentials, staff credentials, Clerk User IDs, generated passwords, or provider secrets.
+`clerk doctor --json` verifies the developer login and linked Clerk application. CLI login is separate from both application sign-in flows: it authorizes account administration, not access to either Epicenter panel. Preview user mutations with `--dry-run`, target `--instance dev` explicitly, and do not commit CLI sessions, patient credentials, nurse credentials, Clerk User IDs, generated passwords, or provider secrets.
 
 See [`docs/auth.md`](docs/auth.md) for provisioning, judge-flow, and authorization test requirements.
 
-FastAPI is the contract authority for the apps. After changing backend request or response models, regenerate and verify the checked-in TypeScript contracts:
+FastAPI is the contract authority for both apps. After changing backend request or response models, regenerate and verify the checked-in TypeScript contracts:
 
 ```bash
 cd frontend
@@ -204,10 +193,10 @@ npm run contracts:check
 ## Provider and deployment boundaries
 
 - **Database:** Supabase is the shared persistence target. The migrations and idempotent seeds cover the raw fixtures plus clinics, appointments, the one-ticket queue, review cases, counters, staff availability, human-approved allocation, operational/audit events, configuration releases, and simulator snapshots. The local FastAPI process automatically selects the server-only Supabase adapter when its URL and secret key are configured; Railway is not required for local use.
-- **Authentication:** Clerk wraps the frontends when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, FastAPI verifies Clerk session tokens with the official Python SDK, maps patients through `patient_accounts`, and maps staff through active clinic-scoped `staff_accounts`. `CLERK_JWT_KEY` is an optional networkless-verification optimization.
+- **Authentication:** Clerk wraps both frontends when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is present. Outside demo mode, FastAPI verifies Clerk session tokens with the official Python SDK, maps patients through `patient_accounts`, and maps staff through active clinic-scoped `staff_accounts`. `CLERK_JWT_KEY` is an optional networkless-verification optimization.
 - **Patient demo boundary:** each verified patient account is attached only to the configured synthetic scenario. Pre-arrival submissions return a patient-safe outcome pending any required staff confirmation; privileged operational data remains behind FastAPI.
-- **Frontend deployment:** create one Vercel project rooted at `frontend/patient/`, one at `frontend/nurse/`, and one at `frontend/pharmacy/`. Set each app's browser-safe environment variables independently; all use the same Railway API URL.
-- **Backend deployment:** create a Railway service with `backend/` as its root directory. `backend/railway.toml` defines the start command and health check; set `EPICENTER_DEMO_MODE=false`, provider credentials and the deployed `EPICENTER_FRONTEND_ORIGINS` (comma-separated; patient, nurse, and pharmacy deployment URLs) in Railway.
+- **Frontend deployment:** create one Vercel project rooted at `frontend/patient/` and another rooted at `frontend/nurse/`. Set each app's browser-safe environment variables independently; both use the same Railway API URL.
+- **Backend deployment:** create a Railway service with `backend/` as its root directory. `backend/railway.toml` defines the start command and health check; set `EPICENTER_DEMO_MODE=false`, provider credentials and the deployed `EPICENTER_FRONTEND_ORIGINS` (comma-separated; both the patient and nurse deployment URLs) in Railway.
 - **MCP publication compatibility:** expose the reviewed Operations and Insurance Format Registry servers over public HTTPS Streamable HTTP, verify tool discovery and a read-only synthetic call in Copilot Studio, and keep licensing/publication as an explicit manual release gate.
 - **Analytics scaling:** use the native dashboard for development and the core demo. Consider Power BI/Fabric only later through a reconciled de-identified aggregate projection; it is never the operational source of truth.
 
@@ -229,4 +218,4 @@ cd backend; .\.venv\Scripts\pytest -q; .\.venv\Scripts\ruff check app tests
 cd frontend; npm test; npm run typecheck; npm run lint; npm run build
 ```
 
-Local `.env` and `.env.local` files contain development-only configuration and are ignored. Copy `frontend/patient/.env.example`, `frontend/nurse/.env.example`, and `frontend/pharmacy/.env.example` into each app when setting up another machine. No real patient data or live provider integration is included.
+Local `.env` and `.env.local` files contain development-only configuration and are ignored. Copy `frontend/patient/.env.example` and `frontend/nurse/.env.example` into each app when setting up another machine. No real patient data or live provider integration is included.
