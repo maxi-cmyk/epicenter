@@ -1,6 +1,5 @@
 "use client";
 
-import { useReverification } from "@clerk/nextjs";
 import { ArrowRight, ShieldAlert } from "lucide-react";
 import { FormEvent, useState } from "react";
 
@@ -20,14 +19,13 @@ export function KioskWorkspace() {
   const [ticket, setTicket] = useState<QueueTicket | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const reverifiedCheckIn = useReverification(checkInWalkIn);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     setError("");
     try {
-      const result = await reverifiedCheckIn(patientName, nurseSupervisor, clinicalEscalation);
+      const result = await checkInWalkIn(patientName, nurseSupervisor, clinicalEscalation);
       setTicket(result.ticket ?? null);
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : "The walk-in could not be registered.");
@@ -85,7 +83,7 @@ export function KioskWorkspace() {
               <StatusBadge state={ticket.readiness_state} />
               <dl>
                 <div><dt>Original check-in</dt><dd>Just now</dd></div>
-                <div><dt>Current route</dt><dd>{ticket.actual_counter}</dd></div>
+                <div><dt>Current route</dt><dd>{ticket.actual_room}</dd></div>
                 <div><dt>Next step</dt><dd>{ticket.clinical_escalation ? "Urgent-care pathway" : "Document processing"}</dd></div>
               </dl>
               <p>This number remains with the patient through processing, review and readiness.</p>

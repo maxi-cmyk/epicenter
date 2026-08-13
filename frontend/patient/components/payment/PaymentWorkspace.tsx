@@ -16,6 +16,7 @@ export function PaymentWorkspace() {
   const [payment, setPayment] = useState<PatientPaymentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -44,6 +45,7 @@ export function PaymentWorkspace() {
           idempotency_key: crypto.randomUUID(),
         }),
       );
+      setConfirming(false);
     } catch (payError) {
       setError(payError instanceof Error ? payError.message : "Demo payment failed.");
     } finally {
@@ -71,47 +73,65 @@ export function PaymentWorkspace() {
             <p>No appointment has been made. You can return here after the clinic books your visit.</p>
           ) : (
             <>
-          <span className={styles.mockedTag}>
-            <Beaker aria-hidden="true" size={14} /> Mocked payment
-          </span>
-          <dl className={styles.summaryList}>
-            <div>
-              <dt>Package</dt>
-              <dd>{payment.package_label}</dd>
-            </div>
-            <div>
-              <dt>Covered</dt>
-              <dd>{payment.amount_covered}</dd>
-            </div>
-            <div>
-              <dt>You pay</dt>
-              <dd>{payment.amount_patient_payable}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{payment.status_detail}</dd>
-            </div>
-            {payment.receipt_reference ? (
-              <div>
-                <dt>Receipt</dt>
-                <dd>{payment.receipt_reference}</dd>
-              </div>
-            ) : null}
-          </dl>
+              <span className={styles.mockedTag}>
+                <Beaker aria-hidden="true" size={14} /> Mocked payment
+              </span>
+              <dl className={styles.summaryList}>
+                <div>
+                  <dt>Package</dt>
+                  <dd>{payment.package_label}</dd>
+                </div>
+                <div>
+                  <dt>Covered</dt>
+                  <dd>{payment.amount_covered}</dd>
+                </div>
+                <div>
+                  <dt>You pay</dt>
+                  <dd>{payment.amount_patient_payable}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{payment.status_detail}</dd>
+                </div>
+                {payment.receipt_reference ? (
+                  <div>
+                    <dt>Receipt</dt>
+                    <dd>{payment.receipt_reference}</dd>
+                  </div>
+                ) : null}
+              </dl>
 
-          {payment.status === "mocked_paid" ? (
-            <div className={styles.successBox} role="status">
-              <strong>Demo payment recorded</strong>
-              <span>This receipt is synthetic and does not move money.</span>
-            </div>
-          ) : (
-            <Button
-              disabled={submitting || payment.status === "not_ready" || payment.status === "mock_processing"}
-              onClick={() => void pay()}
-            >
-              {submitting ? "Processing…" : payment.status === "mock_failed" ? "Retry demo payment" : "Pay now — demo"}
-            </Button>
-          )}
+              {payment.status === "mocked_paid" ? (
+                <div className={styles.successBox} role="status">
+                  <strong>Demo payment recorded</strong>
+                  <span>This receipt is synthetic and does not move money.</span>
+                </div>
+              ) : confirming ? (
+                <div className={styles.paymentConfirmation} role="status">
+                  <div>
+                    <strong>Record this demo payment?</strong>
+                    <span>
+                      This will create a synthetic receipt for {payment.amount_patient_payable}. No card is charged and
+                      no money moves.
+                    </span>
+                  </div>
+                  <div className={styles.uploadActions}>
+                    <Button disabled={submitting} onClick={() => setConfirming(false)} variant="quiet">
+                      Cancel
+                    </Button>
+                    <Button disabled={submitting} onClick={() => void pay()}>
+                      {submitting ? "Recording…" : "Confirm demo payment"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  disabled={submitting || payment.status === "not_ready" || payment.status === "mock_processing"}
+                  onClick={() => setConfirming(true)}
+                >
+                  {payment.status === "mock_failed" ? "Retry demo payment" : "Continue to demo payment"}
+                </Button>
+              )}
             </>
           )}
 

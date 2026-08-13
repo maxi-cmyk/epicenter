@@ -1,6 +1,5 @@
 .shell {
   min-height: 100vh;
-  padding-bottom: 88px;
 }
 
 .header {
@@ -66,43 +65,12 @@
 
 .main,
 .mainBare {
-  min-height: calc(100vh - 170px);
+  min-height: calc(100vh - 82px);
   padding: 34px clamp(18px, 5vw, 72px) 64px;
 }
 
 .mainBare {
   min-height: 100vh;
-}
-
-.nav {
-  background: var(--cream-50);
-  border-top: 1px solid var(--rule);
-  bottom: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  left: 0;
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  position: fixed;
-  right: 0;
-  z-index: 20;
-}
-
-.nav a {
-  align-items: center;
-  color: var(--ink-soft);
-  display: flex;
-  flex-direction: column;
-  font-size: 0.78rem;
-  font-weight: 700;
-  gap: 4px;
-  justify-content: center;
-  min-height: 56px;
-  text-decoration: none;
-}
-
-.nav a:hover,
-.navActive {
-  color: var(--green-900) !important;
 }
 
 @media (max-width: 620px) {
@@ -116,7 +84,7 @@
   }
 
   .main {
-    min-height: calc(100vh - 156px);
+    min-height: calc(100vh - 68px);
     padding-block: 28px 48px;
   }
 }

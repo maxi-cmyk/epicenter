@@ -5,6 +5,8 @@ import { ShieldCheck } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Button } from "@epicenter/shared/ui/Button";
+
 import { activatePatientAccount, setAccessTokenProvider } from "@/lib/api";
 
 import styles from "./PatientAuthProvider.module.css";
@@ -34,6 +36,12 @@ export function PatientAuthProvider({ children }: PatientAuthProviderProps) {
   return (
     <ClerkProvider
       appearance={{
+        elements: {
+          footerAction: { display: "none" },
+          formButtonPrimary: { minHeight: "44px" },
+          formFieldInput: { minHeight: "44px" },
+          socialButtonsBlockButton: { minHeight: "44px" },
+        },
         variables: {
           colorPrimary: "#17473a",
           colorBackground: "#fffdf5",
@@ -47,15 +55,15 @@ export function PatientAuthProvider({ children }: PatientAuthProviderProps) {
         <div aria-live="polite" className={styles.loading}>Establishing secure patient access…</div>
       </ClerkLoading>
       <ClerkLoaded>
-        <Show when="signed-out"><PatientAccess /></Show>
+        <Show when="signed-out"><PatientAccess initialMode={pathname === "/sign-in" ? "sign-in" : "sign-up"} /></Show>
         <Show when="signed-in"><PatientSession>{children}</PatientSession></Show>
       </ClerkLoaded>
     </ClerkProvider>
   );
 }
 
-function PatientAccess() {
-  const [mode, setMode] = useState<"sign-up" | "sign-in">("sign-up");
+function PatientAccess({ initialMode }: { initialMode: "sign-up" | "sign-in" }) {
+  const [mode, setMode] = useState<"sign-up" | "sign-in">(initialMode);
 
   return (
     <main className={styles.accessPage}>
@@ -76,7 +84,7 @@ function PatientAccess() {
           {mode === "sign-up" ? (
             <SignUp routing="hash" signInUrl="/" />
           ) : (
-            <SignIn routing="hash" signUpUrl="/" withSignUp />
+            <SignIn routing="hash" signUpUrl="/" withSignUp={false} />
           )}
         </div>
       </section>
@@ -90,6 +98,7 @@ function PatientSession({ children }: PatientAuthProviderProps) {
   const pathname = usePathname();
   const [state, setState] = useState<"activating" | "ready" | "error">("activating");
   const [message, setMessage] = useState("Linking your assigned synthetic booking…");
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -98,6 +107,10 @@ function PatientSession({ children }: PatientAuthProviderProps) {
       .then((session) => {
         if (!active) return;
         setState("ready");
+        if (pathname === "/sign-in") {
+          router.replace(session.onboarding_completed ? "/" : "/onboarding");
+          return;
+        }
         if (!session.onboarding_completed && pathname !== "/onboarding") {
           router.replace("/onboarding");
         }
@@ -111,7 +124,7 @@ function PatientSession({ children }: PatientAuthProviderProps) {
       active = false;
       setAccessTokenProvider(null);
     };
-  }, [getToken, pathname, router]);
+  }, [getToken, pathname, retryKey, router]);
 
   if (state !== "ready") {
     return (
@@ -119,6 +132,18 @@ function PatientSession({ children }: PatientAuthProviderProps) {
         <span>{state === "error" ? "Access unavailable" : "Secure patient access"}</span>
         <h1>{state === "error" ? "We could not open your booking" : "Opening your booking"}</h1>
         <p>{message}</p>
+        {state === "error" ? (
+          <Button
+            onClick={() => {
+              setState("activating");
+              setMessage("Linking your assigned synthetic booking…");
+              setRetryKey((current) => current + 1);
+            }}
+            variant="secondary"
+          >
+            Try again
+          </Button>
+        ) : null}
         <UserButton showName />
       </main>
     );

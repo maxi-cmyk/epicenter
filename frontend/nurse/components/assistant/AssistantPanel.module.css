@@ -1,0 +1,61 @@
+.shell {
+  background: var(--cream-50);
+  border: 1px solid var(--rule);
+  margin-bottom: 18px;
+}
+
+.open { border-color: var(--green-700); }
+
+.trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--green-950);
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto 1fr auto;
+  min-height: 58px;
+  padding: 11px 18px;
+  text-align: left;
+  width: 100%;
+}
+
+.trigger:disabled { cursor: not-allowed; opacity: 0.58; }
+.trigger strong, .trigger small { display: block; }
+.trigger strong { font-size: 0.9rem; }
+.trigger small { color: var(--ink-soft); font-size: 0.75rem; margin-top: 2px; }
+
+.body { border-top: 1px solid var(--rule); padding: 18px; }
+.starters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.starters button {
+  background: var(--cream-100);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--green-900);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 7px 11px;
+}
+.starters button:hover { border-color: var(--green-700); }
+.form label { display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: 7px; }
+.composer { align-items: stretch; display: grid; gap: 10px; grid-template-columns: 1fr auto; }
+.composer textarea {
+  background: var(--cream-50);
+  border: 1px solid var(--rule);
+  color: var(--green-950);
+  font: inherit;
+  line-height: 1.45;
+  min-height: 62px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.composer textarea:focus { border-color: var(--green-700); outline: 2px solid color-mix(in srgb, var(--green-700) 18%, transparent); }
+.reply { background: var(--green-100); border-left: 4px solid var(--green-700); margin-top: 14px; padding: 14px 16px; }
+.replyHead { align-items: center; display: flex; justify-content: space-between; }
+.replyHead span { background: var(--cream-50); border-radius: 999px; font-size: 0.68rem; font-weight: 700; padding: 4px 8px; text-transform: uppercase; }
+.reply p { line-height: 1.55; margin: 9px 0; white-space: pre-wrap; }
+.reply small, .boundary { color: var(--ink-soft); font-size: 0.72rem; }
+.boundary { margin: 14px 0 0; }
+.error { background: var(--red-soft); color: var(--red); margin: 12px 0 0; padding: 10px 12px; }

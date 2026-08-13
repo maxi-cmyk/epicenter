@@ -20,6 +20,13 @@ type AccessTokenProvider = () => Promise<string | null>;
 
 let accessTokenProvider: AccessTokenProvider | null = null;
 
+class PatientApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "PatientApiError";
+  }
+}
+
 export function setAccessTokenProvider(provider: AccessTokenProvider | null) {
   accessTokenProvider = provider;
 }
@@ -37,7 +44,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(body?.detail ?? "The clinic service could not process this request.");
+    throw new PatientApiError(body?.detail ?? "The clinic service could not process this request.", response.status);
   }
   return response.json() as Promise<T>;
 }
@@ -89,8 +96,21 @@ export function getPatientRecords(): Promise<PatientVisitHistory> {
   return request("/patient/records");
 }
 
-export function getPatientQuestionnaire(appointmentId: string): Promise<PatientQuestionnaire> {
-  return request(`/patient/questionnaire?appointment_id=${encodeURIComponent(appointmentId)}`);
+export async function getPatientQuestionnaire(appointmentId: string): Promise<PatientQuestionnaire> {
+  const path = `/patient/questionnaire?appointment_id=${encodeURIComponent(appointmentId)}`;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await request(path);
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        !(error instanceof PatientApiError) || error.status === 409 || error.status === 429 || error.status >= 500;
+      if (!retryable || attempt === 2) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, 200 * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
 
 export function savePatientQuestionnaire(payload: QuestionnaireSaveRequest): Promise<PatientQuestionnaire> {

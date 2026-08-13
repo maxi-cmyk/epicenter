@@ -40,6 +40,7 @@ export function StaffSignIn() {
         <div className={styles.signInTask}>
           <h2>Open the operations workspace</h2>
           <p>Use the staff account issued by your clinic administrator.</p>
+          <p className={styles.provisioningNote}>Staff accounts are provisioned by the clinic. Self-service sign-up is unavailable.</p>
           <SignIn
             appearance={{
               elements: {

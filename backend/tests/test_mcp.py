@@ -171,11 +171,19 @@ class TestAuthorizeRegistryTool:
 @pytest.fixture(scope="module")
 def client():
     """FastAPI TestClient in demo mode (default env)."""
-    import os
-    os.environ.setdefault("EPICENTER_DEMO_MODE", "true")
+    from app.core.config import Settings, get_settings
     from app.main import app
-    with TestClient(app) as c:
-        yield c
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        demo_mode=True,
+        mcp_api_key=None,
+        persistence_mode="demo",
+        _env_file=None,
+    )
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
 
 
 class TestOperationsMCPEndpoints:
@@ -276,7 +284,8 @@ class TestRegistryMCPEndpoints:
         names = [t["name"] for t in r.json()["tools"]]
         assert "registry_get_schema" in names
         assert "registry_propose_mapping" in names
-        assert len(names) == 5
+        assert "registry_review_mapping" in names
+        assert len(names) == 6
 
     def test_get_schema_known_family(self, client):
         r = client.post(
@@ -317,6 +326,8 @@ class TestRegistryMCPEndpoints:
                 "name": "registry_propose_mapping",
                 "input": {
                     "form_id": "test-form-001",
+                    "fixture_classification": "synthetic",
+                    "approval_reference": "fixture-approval-001",
                     "synthetic_fixture": {"issuer_code": "TEST", "valid_from": "2026-01-01"},
                 },
             },

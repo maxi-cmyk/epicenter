@@ -9,11 +9,21 @@ from app.domain.models import (
     ActivityEvent,
     AllocationRecommendation,
     AuditRecord,
-    CounterAssignmentRequest,
+    BillingConfirmRequest,
+    ChecklistItem,
+    ChecklistStatus,
     DashboardSnapshot,
+    Document,
+    DocumentCategory,
+    DocumentConfirmRequest,
     DocumentProcessingRequest,
+    FormsConfirmRequest,
+    IdentityConfirmRequest,
     KioskCheckInRequest,
+    MedicationDispense,
+    MedicationDispenseRequest,
     Metric,
+    PackageConfirmRequest,
     MockPaymentRequest,
     OnboardingAdvanceRequest,
     OnboardingStep,
@@ -33,7 +43,9 @@ from app.domain.models import (
     PatientQueueStatus,
     PatientRecord,
     PatientSubmissionOutcome,
+    PatientSummary,
     PatientUpdateRequest,
+    PhysicalFormsReceivedRequest,
     PatientVisitHistory,
     PatientVisitRecord,
     PreArrivalSubmissionRequest,
@@ -42,12 +54,15 @@ from app.domain.models import (
     QueueTicket,
     QuestionnaireSaveRequest,
     RecommendationDecisionRequest,
+    RecordChecklist,
     RegistrationValidationRequest,
     RegistrationValidationResult,
     ReviewCase,
     SimulatorSnapshot,
     SingpassProfileField,
     TicketTransitionRequest,
+    TpaSubmission,
+    TpaSubmissionConfirmRequest,
     UploadLinkSession,
     VisitPhase,
 )
@@ -121,11 +136,7 @@ class OperationsRepository(Protocol):
 
     def add_walk_in(self, request: KioskCheckInRequest, actor: str) -> QueueTicket: ...
 
-    def process_document(
-        self, ticket_id: str, request: DocumentProcessingRequest, actor: str
-    ) -> QueueTicket: ...
-
-    def assign_counter(self, ticket_id: str, request: CounterAssignmentRequest, actor: str) -> QueueTicket: ...
+    def process_document(self, ticket_id: str, request: DocumentProcessingRequest, actor: str) -> QueueTicket: ...
 
     def decide_recommendation(
         self,
@@ -134,7 +145,9 @@ class OperationsRepository(Protocol):
         actor: str,
     ) -> AllocationRecommendation: ...
 
-    def list_patients(self, *, search: str | None, offset: int, limit: int) -> PatientList: ...
+    def list_patients(
+        self, *, search: str | None, offset: int, limit: int, contact_filter: str = "all", sort: str = "name"
+    ) -> PatientList: ...
 
     def get_patient(self, patient_id: int) -> PatientRecord | None: ...
 
@@ -144,7 +157,46 @@ class OperationsRepository(Protocol):
 
     def delete_patient(self, patient_id: int, request: PatientDeleteRequest, actor: str) -> PatientRecord: ...
 
-    def list_audit(self, *, limit: int) -> list[AuditRecord]: ...
+    def list_audit(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        search: str | None = None,
+        actor: str | None = None,
+        actor_role: str | None = None,
+        outcome: str | None = None,
+        action_type: str | None = None,
+        target_table: str | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+    ) -> list[AuditRecord]: ...
+
+    def record_medication_dispense(
+        self, ticket_id: str, request: MedicationDispenseRequest, actor: str
+    ) -> MedicationDispense: ...
+
+    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission: ...
+
+    def confirm_tpa_submission(
+        self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str
+    ) -> TpaSubmission: ...
+
+    def confirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
+    ) -> QueueTicket: ...
+
+    def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def confirm_billing(self, ticket_id: str, request: BillingConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def confirm_identity(self, ticket_id: str, request: IdentityConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def confirm_forms(self, ticket_id: str, request: FormsConfirmRequest, actor: str) -> QueueTicket: ...
+
+    def mark_physical_forms_received(
+        self, ticket_id: str, request: PhysicalFormsReceivedRequest, actor: str
+    ) -> QueueTicket: ...
 
 
 def _ticket_from_row(row: dict[str, object]) -> QueueTicket:
@@ -158,15 +210,141 @@ def _ticket_from_row(row: dict[str, object]) -> QueueTicket:
         readiness_reason=str(row["readiness_reason"]),
         scheduled_at=row.get("scheduled_at"),
         checked_in_at=row.get("checked_in_at"),
+        completed_at=row.get("completed_at"),
         original_ordering_at=row["original_ordering_at"],
         waiting_minutes=int(row.get("waiting_minutes") or 0),
-        expected_counter=row.get("expected_counter_number"),
-        actual_counter=row.get("counter_number"),
+        expected_room=row.get("expected_counter_number"),
+        actual_room=row.get("counter_number"),
         processing_stage=str(row["processing_stage"]),
         service_target=str(row.get("service_target") or "on_track"),
         staff_confirmed=bool(row.get("staff_confirmed")),
         clinical_escalation=bool(row.get("clinical_escalation")),
         version=int(row.get("version") or 1),
+        matched_package=row.get("matched_package"),
+        package_confirmed=bool(row.get("package_confirmed")),
+        package_confirmed_by=row.get("package_confirmed_by"),
+        package_confirmed_at=row.get("package_confirmed_at"),
+        billing_code=row.get("billing_code"),
+        uncovered_cost=float(row["uncovered_cost"]) if row.get("uncovered_cost") is not None else None,
+        queue_number=row.get("queue_number"),
+        billing_confirmed=bool(row.get("billing_confirmed")),
+        billing_confirmed_by=row.get("billing_confirmed_by"),
+        billing_confirmed_at=row.get("billing_confirmed_at"),
+        identity_confirmed=bool(row.get("identity_confirmed")),
+        identity_confirmed_by=row.get("identity_confirmed_by"),
+        identity_confirmed_at=row.get("identity_confirmed_at"),
+        ecard_verified=bool(row.get("ecard_verified")),
+        ecard_not_applicable=bool(row.get("ecard_not_applicable")),
+        ecard_na_reason=row.get("ecard_na_reason"),
+        is_checkup=bool(row.get("is_checkup")),
+        forms_confirmed=bool(row.get("forms_confirmed")),
+        forms_confirmed_by=row.get("forms_confirmed_by"),
+        forms_confirmed_at=row.get("forms_confirmed_at"),
+        physical_forms_received=bool(row.get("physical_forms_received")),
+        physical_forms_received_by=row.get("physical_forms_received_by"),
+        physical_forms_received_at=row.get("physical_forms_received_at"),
+    )
+
+
+def _document_from_row(row: dict[str, object]) -> Document:
+    raw_facts = row.get("extracted_facts") or {}
+    assert isinstance(raw_facts, dict)
+    return Document(
+        id=str(row["id"]),
+        category=DocumentCategory(str(row.get("document_category") or "benefit_structure")),
+        issuer_code=str(row.get("issuer_code") or "UNKNOWN"),
+        issuer_name=str(row.get("issuer_name") or "Unknown issuer"),
+        document_type=str(row["document_type"]),
+        reference_number=row.get("reference_number"),
+        valid_from=row.get("validity_start"),
+        valid_to=row.get("validity_end"),
+        facts={str(key): str(value) for key, value in raw_facts.items()},
+        confirmed=str(row.get("review_status")) == "confirmed",
+        confirmed_by=row.get("confirmed_by_reference"),
+        confirmed_at=row.get("confirmed_at"),
+        version=int(row.get("version") or 1),
+    )
+
+
+def _checklist_status_from_bool(ok: bool) -> ChecklistStatus:
+    return ChecklistStatus.PASS if ok else ChecklistStatus.FAIL
+
+
+def _questionnaire_item(label: str, status_by_type: dict[str, str], questionnaire_type: str) -> ChecklistItem:
+    verification_status = status_by_type.get(questionnaire_type)
+    if verification_status is None:
+        return ChecklistItem(label=label, status=ChecklistStatus.NOT_REQUIRED)
+    if verification_status == "verified":
+        return ChecklistItem(label=label, status=ChecklistStatus.PASS, detail="Verified")
+    return ChecklistItem(label=label, status=ChecklistStatus.PENDING, detail=verification_status.replace("_", " "))
+
+
+def _build_checklist(
+    row: dict[str, object],
+    *,
+    patients_by_id: dict[int, dict[str, object]],
+    coverage_by_appointment: dict[str, dict[str, object]],
+    eligibility_by_appointment: dict[str, dict[str, object]],
+    rules_by_id: dict[str, dict[str, object]],
+    questionnaires_by_patient: dict[int, dict[str, str]],
+) -> RecordChecklist:
+    patient_id = row.get("patient_id")
+    appointment_id = row.get("appointment_id")
+
+    patient_row = patients_by_id.get(int(patient_id)) if patient_id is not None else None  # type: ignore[arg-type]
+    patient = (
+        PatientSummary(
+            full_name=str(patient_row["full_name"]),
+            identifier_masked=str(patient_row["identifier_masked"]),
+            date_of_birth=patient_row.get("date_of_birth"),
+            contact_mobile=patient_row.get("contact_mobile"),
+            address=patient_row.get("address"),
+        )
+        if patient_row
+        else None
+    )
+
+    coverage_row = coverage_by_appointment.get(str(appointment_id)) if appointment_id else None
+    documents_present = bool(row.get("all_required_documents_present"))
+    documents_valid = bool(row.get("all_documents_valid"))
+    extraction_pass = str(row.get("extraction_status") or "needs_review") == "pass"
+    coverage_detail = (
+        f"{coverage_row.get('issuer_name')} · {coverage_row.get('document_type')}"
+        if coverage_row and coverage_row.get("issuer_name")
+        else None
+    )
+
+    eligibility_row = eligibility_by_appointment.get(str(appointment_id)) if appointment_id else None
+    match_status = str(row.get("match_status") or "no_match")
+    eligibility_status = (
+        ChecklistStatus.PASS
+        if match_status == "clean"
+        else ChecklistStatus.PENDING
+        if match_status == "ambiguous"
+        else ChecklistStatus.FAIL
+    )
+    matched_rule = rules_by_id.get(str(eligibility_row.get("matched_rule_id"))) if eligibility_row else None
+    eligibility_detail = str(matched_rule["package_name"]) if matched_rule else None
+
+    status_by_type = questionnaires_by_patient.get(int(patient_id), {}) if patient_id is not None else {}  # type: ignore[arg-type]
+
+    return RecordChecklist(
+        patient=patient,
+        items=[
+            ChecklistItem(
+                label="Patient details",
+                status=ChecklistStatus.PASS if patient else ChecklistStatus.PENDING,
+                detail=patient.identifier_masked if patient else None,
+            ),
+            ChecklistItem(
+                label="Coverage document",
+                status=_checklist_status_from_bool(documents_present and documents_valid and extraction_pass),
+                detail=coverage_detail,
+            ),
+            ChecklistItem(label="Eligibility match", status=eligibility_status, detail=eligibility_detail),
+            _questionnaire_item("General health questionnaire", status_by_type, "general_health"),
+            _questionnaire_item("Occupational health questionnaire", status_by_type, "occupational_health"),
+        ],
     )
 
 
@@ -478,6 +656,95 @@ class SupabaseOperationsRepository:
 
         tickets = [_ticket_from_row(row) for row in ticket_rows]
         tickets_by_id = {ticket.id: ticket for ticket in tickets}
+
+        patient_ids = {int(row["patient_id"]) for row in ticket_rows if row.get("patient_id") is not None}
+        appointment_ids = {str(row["appointment_id"]) for row in ticket_rows if row.get("appointment_id") is not None}
+
+        patient_rows = (
+            self.api.select(
+                "patients",
+                "id,full_name,identifier_masked,date_of_birth,contact_mobile,address",
+                filters={"id": f"in.({','.join(str(pid) for pid in patient_ids)})"},
+            )
+            if patient_ids
+            else []
+        )
+        patients_by_id = {int(row["id"]): row for row in patient_rows}
+
+        coverage_rows = (
+            self.api.select(
+                "coverage_documents",
+                (
+                    "id,appointment_id,issuer_code,issuer_name,document_type,document_category,"
+                    "reference_number,validity_start,validity_end,extracted_facts,review_status,"
+                    "confirmed_by_reference,confirmed_at,version,updated_at"
+                ),
+                filters={"appointment_id": f"in.({','.join(appointment_ids)})", "deleted_at": "is.null"},
+                order="updated_at.desc",
+            )
+            if appointment_ids
+            else []
+        )
+        coverage_by_appointment: dict[str, dict[str, object]] = {}
+        documents_by_appointment: dict[str, list[Document]] = {}
+        for row in coverage_rows:
+            coverage_by_appointment.setdefault(str(row["appointment_id"]), row)
+            documents_by_appointment.setdefault(str(row["appointment_id"]), []).append(_document_from_row(row))
+
+        eligibility_rows = (
+            self.api.select(
+                "eligibility_matches",
+                "appointment_id,matched_rule_id,match_status,updated_at",
+                filters={"appointment_id": f"in.({','.join(appointment_ids)})", "deleted_at": "is.null"},
+                order="updated_at.desc",
+            )
+            if appointment_ids
+            else []
+        )
+        eligibility_by_appointment: dict[str, dict[str, object]] = {}
+        for row in eligibility_rows:
+            eligibility_by_appointment.setdefault(str(row["appointment_id"]), row)
+
+        rule_ids = {str(row["matched_rule_id"]) for row in eligibility_rows if row.get("matched_rule_id")}
+        rule_rows = (
+            self.api.select("eligibility_rules", "id,package_name", filters={"id": f"in.({','.join(rule_ids)})"})
+            if rule_ids
+            else []
+        )
+        rules_by_id = {str(row["id"]): row for row in rule_rows}
+
+        questionnaire_rows = (
+            self.api.select(
+                "questionnaire_submissions",
+                "patient_id,questionnaire_type,verification_status",
+                filters={"patient_id": f"in.({','.join(str(pid) for pid in patient_ids)})"},
+            )
+            if patient_ids
+            else []
+        )
+        questionnaires_by_patient: dict[int, dict[str, str]] = {}
+        for row in questionnaire_rows:
+            if row.get("patient_id") is None:
+                continue
+            bucket = questionnaires_by_patient.setdefault(int(row["patient_id"]), {})
+            bucket[str(row["questionnaire_type"])] = str(row["verification_status"])
+
+        for row, ticket in zip(ticket_rows, tickets, strict=True):
+            ticket.record_checklist = _build_checklist(
+                row,
+                patients_by_id=patients_by_id,
+                coverage_by_appointment=coverage_by_appointment,
+                eligibility_by_appointment=eligibility_by_appointment,
+                rules_by_id=rules_by_id,
+                questionnaires_by_patient=questionnaires_by_patient,
+            )
+            appointment_id = row.get("appointment_id")
+            ticket.documents = documents_by_appointment.get(str(appointment_id), []) if appointment_id else []
+            eligibility_row = eligibility_by_appointment.get(str(appointment_id)) if appointment_id else None
+            matched_rule = rules_by_id.get(str(eligibility_row.get("matched_rule_id"))) if eligibility_row else None
+            if ticket.matched_package is None:
+                ticket.matched_package = str(matched_rule["package_name"]) if matched_rule else None
+
         review_cases = []
         for row in review_rows:
             ticket = tickets_by_id.get(str(row["queue_entry_id"]))
@@ -681,9 +948,7 @@ class SupabaseOperationsRepository:
         )
         return _ticket_from_row(row)
 
-    def process_document(
-        self, ticket_id: str, request: DocumentProcessingRequest, actor: str
-    ) -> QueueTicket:
+    def process_document(self, ticket_id: str, request: DocumentProcessingRequest, actor: str) -> QueueTicket:
         row = self.api.rpc(
             "epicenter_process_document",
             {
@@ -702,13 +967,107 @@ class SupabaseOperationsRepository:
         )
         return _ticket_from_row(row)
 
-    def assign_counter(self, ticket_id: str, request: CounterAssignmentRequest, actor: str) -> QueueTicket:
+    def record_medication_dispense(
+        self, ticket_id: str, request: MedicationDispenseRequest, actor: str
+    ) -> MedicationDispense:
+        raise NotImplementedError(
+            "Pharmacist medication dispensing is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def draft_tpa_submission(self, ticket_id: str) -> TpaSubmission:
+        raise NotImplementedError(
+            "TPA submission drafting is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_tpa_submission(self, ticket_id: str, request: TpaSubmissionConfirmRequest, actor: str) -> TpaSubmission:
+        raise NotImplementedError(
+            "TPA submission confirmation is only available in the demo repository "
+            "pending the deferred production migration (task #13)."
+        )
+
+    def confirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
+    ) -> QueueTicket:
         row = self.api.rpc(
-            "epicenter_assign_counter",
+            "epicenter_confirm_document",
+            {
+                "p_ticket_id": ticket_id,
+                "p_document_id": document_id,
+                "p_expected_version": request.expected_version,
+                "p_facts": request.facts,
+                "p_reference_number": request.reference_number,
+                "p_valid_from": request.valid_from.isoformat() if request.valid_from else None,
+                "p_valid_to": request.valid_to.isoformat() if request.valid_to else None,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _ticket_from_row(row)
+
+    def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket:
+        row = self.api.rpc(
+            "epicenter_confirm_package",
             {
                 "p_ticket_id": ticket_id,
                 "p_expected_version": request.expected_version,
-                "p_counter_number": request.counter_number,
+                "p_corrected_package": request.corrected_package,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _ticket_from_row(row)
+
+    def confirm_billing(self, ticket_id: str, request: BillingConfirmRequest, actor: str) -> QueueTicket:
+        row = self.api.rpc(
+            "epicenter_confirm_billing",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_corrected_billing_code": request.corrected_billing_code,
+                "p_corrected_uncovered_cost": request.corrected_uncovered_cost,
+                "p_corrected_queue_number": request.corrected_queue_number,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _ticket_from_row(row)
+
+    def confirm_identity(self, ticket_id: str, request: IdentityConfirmRequest, actor: str) -> QueueTicket:
+        row = self.api.rpc(
+            "epicenter_confirm_identity",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_ecard_not_applicable": request.ecard_not_applicable,
+                "p_ecard_na_reason": request.ecard_na_reason,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _ticket_from_row(row)
+
+    def confirm_forms(self, ticket_id: str, request: FormsConfirmRequest, actor: str) -> QueueTicket:
+        row = self.api.rpc(
+            "epicenter_confirm_forms",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _ticket_from_row(row)
+
+    def mark_physical_forms_received(
+        self, ticket_id: str, request: PhysicalFormsReceivedRequest, actor: str
+    ) -> QueueTicket:
+        row = self.api.rpc(
+            "epicenter_mark_physical_forms_received",
+            {
+                "p_ticket_id": ticket_id,
+                "p_expected_version": request.expected_version,
                 "p_actor_reference": actor,
                 "p_idempotency_key": request.idempotency_key,
             },
@@ -734,17 +1093,30 @@ class SupabaseOperationsRepository:
         )
         return _recommendation_from_row(row)
 
-    def list_patients(self, *, search: str | None, offset: int, limit: int) -> PatientList:
+    def list_patients(
+        self, *, search: str | None, offset: int, limit: int, contact_filter: str = "all", sort: str = "name"
+    ) -> PatientList:
         filters = {"deleted_at": "is.null"}
         if search:
             safe_search = search.replace("%", "").replace("*", "").strip()
             if safe_search:
                 filters["full_name"] = f"ilike.*{safe_search}*"
+        if contact_filter == "email":
+            filters["email"] = "not.is.null"
+        elif contact_filter == "mobile":
+            filters["contact_mobile"] = "not.is.null"
+        elif contact_filter == "complete":
+            filters["email"] = "not.is.null"
+            filters["contact_mobile"] = "not.is.null"
+        order = {
+            "reference": "source_record_key.asc",
+            "dob": "date_of_birth.desc.nullslast",
+        }.get(sort, "full_name.asc")
         rows = self.api.select(
             "patients",
             "id,source_record_key,identifier_masked,full_name,date_of_birth,email,contact_mobile,version,deleted_at",
             filters=filters,
-            order="full_name.asc",
+            order=order,
             limit=limit,
             offset=offset,
         )
@@ -809,15 +1181,72 @@ class SupabaseOperationsRepository:
         )
         return _patient_from_row(row)
 
-    def list_audit(self, *, limit: int) -> list[AuditRecord]:
+    def list_audit(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        search: str | None = None,
+        actor: str | None = None,
+        actor_role: str | None = None,
+        outcome: str | None = None,
+        action_type: str | None = None,
+        target_table: str | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+    ) -> list[AuditRecord]:
+        filters = {"clinic_id": f"eq.{self.clinic_id}"}
+        if action_type:
+            filters["action_type"] = f"eq.{action_type}"
+        if target_table:
+            filters["target_table"] = f"eq.{target_table}"
+        if occurred_from:
+            filters["occurred_at"] = f"gte.{occurred_from.isoformat()}"
+        # PostgREST cannot express two constraints for the same mapping key, so
+        # apply the upper date bound after the clinic-scoped query.
+        fetch_limit = min(500, limit + offset + (200 if search or occurred_to else 0))
         rows = self.api.select(
             "audit_log",
             "id,actor_reference,action_type,target_table,target_id,details,occurred_at",
-            filters={"clinic_id": f"eq.{self.clinic_id}"},
-            order="occurred_at.desc",
-            limit=limit,
+            filters=filters,
+            order="occurred_at.desc,id.desc",
+            limit=fetch_limit,
         )
-        return [AuditRecord(**row) for row in rows]
+        records = [AuditRecord(**row) for row in rows]
+        if occurred_to:
+            records = [record for record in records if record.occurred_at <= occurred_to]
+        if search:
+            needle = search.casefold()
+            records = [
+                record
+                for record in records
+                if needle
+                in " ".join(
+                    (
+                        record.actor_reference,
+                        record.action_type,
+                        record.target_table,
+                        record.target_id,
+                    )
+                ).casefold()
+            ]
+        if actor:
+            records = [record for record in records if actor.casefold() in record.actor_reference.casefold()]
+        if actor_role:
+            role = actor_role.casefold()
+            records = [
+                record
+                for record in records
+                if record.actor_role == role or str(record.details.get("actor_role", "")).casefold() == role
+            ]
+        if outcome:
+            records = [
+                record
+                for record in records
+                if outcome.casefold()
+                in str(record.details.get("outcome") or record.details.get("status") or "committed").casefold()
+            ]
+        return records[offset : offset + limit]
 
     def get_patient_home(self, patient_id: int | None = None) -> PatientHome:
         if patient_id is None:

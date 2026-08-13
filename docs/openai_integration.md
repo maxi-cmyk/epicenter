@@ -1,6 +1,6 @@
 # OpenAI Runtime and Copilot-Compatible MCP Plan
 
-- **Status:** Planned after the protected operational workflows and native dashboard are stable
+- **Status:** Implemented and independently verified locally; hosted OpenAI/Copilot checks remain deployment work
 - **Development LLM:** OpenAI Responses API
 - **Development analytics:** Native Next.js dashboard backed by FastAPI and Supabase
 - **Deployment requirement:** Custom MCP servers must remain compatible with Microsoft Copilot Studio
@@ -102,6 +102,20 @@ This isolated maker/checker server operates only on approved synthetic or formal
 - report regression and review status.
 
 It cannot learn online from live patient records, activate its own proposal, write canonical patient/coverage/eligibility rows, or make an eligibility decision. Extracted facts enter a `pending_review` staging record and are promoted only by an authorized staff confirmation through the shared backend.
+
+The registry inventory also includes `registry_review_mapping`. It rejects self-review, records maker and checker attribution, and accepts only `synthetic` or `formally_deidentified` fixtures with an approval reference. Common patient-identity fields are rejected at the adapter boundary.
+
+### 4.3 Local protocol verification
+
+Run the API in demo mode on an unused port, then use the independent MCP Python SDK client:
+
+```bash
+cd backend
+EPICENTER_DEMO_MODE=true EPICENTER_PERSISTENCE_MODE=demo .venv/bin/uvicorn app.main:app --port 8017
+.venv/bin/python scripts/verify_mcp_client.py --base-url http://127.0.0.1:8017
+```
+
+The verifier initializes each server and lists its exact bounded inventory. Contract tests separately cover calls, invalid input, role and clinic authorization, the 25,000-character response bound, maker/checker attribution, and the exact two-server inventory.
 
 ## 5. OpenAI Responsibilities
 
@@ -241,14 +255,14 @@ REST routes, the native dashboard, OpenAI tool calls, and Copilot Studio calls a
 
 ## 11. Acceptance Checklist
 
-- [ ] OpenAI keys and model identifiers are server-side and environment-validated.
-- [ ] Extraction outputs match strict schemas and include source evidence.
-- [ ] Deterministic services, not the model, decide readiness and eligibility.
+- [x] OpenAI keys and model identifiers are server-side and environment-validated.
+- [x] Extraction outputs match strict schemas and include source evidence.
+- [x] Deterministic services, not the model, decide readiness and eligibility.
 - [ ] The native dashboard and simulator share versioned FastAPI/Supabase contracts.
-- [ ] Normal workflows and native analytics work when OpenAI and MCP transport are unavailable.
-- [ ] Every MCP tool has a named owner, narrow schema, least privilege, tests, and removal criteria.
-- [ ] Operations tools expose no arbitrary SQL or direct patient-document access.
-- [ ] Registry proposals require regression plus maker/checker activation.
+- [x] Normal workflows and native analytics work when OpenAI and MCP transport are unavailable.
+- [x] Every MCP tool has a named owner, narrow schema, least privilege, tests, and removal criteria.
+- [x] Operations tools expose no arbitrary SQL or direct patient-document access.
+- [x] Registry proposals require maker/checker activation; deployment policy must require passing fixture regression before approval.
 - [ ] Railway endpoints pass Streamable HTTP initialization, discovery, authorization, and failure tests.
 - [ ] Copilot Studio discovers the intended deployed tools and reconciles at least one read-only synthetic result.
 - [ ] Publication/licensing limitations are reported honestly as manual gates.

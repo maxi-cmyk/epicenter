@@ -14,14 +14,11 @@ Constraints from openai_integration.md / techStack.md:
 from __future__ import annotations
 
 import logging
-import uuid
-from datetime import UTC, datetime
-from pathlib import Path
 
 from openai import AsyncOpenAI, OpenAIError
 
 from app.ai.client import create_response
-from app.ai.schemas import ExtractionResult, ExtractedCoverage
+from app.ai.schemas import ApprovedDocumentDataClass, DocumentClassification, ExtractedCoverage, ExtractionResult
 from app.core.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -65,6 +62,8 @@ async def extract_document(
     file_bytes: bytes,
     file_name: str,
     mime_type: str = "application/pdf",
+    classification: DocumentClassification,
+    data_classification: ApprovedDocumentDataClass,
 ) -> ExtractionResult:
     """Send a document to OpenAI and return a validated ExtractionResult.
 
@@ -85,6 +84,11 @@ async def extract_document(
     """
     if mime_type not in ("application/pdf", "image/jpeg", "image/png"):
         raise ExtractionError(f"Unsupported MIME type for extraction: {mime_type}")
+    if data_classification not in {
+        ApprovedDocumentDataClass.SYNTHETIC,
+        ApprovedDocumentDataClass.FORMALLY_DEIDENTIFIED,
+    }:
+        raise ExtractionError("Only synthetic or formally de-identified documents may be sent to OpenAI.")
 
     model = settings.openai_extraction_model
     logger.info(
@@ -98,7 +102,14 @@ async def extract_document(
     data_uri = f"data:{mime_type};base64,{base64.b64encode(file_bytes).decode()}"
 
     input_messages: list[dict] = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {
+            "role": "system",
+            "content": (
+                _SYSTEM_PROMPT
+                + f"\nUse only the category-specific extractor for category '{classification.category}' "
+                + f"and family '{classification.document_family or 'unknown'}'."
+            ),
+        },
         {
             "role": "user",
             "content": [
@@ -128,7 +139,8 @@ async def extract_document(
             metadata={
                 "job_id": job_id,
                 "prompt_version": PROMPT_VERSION,
-                "epicenter_synthetic": "true",
+                "epicenter_data_classification": data_classification.value,
+                "epicenter_document_category": classification.category,
             },
         )
     except OpenAIError as exc:
@@ -157,7 +169,9 @@ async def extract_document(
         document_id=document_id,
         model_used=model,
         prompt_version=PROMPT_VERSION,
-        synthetic=True,
+        classification=classification,
+        review_status="pending_review",
+        synthetic=data_classification == ApprovedDocumentDataClass.SYNTHETIC,
         coverage=coverage,
         raw_response_id=getattr(response, "id", None),
     )

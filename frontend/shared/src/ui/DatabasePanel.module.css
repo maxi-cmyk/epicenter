@@ -1,0 +1,62 @@
+.workspace { margin: 0 auto; max-width: 1480px; }
+.controls { align-items: end; background: var(--cream-50); box-shadow: var(--shadow); display: grid; gap: 18px; grid-template-columns: minmax(280px, 1fr) auto; padding: 20px; }
+.searchBox { align-items: center; border: 1px solid var(--green-500); display: flex; gap: 10px; min-height: 52px; padding: 0 15px; }
+.searchBox:focus-within { box-shadow: 0 0 0 3px var(--green-100); }
+.searchBox input { background: transparent; border: 0; color: var(--ink); flex: 1; min-width: 0; outline: 0; }
+.searchBox button, .moreButton { align-items: center; background: transparent; border: 0; color: var(--green-900); cursor: pointer; display: inline-flex; justify-content: center; min-height: 40px; min-width: 40px; }
+.filters { display: flex; gap: 12px; }
+.filters label, .recordForm label, .passwordModal label { color: var(--ink-soft); display: grid; font-size: .76rem; font-weight: 700; gap: 5px; letter-spacing: .04em; text-transform: uppercase; }
+.filters select, .recordForm input, .recordForm textarea, .passwordModal input, .passwordModal textarea { background: var(--cream-50); border: 1px solid var(--rule); color: var(--ink); min-height: 44px; padding: 9px 11px; text-transform: none; }
+.createButton, .recordForm button, .passwordModal button, .message button, .pagination button { align-items: center; background: var(--green-900); border: 0; color: var(--cream-50); cursor: pointer; display: inline-flex; font-weight: 700; gap: 8px; justify-content: center; min-height: 44px; padding: 0 16px; }
+.notice { background: var(--green-100); color: var(--green-950); font-weight: 650; margin-top: 16px; padding: 13px 16px; }
+.inlineError { background: var(--red-soft); color: #6f211c; font-weight: 650; margin-top: 16px; padding: 13px 16px; }
+.databaseLayout { align-items: start; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(290px, 390px); margin-top: 18px; }
+.tableWrap { background: var(--cream-50); box-shadow: var(--shadow); overflow: visible; }
+.tableWrap table { border-collapse: collapse; width: 100%; }
+.tableWrap th { background: var(--green-950); color: var(--cream-50); font-size: .74rem; letter-spacing: .05em; padding: 12px 14px; text-align: left; text-transform: uppercase; }
+.tableWrap td { border-bottom: 1px solid var(--rule); padding: 14px; vertical-align: middle; }
+.tableWrap tbody tr { cursor: pointer; }
+.tableWrap tbody tr:hover, .tableWrap tr[aria-selected="true"] { background: var(--green-100); }
+.tableWrap td strong, .tableWrap td span, .tableWrap td small { display: block; }
+.tableWrap td small { color: var(--ink-soft); margin-top: 2px; }
+.actionCell { position: relative; width: 54px; }
+.rowMenu { background: var(--cream-50); box-shadow: 0 16px 34px rgba(18, 55, 45, .22); display: grid; min-width: 150px; padding: 6px; position: absolute; right: 12px; top: 48px; z-index: 8; }
+.rowMenu button { align-items: center; background: transparent; border: 0; color: var(--ink); cursor: pointer; display: flex; gap: 9px; min-height: 40px; padding: 0 10px; text-align: left; }
+.rowMenu button:hover { background: var(--green-100); }
+.rowMenu .deleteAction { color: var(--red); }
+.detailPanel { background: var(--cream-50); box-shadow: var(--shadow); min-height: 360px; padding: 22px; position: sticky; top: 20px; }
+.detailPanel > span, .recordForm > span, .passwordModal > span { color: var(--amber); font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.detailPanel h2, .recordForm h2, .passwordModal h2, .emptyDetail h2 { font-family: var(--font-display); font-size: 2.2rem; line-height: .98; margin: 8px 0 20px; text-transform: uppercase; }
+.detailPanel dl { margin: 0; }
+.detailPanel dl div { border-top: 1px solid var(--rule); padding: 11px 0; }
+.detailPanel dt { color: var(--ink-soft); font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.detailPanel dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.emptyDetail { color: var(--ink-soft); display: grid; min-height: 315px; place-content: center; text-align: center; }
+.emptyDetail svg { margin: 0 auto 12px; }
+.emptyDetail h2 { color: var(--ink); margin-bottom: 6px; }
+.emptyDetail p { margin: 0; }
+.recordForm { display: grid; gap: 14px; }
+.recordForm h2 { margin-bottom: 6px; }
+.recordForm p { color: var(--ink-soft); margin: 0; }
+.recordForm label small { font-size: .76rem; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.recordForm textarea { resize: vertical; }
+.formActions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+.recordForm .cancelButton, .passwordModal .cancelButton { background: transparent; box-shadow: inset 0 0 0 1px var(--green-700); color: var(--green-900); }
+.recordForm .dangerButton, .passwordModal .dangerButton { background: var(--red); color: var(--white); }
+.loading, .message { background: var(--cream-50); box-shadow: var(--shadow); margin-top: 18px; padding: 34px; text-align: center; }
+.message strong { font-family: var(--font-display); font-size: 1.6rem; text-transform: uppercase; }
+.message p { color: var(--ink-soft); }
+.pagination { align-items: center; display: flex; gap: 14px; justify-content: center; margin-top: 22px; }
+.pagination button { background: var(--cream-50); box-shadow: inset 0 0 0 1px var(--green-700); color: var(--green-900); }
+.pagination button:disabled, .recordForm button:disabled, .passwordModal button:disabled { cursor: not-allowed; opacity: .48; }
+.modalBackdrop { align-items: center; background: rgba(18, 55, 45, .58); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 100; }
+.passwordModal { background: var(--cream-50); box-shadow: 0 28px 70px rgba(18, 55, 45, .34); max-height: calc(100vh - 40px); max-width: 560px; overflow-y: auto; padding: 28px; width: 100%; }
+.passwordModal h2 { font-size: 2.45rem; max-width: 11ch; }
+.passwordModal > p { color: var(--ink-soft); margin: -6px 0 22px; }
+.passwordModal form { display: grid; gap: 14px; }
+.modalFields { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.modalFields label:first-child { grid-column: 1 / -1; }
+.deleteSummary { background: var(--cream-200); color: var(--ink); margin: 0; padding: 12px; }
+.modalError { background: var(--red-soft); color: #6f211c; margin: 0; padding: 10px 12px; }
+@media (max-width: 1050px) { .controls { grid-template-columns: 1fr; } .filters { flex-wrap: wrap; } .databaseLayout { grid-template-columns: 1fr; } .detailPanel { position: static; } }
+@media (max-width: 700px) { .filters { display: grid; grid-template-columns: 1fr; } .tableWrap { background: transparent; box-shadow: none; } .tableWrap table, .tableWrap tbody, .tableWrap tr, .tableWrap td { display: block; width: 100%; } .tableWrap thead { display: none; } .tableWrap tr { background: var(--cream-50); box-shadow: var(--shadow); margin-bottom: 12px; padding: 10px; } .tableWrap td { border: 0; display: grid; grid-template-columns: 100px 1fr; padding: 6px; } .tableWrap td::before { color: var(--ink-soft); content: attr(data-label); font-size: .72rem; font-weight: 700; text-transform: uppercase; } .actionCell { min-height: 48px; width: auto; } .moreButton { justify-self: end; } .rowMenu { left: 6px; right: 6px; top: 48px; } .passwordModal { padding: 22px; } .passwordModal h2 { font-size: 2rem; } .modalFields { grid-template-columns: 1fr; } .modalFields label:first-child { grid-column: auto; } }

@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Epicenter Operations MCP — Streamable HTTP endpoint.
 
 Exposed at /mcp/operations. Serves read-only and synthetic-simulation tools
@@ -15,7 +16,6 @@ raw prompt proxy, or database service-role capability is exposed.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Annotated, Any
@@ -29,6 +29,7 @@ from app.core.config import Settings, get_settings
 from app.data.dependencies import get_operations_repository
 from app.data.operations_repository import OperationsRepository
 from app.mcp.auth import authorize_operations_tool, require_mcp_identity
+from app.mcp.protocol import PROTOCOL_VERSION, governed_tool, jsonrpc_error, jsonrpc_result, tool_result
 from app.mcp.schemas import (
     AllocationRecommendationOutput,
     CompareSimulationRunsInput,
@@ -63,7 +64,18 @@ _SERVER_INFO = {
     ),
 }
 
-_PROTOCOL_VERSION = "2024-11-05"
+_PROTOCOL_VERSION = PROTOCOL_VERSION
+
+_GOVERNANCE = {
+    "epicenter_get_extraction_status": {"title": "Extraction status", "owner": "Epicenter operations", "capability": "Read one bounded extraction job status", "least_privilege": "registration, operations_admin", "data_boundary": "synthetic or formally de-identified job metadata", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove when extraction jobs no longer exist"},
+    "epicenter_preview_eligibility": {"title": "Eligibility preview", "owner": "Epicenter operations", "capability": "Explain a deterministic advisory preview", "least_privilege": "registration, operations_admin", "data_boundary": "bounded document and appointment references; no decision write", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if deterministic preview is retired"},
+    "epicenter_get_visit_ticket": {"title": "Visit ticket", "owner": "Epicenter operations", "capability": "Read one clinic-scoped ticket without patient identity", "least_privilege": "registration, operations_admin", "data_boundary": "de-identified operational state", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if ticket workflow is retired"},
+    "epicenter_get_operational_summary": {"title": "Operational summary", "owner": "Epicenter operations", "capability": "Read bounded aggregate metrics", "least_privilege": "operations_admin, auditor", "data_boundary": "clinic aggregate only", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove when native summary supersedes assistant use"},
+    "epicenter_get_queue_snapshot": {"title": "Queue snapshot", "owner": "Epicenter operations", "capability": "Read bounded de-identified queue counts", "least_privilege": "operations_admin, auditor", "data_boundary": "clinic aggregate only", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if queue assistant support is retired"},
+    "epicenter_get_allocation_recommendation": {"title": "Allocation explanation", "owner": "Epicenter operations", "capability": "Explain one existing advisory recommendation", "least_privilege": "operations_admin", "data_boundary": "recommendation metadata; never approves", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if allocation recommendations are retired"},
+    "epicenter_run_simulation": {"title": "Run synthetic simulation", "owner": "Epicenter operations", "capability": "Run one deterministic isolated scenario", "least_privilege": "operations_admin", "data_boundary": "synthetic simulator state only", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if simulator is retired"},
+    "epicenter_compare_simulation_runs": {"title": "Compare simulations", "owner": "Epicenter operations", "capability": "Compare two bounded synthetic runs", "least_privilege": "operations_admin", "data_boundary": "synthetic aggregate metrics only", "tests": "test_mcp_protocol.py", "removal_criteria": "Remove if run comparison is retired"},
+}
 
 
 def _now_iso() -> str:
@@ -101,8 +113,7 @@ def initialize(request_body: dict[str, Any]) -> dict[str, Any]:
 @router.post("/tools/list")
 def list_tools() -> dict[str, Any]:
     """Return the MCP tool inventory. Stable — discovery requires no auth."""
-    return {
-        "tools": [
+    tools = [
             {
                 "name": "epicenter_get_extraction_status",
                 "description": "Get the status and result of a document extraction job.",
@@ -230,7 +241,44 @@ def list_tools() -> dict[str, Any]:
                 },
             },
         ]
-    }
+    return {"tools": [governed_tool(tool, _GOVERNANCE[tool["name"]]) for tool in tools]}
+
+
+@router.post("")
+async def streamable_http(
+    raw_body: dict[str, Any],
+    principal: Annotated[StaffPrincipal, Depends(require_mcp_identity)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    repo: Annotated[OperationsRepository, Depends(get_operations_repository)],
+) -> JSONResponse:
+    """Stateless Streamable HTTP JSON-RPC endpoint for independent MCP clients."""
+    request_id = raw_body.get("id")
+    if raw_body.get("jsonrpc") != "2.0":
+        return jsonrpc_error(request_id, -32600, "Invalid JSON-RPC request.")
+    method = raw_body.get("method")
+    if method == "initialize":
+        return jsonrpc_result(request_id, initialize(raw_body.get("params", {})))
+    if method == "notifications/initialized":
+        return JSONResponse(status_code=202, content=None, headers={"MCP-Protocol-Version": _PROTOCOL_VERSION})
+    if method == "tools/list":
+        return jsonrpc_result(request_id, list_tools())
+    if method != "tools/call":
+        return jsonrpc_error(request_id, -32601, "Method not found.")
+    params = raw_body.get("params") or {}
+    name = params.get("name")
+    arguments = params.get("arguments") or {}
+    if not name:
+        return jsonrpc_error(request_id, -32602, "Tool name is required.")
+    try:
+        result = await _dispatch_tool(name, arguments, principal, settings, repo)
+        return jsonrpc_result(request_id, tool_result(result))
+    except ValidationError as exc:
+        return jsonrpc_result(request_id, tool_result({"error": "invalid_input", "message": f"Input validation failed: {exc.error_count()} error(s)."}, is_error=True))
+    except HTTPException as exc:
+        return jsonrpc_result(request_id, tool_result({"error": "tool_error", "message": str(exc.detail)}, is_error=True))
+    except Exception:
+        logger.exception("Operations MCP JSON-RPC tool failure")
+        return jsonrpc_result(request_id, tool_result({"error": "tool_error", "message": "An internal error occurred."}, is_error=True))
 
 
 @router.post("/tools/call")
@@ -331,7 +379,6 @@ def _get_extraction_status(
     settings: Settings,
 ) -> dict[str, Any]:
     """Return extraction job status. Reads from document_jobs via repo."""
-    snapshot = repo.snapshot()
     # In demo mode, return a synthetic status based on the job_id
     output = ExtractionStatusOutput(
         job_id=inp.job_id,

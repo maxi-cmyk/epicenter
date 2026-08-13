@@ -167,14 +167,23 @@
   margin-top: 2px;
 }
 
-.documentStrip button {
-  background: transparent;
-  border: 0;
+.sourceDetails {
   color: var(--green-900);
-  cursor: pointer;
   font-weight: 700;
+  max-width: 260px;
+}
+
+.sourceDetails summary {
+  cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.sourceDetails p {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 400;
+  margin: 8px 0 0;
 }
 
 .evidenceGrid {

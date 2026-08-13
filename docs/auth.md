@@ -75,7 +75,7 @@ Before submission, verify all of the following against the deployed applications
 4. A pre-provisioned nurse can sign in and access only the permitted clinic and role scope.
 5. An authenticated Clerk user without a `staff_accounts` mapping receives `403`, not nurse access.
 6. A disabled staff record or wrong-clinic role receives `403`.
-7. Sensitive nurse mutations require fresh reverification and create an attributable audit event.
+7. Sensitive workflow mutations and Database Update/Delete require fresh reverification and create an attributable audit event; Database Create/View rely on normal role and clinic authorization.
 
 ## Current Implementation Status
 
@@ -88,7 +88,7 @@ Implemented and verified locally against the development Clerk and hosted Supaba
 - FastAPI verifies Clerk session tokens, explicitly allowlists authorized frontend origins, and resolves one active `staff_accounts` role and clinic mapping for every staff request.
 - Two administrator-created Clerk development nurse users are mapped to the active `staff_noor` and `staff_aisyah` rows without committing their provider IDs.
 - Unit and API tests cover patient, registration nurse, operations administrator, auditor, disabled, unmapped, duplicate, and wrong-clinic authorization cases.
-- Every currently implemented staff mutation requires Clerk strict reverification within ten minutes. The backend returns Clerk's standard reverification hint and the frontend retries through `useReverification` after the strongest configured factor succeeds.
+- Sensitive workflow mutations use Clerk strict reverification within ten minutes. In the Database surface, Create/View do not add a second prompt, while Update/Delete use the custom centered password flow and still require a fresh signed Clerk verification age at the backend boundary.
 - The live Playwright suite verifies patient signup, patient-to-nurse denial, nurse email-code sign-in, real Supabase-backed dashboard access, disabled-mapping denial, the Clerk verification prompt, and authenticated audit attribution. Temporary users and modified fixtures are restored during cleanup.
 
 Repeat the local development-provider gate with:
