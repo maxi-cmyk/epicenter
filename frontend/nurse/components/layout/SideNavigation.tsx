@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton, useUser } from "@clerk/nextjs";
-import { ClipboardCheck, LayoutDashboard } from "lucide-react";
+import { ClipboardCheck, LayoutDashboard, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,13 +18,23 @@ type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
 const NAVIGATION: NavItem[] = [
   { href: "/", label: "Readiness board", icon: LayoutDashboard },
   { href: "/review", label: "Assisted review", icon: ClipboardCheck },
+  { href: "/audit", label: "Audit trail", icon: ShieldCheck },
 ];
 
 export function SideNavigation() {
-  const pathname = usePathname();
+  const visualQaBypass =
+    process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "true";
+  return visualQaBypass ? <NavigationView displayName="Synthetic nurse" role="registration" /> : <AuthenticatedNavigation />;
+}
+
+function AuthenticatedNavigation() {
   const { user } = useUser();
   const role = useStaffRole();
-  const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || "Signed in";
+  return <NavigationView displayName={user?.fullName || user?.primaryEmailAddress?.emailAddress || "Signed in"} role={role} userButton />;
+}
+
+function NavigationView({ displayName, role, userButton = false }: { displayName: string; role: string | null; userButton?: boolean }) {
+  const pathname = usePathname();
 
   return (
     <aside className={styles.sidebar}>
@@ -51,14 +61,14 @@ export function SideNavigation() {
           <strong>{displayName}</strong>
           {role ? <small>{capitalize(role)}</small> : null}
         </div>
-        <UserButton
+        {userButton ? <UserButton
           appearance={{
             elements: {
               userButtonAvatarBox: styles.userButtonAvatar,
               userButtonTrigger: styles.userButtonTrigger,
             },
           }}
-        />
+        /> : null}
       </div>
     </aside>
   );

@@ -1,0 +1,36 @@
+.workspace { margin: 0 auto; max-width: 1480px; }
+.controls { background: var(--cream-50); box-shadow: var(--shadow); padding: 20px; }
+.searchBox { align-items: center; border: 1px solid var(--green-500); display: flex; gap: 10px; min-height: 52px; padding: 0 15px; }
+.searchBox:focus-within { box-shadow: 0 0 0 3px var(--green-100); }
+.searchBox input { background: transparent; border: 0; color: var(--ink); flex: 1; min-width: 0; outline: 0; }
+.filters { align-items: end; display: grid; gap: 12px; grid-template-columns: 1.3fr 1.2fr repeat(2, minmax(145px, .8fr)) auto; margin-top: 16px; }
+.filters label { color: var(--ink-soft); display: grid; font-size: .76rem; font-weight: 700; gap: 5px; letter-spacing: .04em; text-transform: uppercase; }
+.filters input, .filters select { background: var(--cream-50); border: 1px solid var(--rule); color: var(--ink); min-height: 42px; padding: 0 10px; }
+.clearButton, .toolbar button, .pagination button, .message button { align-items: center; background: transparent; border: 1px solid var(--green-700); color: var(--green-900); cursor: pointer; display: inline-flex; font-weight: 650; gap: 6px; justify-content: center; min-height: 42px; padding: 0 12px; }
+.toolbar { align-items: center; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; min-height: 58px; }
+.toolbar p { color: var(--ink-soft); margin: 0; }
+.toolbar > div { display: flex; gap: 8px; }
+.toolbar button { min-height: 34px; }
+.toolbar button:disabled, .pagination button:disabled { cursor: not-allowed; opacity: .45; }
+.auditLayout { align-items: start; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); }
+.tableWrap { background: var(--cream-50); box-shadow: var(--shadow); overflow-x: auto; }
+.tableWrap table { border-collapse: collapse; min-width: 700px; width: 100%; }
+.tableWrap th { background: var(--green-950); color: var(--cream-50); font-size: .74rem; letter-spacing: .05em; padding: 12px 14px; text-align: left; text-transform: uppercase; }
+.tableWrap td { border-bottom: 1px solid var(--rule); padding: 14px; vertical-align: top; }
+.tableWrap tr { cursor: pointer; }
+.tableWrap tbody tr:hover, .tableWrap tr[aria-selected="true"] { background: var(--green-100); }
+.tableWrap td:first-child { color: var(--ink-soft); font-size: .86rem; white-space: nowrap; }
+.outcome { background: var(--green-100); border-radius: 999px; color: var(--green-950); display: inline-block; font-size: .76rem; font-weight: 700; padding: 5px 8px; white-space: nowrap; }
+.detail { background: var(--cream-50); box-shadow: var(--shadow); max-height: 70vh; overflow: auto; padding: 20px; position: sticky; top: 20px; }
+.detail > span { color: var(--amber); font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.detail h2 { font-family: var(--font-display); font-size: 2rem; line-height: 1; margin: 8px 0 20px; text-transform: uppercase; }
+.detail dl { margin: 0; }
+.detail dl div { border-top: 1px solid var(--rule); padding: 11px 0; }
+.detail dt { color: var(--ink-soft); font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.detail dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.message, .loading { background: var(--cream-50); box-shadow: var(--shadow); margin-top: 18px; padding: 32px; text-align: center; }
+.message strong { font-family: var(--font-display); font-size: 1.6rem; text-transform: uppercase; }
+.message p { color: var(--ink-soft); }
+.pagination { align-items: center; display: flex; gap: 14px; justify-content: center; margin-top: 22px; }
+@media (max-width: 1100px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .auditLayout { grid-template-columns: 1fr; } .detail { max-height: none; position: static; } }
+@media (max-width: 700px) { .filters { grid-template-columns: 1fr; } .toolbar { align-items: flex-start; gap: 10px; padding: 12px 0; } .tableWrap { background: transparent; box-shadow: none; overflow: visible; } .tableWrap table, .tableWrap tbody, .tableWrap tr, .tableWrap td { display: block; min-width: 0; width: 100%; } .tableWrap thead { display: none; } .tableWrap tr { background: var(--cream-50); box-shadow: var(--shadow); margin-bottom: 12px; padding: 12px; } .tableWrap td { border: 0; display: grid; gap: 10px; grid-template-columns: 82px 1fr; padding: 6px 4px; white-space: normal; } .tableWrap td::before { color: var(--ink-soft); content: attr(data-label); font-size: .72rem; font-weight: 700; text-transform: uppercase; } }

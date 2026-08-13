@@ -76,7 +76,7 @@ Live verification:
 - [x] Run `supabase/operational_seed.sql` successfully.
 - [x] Run `supabase/verify_operational.sql` successfully, including counts, joins, RLS/grants, one-ticket invariants, outcomes, and zero false-ready checks.
 
-Supabase advisor review remains part of the broader release gate in Task 10; it does not block completion of the schema-and-seed task.
+Supabase advisor review remains part of the broader release gate in Task 11; it does not block completion of the schema-and-seed task.
 
 ### 3. Replace demo repositories with the shared persistence/backend boundary
 
@@ -136,7 +136,7 @@ Live verification:
 - [x] Confirm Clerk's verification prompt completes by email code and retries the protected mutation.
 - [x] Confirm a real ticket mutation records the authenticated Clerk actor in Supabase audit history, then restore the fixture state.
 
-Production or externally delivered judge credentials are intentionally not repository artifacts. Provisioning and secure handoff for deployed instances remain in Task 11.
+Production or externally delivered judge credentials are intentionally not repository artifacts. Provisioning and secure handoff for deployed instances remain in Task 12.
 
 See [auth.md](./auth.md) for the identity contract.
 
@@ -235,7 +235,7 @@ Completed foundation:
 
 Navigation and daily workflow:
 
-- [ ] Limit primary navigation to `Today`, `Review`, `Patients`, `Simulator`, and `Audit`; open upload, extraction correction, billing, notifications, and counter actions contextually from a visit instead of as competing top-level destinations.
+- [ ] Limit primary navigation to `Today`, `Review`, `Patients`, `Simulator`, and `Audit`; open upload, extraction correction, billing, notifications, and counter actions contextually from a visit instead of as competing top-level destinations. In the demo, show the read-only Audit destination to every active nurse and pharmacist demo account.
 - [ ] Make Today the default route with date selection and Incoming, Ongoing, and Finished groups backed by one queue-entry lifecycle.
 - [ ] Prioritize the oldest actionable visit while respecting already-called patients, explicit clinic administrative priority, staff role/skill scope, and physical nurse-led clinical escalation.
 - [ ] Add a staff-set administrative urgency/priority marker that reorders the Incoming/Ongoing queue display (e.g. TPA deadline, corporate account priority) without displacing already-called patients or inferring clinical urgency automatically — this stays an administrative sort key, never a clinical triage signal, consistent with the PRD guardrail that the system never ranks clinical urgency itself.
@@ -256,7 +256,7 @@ Single visit task:
 
 Nurse validation and workload:
 
-- [ ] Verify registration staff, nurse, operations administrator, auditor, billing, and pharmacy roles see only permitted facts/actions and that sensitive reveals/mutations require current reverification.
+- [ ] Verify registration staff, nurse, operations administrator, auditor, billing, and pharmacy roles see only permitted facts/actions and that sensitive reveals/mutations require current reverification. The demo has no doctor role.
 - [ ] Test empty/loading/permission/stale/offline/conflict/duplicate/retry/session-expiry states; failed commits must preserve input, queue state, and the patient's original position.
 - [ ] Measure end-to-end administrative time, touches, repeated entries, corrections, errors, and perceived workload for representative registration/nurse tasks; compare against the documented 23–32-minute manual baseline without treating the estimate as measured clinic performance.
 - [ ] Prove the simplified Today flow completes the oldest actionable visit without requiring the generic Patients browser and never blocks physical urgent escalation or the core visit.
@@ -267,14 +267,81 @@ Nurse validation and workload:
 
 - [x] Add allowlisted patient list, detail, create, update, and recoverable soft-delete endpoints through FastAPI.
 - [x] Add search, pagination, optimistic concurrency, idempotency, and audit attribution at the backend boundary.
-- [x] Keep audit/evidence records immutable and operational tables unavailable to browser roles.
 - [ ] Build the nurse Patients browser with search, filter, sort, and pagination.
 - [x] Require fresh Clerk strict reverification for every currently implemented staff mutation (completed in Task 4).
 - [ ] Decide whether future sensitive data reveals require password-only reverification instead of Clerk's strongest available factor.
 - [ ] Add an explicit commit screen with action, record, before/after values, and reason.
 - [ ] Restrict hard delete and test permissions, reverification expiry, retries, duplicates, and stale writes end to end.
 
-### 8. Build the simulator inside the nurse panel
+### 8. Build the immutable, read-only Audit panel
+
+**Status: Complete for the synthetic demo — production permission provisioning, retention operations, and Supabase persistence for pharmacy/payment events remain deployment follow-ons**
+
+Demo closure: both nurse (`registration`) and pharmacist accounts can open the same clinic-scoped Audit panel. It is read-only, searchable, filterable, paginated newest-first, responsive, and supports safe CSV/JSON export of the visible filtered page. The API exposes no audit mutation route, sends `Cache-Control: no-store`, redacts forbidden detail keys, and the existing database triggers reject audit updates/deletes. The synthetic trail includes medication, TPA, payment-detail confirmation, and scheduled/check-in/completion visit times. There is no doctor role.
+
+Audit is a separate operational and accountability surface, not an editable CRUD view. It must show who performed a committed action, what changed, why, when, and which clinic-scoped record was affected without exposing an audit mutation path. For this task, immutable means append-only against every application, browser, worker, and service-role path; database-owner and migration access remain separately governed infrastructure privileges and must not be presented as cryptographic tamper proof.
+
+Completed foundation:
+
+- [x] Store append-only audit records with clinic, actor reference, patient reference when applicable, action type, target table/record, structured details, and server-generated timestamp.
+- [x] Record current transactional actions including registration validation, pre-arrival submission, document processing, readiness transitions, supervised walk-in check-in, counter assignment, allocation decisions, and patient create/update/soft-delete.
+- [x] In the synthetic demo repository, record medication line items/quantity/cost/dispensing time, conceptual TPA status/documents/reference/submission time, synthetic payment amount-due state/confirmation time, and scheduled/check-in/completion visit timestamps. Idempotent replays create no duplicate audit event.
+- [x] Reject `UPDATE` and `DELETE` on `audit_log` and `operational_events` with database triggers.
+- [x] Keep operational tables unavailable to browser database roles and read audit history through the FastAPI backend with clinic filtering.
+- [x] Verify a real authenticated staff mutation records the Clerk actor reference and that operations administrators and auditors can read the existing endpoint.
+
+Demo and production access:
+
+- [x] For this demo, allow every active nurse (`registration`) and pharmacist demo account to read the Audit panel, in addition to operations administrators and auditors. The demo has no doctor role.
+- [x] Add the Audit destination to both the nurse and pharmacy applications for permitted demo accounts while keeping the same clinic-scoped backend contract.
+- [x] Keep the panel strictly read-only for every role: no create, edit, delete, restore, annotation, or correction action is permitted from the UI or API.
+- [ ] Treat the demo-wide access rule as a demo assumption only. In production, provision a separate least-privileged audit-read permission; do not infer it from a nurse or pharmacist job title.
+- [ ] Fail closed for disabled, unmapped, wrong-clinic, expired-session, or unpermitted production accounts, and never fall back to fixture audit data when production auth or persistence is unavailable.
+- [x] Send `Cache-Control: no-store` for audit responses; the authenticated app lifecycle clears component state when the staff session changes.
+
+Audit event contract:
+
+- [ ] Audit every committed staff or system mutation that affects registration, coverage reuse/replacement, extracted facts and source review, readiness outcomes, manual attestations, queue state/order, counters, patient records, allocation decisions, notifications, billing, pharmacy confirmation, and visit completion.
+- [ ] Preserve the demo's field-level coverage when medication, TPA, payment, and visit-completion persistence moves to Supabase: medication name/quantity/unit cost/total/dispensed actor and time; TPA mode/status/safe document references/medication reference/external reference/submitted actor and time; payment mode/status/currency/billing code/amount/reference/confirmed actor and time; and scheduled/check-in/completion visit timestamps. Do not equate an amount-due confirmation with a real payment transaction.
+- [ ] Define and version one audit action taxonomy and payload contract so the database, FastAPI models, generated TypeScript contracts, nurse app, pharmacy app, filters, and exports use the same stable action names and meanings.
+- [ ] Store a stable actor identifier plus an event-time snapshot of safe actor name/type/role, action, target, reason, before/after values where appropriate, record version, idempotency/correlation reference, source channel, and outcome without allowing the client to supply authoritative actor or timestamp fields. Later staff renames or deactivation must not rewrite historical attribution.
+- [ ] Represent human, patient, worker, and system actors explicitly; never collapse an automated extraction or migration action into a nurse identity.
+- [x] Apply a server-side redaction projection before returning audit data. Exclude identifier hashes, full NRIC/FIN/passport values, raw document text, tokens, secrets, and unnecessary contact fields even if they exist inside stored `details` JSON.
+- [ ] Keep sensitive identifiers and document contents out of list rows and exports; use masked patient context and reveal only the minimum clinic-scoped detail needed to understand the event.
+- [ ] Distinguish committed business changes from denied or failed attempts. Capture security-relevant denials through bounded security logging without fabricating a successful audit event or storing unnecessary patient data.
+- [ ] Treat audit reads and exports as access/security telemetry without recursively creating an endless chain of business-audit events.
+- [ ] Define retention, backup, restore, and clock/timezone behavior so deployment, rollback, or cleanup procedures never silently rewrite or discard audit history.
+- [ ] Keep operational workflow events, audit records, and simulator event logs as separate contracts; none may silently substitute for another when presenting a complete audit trail.
+
+Audit panel experience:
+
+- [x] Put a prominent debounced search bar at the top of the Audit panel and search the clinic-scoped backend result across actor, action, ticket/reference, target, and event detail.
+- [x] Place filtering options directly below the search bar for date range, actor, role, action, outcome, and target type, reset pagination when filters change, and provide `Clear all`.
+- [x] Build a bounded, paginated, newest-first Audit table showing timestamp, actor, event-time demo role, action, target, and outcome; never infer an opaque staff ID's role in the browser.
+- [ ] Replace the current limit-only read with bounded cursor pagination ordered deterministically by `(occurred_at, id)` descending, including a stable next cursor so concurrent inserts do not duplicate or skip older rows.
+- [x] Apply search, action/target/date filters, sorting, and pagination through the clinic-scoped backend query; bound queries, validate date ranges, and return a clear no-results state.
+- [ ] Show a non-disruptive `New audit events available` refresh control when records arrive while the user is reviewing an older page; do not reorder the visible table unexpectedly.
+- [x] Add a read-only event-detail view that presents structured values and provenance clearly instead of raw database JSON as the primary interface.
+- [x] Support CSV/JSON export of the visible authorized, filtered page with synthetic-data labelling and server-redacted detail fields.
+- [x] Handle loading, empty, permission/API failure, and retry states without falling back to fixture audit data or claiming the log is complete.
+- [x] Make the table and detail view responsive, keyboard accessible, screen-reader labelled, and understandable without colour alone.
+- [ ] Seed deterministic, visibly synthetic audit history covering representative nurse, pharmacist, administrator, worker/system, success, and review events so a fresh local or hosted demo does not open to an unexplained empty panel.
+
+Immutability and validation:
+
+- [ ] Reconcile the immutable trigger, grants, indexes, and audit schema with `backend/persistence/schema.sql` so fresh installs match the applied migrations.
+- [ ] Centralize audit insertion behind a trusted database/backend writer used by every transactional workflow; expose no general audit-write endpoint, deny browser roles direct table access, and prevent callers from forging actor, clinic, or timestamp attribution.
+- [ ] Ensure application and service roles cannot update, delete, truncate, or overwrite audit rows, and ensure ordinary rollback/cleanup jobs cannot bypass the protection.
+- [ ] Add database and API tamper tests that attempt forged inserts, update, delete, truncate, and client-supplied actor/timestamp values through browser, permitted application, worker, and service-role paths; verify rejection and that existing rows remain byte-for-byte unchanged.
+- [x] Add API role tests proving nurse and pharmacist demo roles can read the clinic-scoped audit endpoint and that there is no mutation route.
+- [ ] Reconcile each representative workflow mutation with exactly one expected audit event, including replayed idempotency keys, stale-version conflicts, failed commits, and retry behavior.
+- [ ] Verify pagination/filter stability under concurrent inserts and confirm exports reconcile with the visible filtered result set.
+- [ ] Add indexes that match clinic-scoped `(occurred_at, id)` pagination and approved actor/action/target filters; inspect representative query plans and avoid unrestricted scans over `details` JSON.
+- [x] Regenerate and verify the OpenAPI/TypeScript contracts after adding audit query parameters, then update both frontend API clients.
+- [ ] Add backend unit/API/SQL-contract tests, frontend contract tests, authenticated nurse/pharmacist browser journeys, and desktop/mobile visual QA for search, filters, detail, export, denial, redaction, empty, and failure states.
+- [ ] Run backend tests and lint, frontend tests/type checks/lint/builds, contract generation checks, Supabase verification/advisors, Markdown rendering, and `git diff --check` before marking this task complete.
+
+### 9. Build the simulator inside the nurse panel
 
 **Status: Partial — the three initial versioned snapshots/runs and nurse-only read API exist; the engine, animated tab, metric adapters, and comparison controls remain**
 
@@ -334,7 +401,7 @@ Validation and safety:
 - [ ] Test empty queues, simultaneous events, midnight/day boundaries, stale or missing metric data, provider outage, invalid fixtures, very high queue volume, pause/reset during activity, and high-speed rendering.
 - [ ] Verify keyboard controls, screen-reader labels, non-colour state cues, reduced motion, responsive layout, and readable aggregation at `50×`.
 
-### 9. Deliver the OpenAI assistant and Copilot-compatible MCP layer
+### 10. Deliver the OpenAI assistant and Copilot-compatible MCP layer
 
 **Status: Not started — contracts are scoped; implementation follows stable core workflows and dashboard metrics**
 
@@ -365,7 +432,7 @@ This governs what actually reaches `QueueTicket.documents`: the nurse and pharma
 
 CHAS and corporate-insurance eligibility-to-package matching is a separate, already-implemented mechanism — see the note under Task 6/cross-panel workflow below; it does not go through this Document/DocumentCategory model at all.
 
-### 10. Pass the backend release gate, then finalise visual design
+### 11. Pass the backend release gate, then finalise visual design
 
 **Status: Partial — local automated checks pass; live, security, and browser gates remain**
 
@@ -378,7 +445,7 @@ CHAS and corporate-insurance eligibility-to-package matching is a separate, alre
 - [ ] Run complete browser journeys for success, failure, retry, and stale states.
 - [ ] Finalise palette, typography, status tokens, responsive layouts, WCAG AA contrast, colour-vision checks, and separate patient/nurse visual QA without changing workflow semantics.
 
-### 11. Deploy and verify the complete system
+### 12. Deploy and verify the complete system
 
 **Status: Not started — local only**
 
@@ -400,10 +467,10 @@ CHAS and corporate-insurance eligibility-to-package matching is a separate, alre
 
 ## Immediate next actions
 
-1. Continue Tasks 5–8 using the persistence and authorization foundations already completed.
+1. Continue Tasks 5–9 using the persistence and authorization foundations already completed.
 2. Start the client-neutral MCP work only after the protected operational workflows are stable; use OpenAI during development and run the Copilot Studio compatibility check after deployment.
 3. Deploy Railway/Vercel only after the backend release gate passes locally and against the synthetic Supabase project.
-4. Provision production nurse identities and distribute judge credentials outside the repository as part of Task 11.
+4. Provision production nurse identities and distribute judge credentials outside the repository as part of Task 12.
 
 ## Open questions
 

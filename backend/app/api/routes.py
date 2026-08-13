@@ -1,7 +1,8 @@
 import logging
+from datetime import datetime
 from typing import Annotated, NoReturn
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.core.auth import StaffPrincipal, require_reverified_staff, require_staff
 from app.data.dependencies import get_operations_repository
@@ -43,6 +44,21 @@ Repository = Annotated[OperationsRepository, Depends(get_operations_repository)]
 Principal = Annotated[StaffPrincipal, Depends(require_staff)]
 ReverifiedPrincipal = Annotated[StaffPrincipal, Depends(require_reverified_staff)]
 
+_AUDIT_REDACTED_KEYS = {
+    "access_token",
+    "contact_mobile",
+    "email",
+    "identifier_hash",
+    "nric",
+    "passport",
+    "provider_id",
+    "provider_identifier",
+    "raw_document_text",
+    "refresh_token",
+    "secret",
+    "token",
+}
+
 
 def _require_roles(principal: StaffPrincipal, *allowed_roles: str) -> None:
     if principal.role not in allowed_roles:
@@ -64,6 +80,21 @@ def _raise_repository_error(exc: SupabaseDataError) -> NoReturn:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Persistence service unavailable",
     ) from exc
+
+
+def _safe_audit_record(record: AuditRecord) -> AuditRecord:
+    def redact(value: object) -> object:
+        if isinstance(value, dict):
+            return {
+                str(key): redact(item) for key, item in value.items() if str(key).casefold() not in _AUDIT_REDACTED_KEYS
+            }
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        return value
+
+    details = redact(record.details)
+    assert isinstance(details, dict)
+    return record.model_copy(update={"details": details}, deep=True)
 
 
 @router.get("/dashboard", response_model=DashboardSnapshot)
@@ -165,7 +196,11 @@ def confirm_billing(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
-    return ActionResult(success=True, message="Billing and queue number rechecked and confirmed by staff.", ticket=ticket)
+    return ActionResult(
+        success=True,
+        message="Billing and queue number rechecked and confirmed by staff.",
+        ticket=ticket,
+    )
 
 
 @router.post("/tickets/{ticket_id}/identity/confirm", response_model=ActionResult)
@@ -440,10 +475,38 @@ def delete_patient(
 def list_audit(
     repository: Repository,
     principal: Principal,
+    response: Response,
     limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=10_000),
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    actor: str | None = Query(default=None, min_length=1, max_length=120),
+    actor_role: str | None = Query(default=None, pattern="^(nurse|pharmacist|administrator|system)$"),
+    outcome: str | None = Query(default=None, min_length=1, max_length=80),
+    action_type: str | None = Query(default=None, min_length=1, max_length=80),
+    target_table: str | None = Query(default=None, min_length=1, max_length=80),
+    occurred_from: Annotated[datetime | None, Query()] = None,
+    occurred_to: Annotated[datetime | None, Query()] = None,
 ) -> list[AuditRecord]:
-    _require_roles(principal, "operations_admin", "auditor")
+    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
+    if occurred_from and occurred_to and occurred_from > occurred_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Start date must be before end date.",
+        )
+    response.headers["Cache-Control"] = "no-store"
     try:
-        return repository.list_audit(limit=limit)
+        records = repository.list_audit(
+            limit=limit,
+            offset=offset,
+            search=search,
+            actor=actor,
+            actor_role=actor_role,
+            outcome=outcome,
+            action_type=action_type,
+            target_table=target_table,
+            occurred_from=occurred_from,
+            occurred_to=occurred_to,
+        )
+        return [_safe_audit_record(record) for record in records]
     except SupabaseDataError as exc:
         _raise_repository_error(exc)

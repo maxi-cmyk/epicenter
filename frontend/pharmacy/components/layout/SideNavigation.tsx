@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton, useUser } from "@clerk/nextjs";
-import { Pill } from "lucide-react";
+import { Pill, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -15,13 +15,25 @@ function capitalize(value: string) {
 
 type NavItem = { href: string; label: string; icon: typeof Pill };
 
-const NAVIGATION: NavItem[] = [{ href: "/", label: "Pharmacy queue", icon: Pill }];
+const NAVIGATION: NavItem[] = [
+  { href: "/", label: "Pharmacy queue", icon: Pill },
+  { href: "/audit", label: "Audit trail", icon: ShieldCheck },
+];
 
 export function SideNavigation() {
-  const pathname = usePathname();
+  const visualQaBypass =
+    process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "true";
+  return visualQaBypass ? <NavigationView displayName="Synthetic pharmacist" role="pharmacist" /> : <AuthenticatedNavigation />;
+}
+
+function AuthenticatedNavigation() {
   const { user } = useUser();
   const role = useStaffRole();
-  const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || "Signed in";
+  return <NavigationView displayName={user?.fullName || user?.primaryEmailAddress?.emailAddress || "Signed in"} role={role} userButton />;
+}
+
+function NavigationView({ displayName, role, userButton = false }: { displayName: string; role: string | null; userButton?: boolean }) {
+  const pathname = usePathname();
 
   return (
     <aside className={styles.sidebar}>
@@ -34,7 +46,7 @@ export function SideNavigation() {
       </Link>
       <nav aria-label="Primary navigation" className={styles.navigation}>
         {NAVIGATION.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith("/tickets/");
+          const active = pathname === href || (href === "/" && pathname.startsWith("/tickets/"));
           return (
             <Link aria-current={active ? "page" : undefined} className={active ? styles.activeLink : styles.navLink} href={href} key={href}>
               <Icon aria-hidden="true" size={19} />
@@ -48,14 +60,14 @@ export function SideNavigation() {
           <strong>{displayName}</strong>
           {role ? <small>{capitalize(role)}</small> : null}
         </div>
-        <UserButton
+        {userButton ? <UserButton
           appearance={{
             elements: {
               userButtonAvatarBox: styles.userButtonAvatar,
               userButtonTrigger: styles.userButtonTrigger,
             },
           }}
-        />
+        /> : null}
       </div>
     </aside>
   );

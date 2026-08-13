@@ -1,5 +1,6 @@
 import { demoSnapshot } from "./demo-data";
-import type { ActionResult, DashboardSnapshot, ReadinessState, VisitPhase } from "@epicenter/shared/contracts";
+import type { ActionResult, AuditRecord, DashboardSnapshot, ReadinessState, VisitPhase } from "@epicenter/shared/contracts";
+import type { AuditQuery } from "@epicenter/shared/ui/AuditPanel";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 type AccessTokenProvider = () => Promise<string | null>;
@@ -60,6 +61,19 @@ export async function fetchDashboard(): Promise<{ data: DashboardSnapshot; sourc
 
 export function fetchStaffSession() {
   return request<{ role: string; clinic_id: string }>("/staff/session");
+}
+
+export function fetchAudit(query: AuditQuery) {
+  const params = new URLSearchParams({ limit: String(query.limit), offset: String(query.offset) });
+  if (query.search) params.set("search", query.search);
+  if (query.actor) params.set("actor", query.actor);
+  if (query.actorRole) params.set("actor_role", query.actorRole);
+  if (query.outcome) params.set("outcome", query.outcome);
+  if (query.actionType) params.set("action_type", query.actionType);
+  if (query.targetTable) params.set("target_table", query.targetTable);
+  if (query.occurredFrom) params.set("occurred_from", query.occurredFrom);
+  if (query.occurredTo) params.set("occurred_to", query.occurredTo);
+  return request<AuditRecord[]>(`/audit?${params.toString()}`, { cache: "no-store" });
 }
 
 export function transitionTicket(

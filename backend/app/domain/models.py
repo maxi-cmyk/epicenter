@@ -117,6 +117,7 @@ class QueueTicket(BaseModel):
     readiness_reason: str
     scheduled_at: datetime | None = None
     checked_in_at: datetime | None = None
+    completed_at: datetime | None = None
     original_ordering_at: datetime
     waiting_minutes: int = Field(ge=0)
     expected_room: str | None = None
@@ -420,6 +421,7 @@ class PatientDeleteRequest(BaseModel):
 class AuditRecord(BaseModel):
     id: int
     actor_reference: str
+    actor_role: str | None = None
     action_type: str
     target_table: str
     target_id: str
