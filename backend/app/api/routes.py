@@ -340,19 +340,23 @@ def list_patients(
     repository: Repository,
     principal: Principal,
     search: str | None = Query(default=None, max_length=80),
+    contact_filter: str = Query(default="all", pattern="^(all|email|mobile|complete)$"),
+    sort: str = Query(default="name", pattern="^(name|reference|dob)$"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=25, ge=1, le=100),
 ) -> PatientList:
-    _require_roles(principal, "registration", "operations_admin", "auditor")
+    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
     try:
-        return repository.list_patients(search=search, offset=offset, limit=limit)
+        return repository.list_patients(
+            search=search, contact_filter=contact_filter, sort=sort, offset=offset, limit=limit
+        )
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
 
 
 @router.get("/patients/{patient_id}", response_model=PatientRecord)
 def get_patient(patient_id: int, repository: Repository, principal: Principal) -> PatientRecord:
-    _require_roles(principal, "registration", "operations_admin", "auditor")
+    _require_roles(principal, "registration", "pharmacist", "operations_admin", "auditor")
     try:
         patient = repository.get_patient(patient_id)
     except SupabaseDataError as exc:
@@ -366,7 +370,7 @@ def get_patient(patient_id: int, repository: Repository, principal: Principal) -
 def create_patient(
     request: PatientCreateRequest,
     repository: Repository,
-    principal: ReverifiedPrincipal,
+    principal: Principal,
 ) -> PatientRecord:
     _require_roles(principal, "registration", "operations_admin")
     try:

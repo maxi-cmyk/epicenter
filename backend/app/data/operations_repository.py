@@ -70,7 +70,9 @@ class OperationsRepository(Protocol):
         actor: str,
     ) -> AllocationRecommendation: ...
 
-    def list_patients(self, *, search: str | None, offset: int, limit: int) -> PatientList: ...
+    def list_patients(
+        self, *, search: str | None, offset: int, limit: int, contact_filter: str = "all", sort: str = "name"
+    ) -> PatientList: ...
 
     def get_patient(self, patient_id: int) -> PatientRecord | None: ...
 
@@ -650,17 +652,30 @@ class SupabaseOperationsRepository:
         )
         return _recommendation_from_row(row)
 
-    def list_patients(self, *, search: str | None, offset: int, limit: int) -> PatientList:
+    def list_patients(
+        self, *, search: str | None, offset: int, limit: int, contact_filter: str = "all", sort: str = "name"
+    ) -> PatientList:
         filters = {"deleted_at": "is.null"}
         if search:
             safe_search = search.replace("%", "").replace("*", "").strip()
             if safe_search:
                 filters["full_name"] = f"ilike.*{safe_search}*"
+        if contact_filter == "email":
+            filters["email"] = "not.is.null"
+        elif contact_filter == "mobile":
+            filters["contact_mobile"] = "not.is.null"
+        elif contact_filter == "complete":
+            filters["email"] = "not.is.null"
+            filters["contact_mobile"] = "not.is.null"
+        order = {
+            "reference": "source_record_key.asc",
+            "dob": "date_of_birth.desc.nullslast",
+        }.get(sort, "full_name.asc")
         rows = self.api.select(
             "patients",
             "id,source_record_key,identifier_masked,full_name,date_of_birth,email,contact_mobile,version,deleted_at",
             filters=filters,
-            order="full_name.asc",
+            order=order,
             limit=limit,
             offset=offset,
         )

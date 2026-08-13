@@ -1031,12 +1031,25 @@ class DemoRepository:
             highest = max(int(ticket.id.removeprefix("Q-")) for ticket in self._snapshot.tickets)
             return f"Q-{highest + 1:03d}"
 
-    def list_patients(self, *, search: str | None, offset: int, limit: int) -> PatientList:
+    def list_patients(
+        self, *, search: str | None, offset: int, limit: int, contact_filter: str = "all", sort: str = "name"
+    ) -> PatientList:
         with self._lock:
             records = [patient for patient in self._patients.values() if patient.deleted_at is None]
             if search:
                 records = [patient for patient in records if search.casefold() in patient.full_name.casefold()]
-            records.sort(key=lambda patient: patient.full_name)
+            if contact_filter == "email":
+                records = [patient for patient in records if patient.email]
+            elif contact_filter == "mobile":
+                records = [patient for patient in records if patient.contact_mobile]
+            elif contact_filter == "complete":
+                records = [patient for patient in records if patient.email and patient.contact_mobile]
+            if sort == "reference":
+                records.sort(key=lambda patient: patient.source_record_key)
+            elif sort == "dob":
+                records.sort(key=lambda patient: patient.date_of_birth or date.min, reverse=True)
+            else:
+                records.sort(key=lambda patient: patient.full_name)
             return PatientList(records=deepcopy(records[offset : offset + limit]), offset=offset, limit=limit)
 
     def get_patient(self, patient_id: int) -> PatientRecord | None:

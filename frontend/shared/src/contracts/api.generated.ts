@@ -1457,9 +1457,11 @@ export interface operations {
     list_patients_api_v1_patients_get: {
         parameters: {
             query?: {
+                contact_filter?: string;
                 limit?: number;
                 offset?: number;
                 search?: string | null;
+                sort?: string;
             };
             header?: never;
             path?: never;

@@ -261,17 +261,23 @@ Nurse validation and workload:
 - [ ] Measure end-to-end administrative time, touches, repeated entries, corrections, errors, and perceived workload for representative registration/nurse tasks; compare against the documented 23–32-minute manual baseline without treating the estimate as measured clinic performance.
 - [ ] Prove the simplified Today flow completes the oldest actionable visit without requiring the generic Patients browser and never blocks physical urgent escalation or the core visit.
 
-### 7. Add intentional nurse-side database CRUD
+### 7. Add intentional staff database access
 
-**Status: Partial — secured backend CRUD contract and strict step-up auth exist; nurse UI and explicit commit flow remain**
+**Status: Complete for the approved patient-record demo scope — nurse management and pharmacy read access delivered**
 
 - [x] Add allowlisted patient list, detail, create, update, and recoverable soft-delete endpoints through FastAPI.
 - [x] Add search, pagination, optimistic concurrency, idempotency, and audit attribution at the backend boundary.
-- [ ] Build the nurse Patients browser with search, filter, sort, and pagination.
-- [x] Require fresh Clerk strict reverification for every currently implemented staff mutation (completed in Task 4).
-- [ ] Decide whether future sensitive data reveals require password-only reverification instead of Clerk's strongest available factor.
-- [ ] Add an explicit commit screen with action, record, before/after values, and reason.
-- [ ] Restrict hard delete and test permissions, reverification expiry, retries, duplicates, and stale writes end to end.
+- [x] Add a separate Database tab to both nurse and pharmacy navigation; keep Audit as its own independent, read-only tab.
+- [x] Build the patient browser with a top search bar, contact filters, sorting, pagination, loading, empty, error, and responsive states.
+- [x] Make a row click expose View, Update, and Delete for authorised nurse/administrator accounts; pharmacists receive View only for patient identity/contact records.
+- [x] Allow authenticated nurse/administrator Create and View without an extra password prompt.
+- [x] Require password reverification only when committing Update or Delete, using a centered modal with the copy “Enter password to make this change”.
+- [x] Submit the password directly to Clerk's session-verification flow, clear it from UI state, refresh the signed session proof, and retain backend freshness enforcement before the mutation.
+- [x] Preserve update drafts and deletion reasons when the password modal is cancelled or verification fails.
+- [x] Keep hard delete unavailable; deletion remains recoverable, version-checked, idempotent, and audit-attributed.
+- [x] Test role permissions, create-without-step-up, update-with-step-up, stale writes, duplicate protection, and the separate Database/Audit route contract.
+
+Deferred beyond this task: a generic medication/TPA/payment data editor. Pharmacists continue to commit those records through the dedicated pharmacy workflow; the Database tab must not become a raw SQL or unrestricted operational-table console.
 
 ### 8. Build the immutable, read-only Audit panel
 

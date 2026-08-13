@@ -1,8 +1,8 @@
-import type { ActionResult, AuditRecord, MedicationItem, QueueTicket, TpaSubmission } from "@epicenter/shared/contracts";
+import type { ActionResult, AuditRecord, MedicationItem, PatientList, QueueTicket, TpaSubmission } from "@epicenter/shared/contracts";
 import type { AuditQuery } from "@epicenter/shared/ui/AuditPanel";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
-type AccessTokenProvider = () => Promise<string | null>;
+type AccessTokenProvider = (options?: { skipCache?: boolean }) => Promise<string | null>;
 
 type ReverificationHint = {
   clerk_error: {
@@ -29,6 +29,10 @@ let accessTokenProvider: AccessTokenProvider | null = null;
 
 export function setAccessTokenProvider(provider: AccessTokenProvider | null) {
   accessTokenProvider = provider;
+}
+
+export async function refreshAccessToken() {
+  await accessTokenProvider?.({ skipCache: true });
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -64,6 +68,14 @@ export function fetchAudit(query: AuditQuery) {
   if (query.occurredFrom) params.set("occurred_from", query.occurredFrom);
   if (query.occurredTo) params.set("occurred_to", query.occurredTo);
   return request<AuditRecord[]>(`/audit?${params.toString()}`, { cache: "no-store" });
+}
+
+export function fetchPatients(query: { search?: string; contactFilter?: string; sort?: string; offset: number; limit: number }) {
+  const params = new URLSearchParams({ offset: String(query.offset), limit: String(query.limit) });
+  if (query.search) params.set("search", query.search);
+  if (query.contactFilter) params.set("contact_filter", query.contactFilter);
+  if (query.sort) params.set("sort", query.sort);
+  return request<PatientList>(`/patients?${params.toString()}`, { cache: "no-store" });
 }
 
 export function fetchPharmacyQueue() {

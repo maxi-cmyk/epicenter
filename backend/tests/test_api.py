@@ -442,6 +442,70 @@ def test_auditor_role_cannot_mutate_patients() -> None:
     assert response.json()["detail"] == "Staff role is not permitted for this action."
 
 
+def test_pharmacist_can_view_patient_database_but_cannot_create_records() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("pharmacist")
+
+    assert client.get("/api/v1/patients").status_code == 200
+    response = client.post(
+        "/api/v1/patients",
+        json={
+            "source_record_key": "api-test:pharmacy-denied",
+            "identifier_hash": "d" * 64,
+            "identifier_masked": "*****888Y",
+            "full_name": "Pharmacy Denied Patient",
+            "reason": "Permission test",
+            "idempotency_key": "pharmacy-denied-test",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Staff role is not permitted for this action."
+
+
+def test_patient_filters_and_sort_apply_before_pagination() -> None:
+    response = client.get(
+        "/api/v1/patients",
+        params={"contact_filter": "email", "sort": "reference", "offset": 0, "limit": 1},
+    )
+
+    assert response.status_code == 200
+    records = response.json()["records"]
+    assert len(records) <= 1
+    assert all(record["email"] for record in records)
+    assert response.json()["offset"] == 0
+    assert response.json()["limit"] == 1
+
+
+def test_patient_create_does_not_require_reverification_but_update_does() -> None:
+    app.dependency_overrides[require_staff] = lambda: staff_principal("registration", factor_age=(10, -1))
+
+    created = client.post(
+        "/api/v1/patients",
+        json={
+            "source_record_key": "api-test:create-without-step-up",
+            "identifier_hash": "e" * 64,
+            "identifier_masked": "*****777X",
+            "full_name": "Create Without Step Up",
+            "reason": "Database policy test",
+            "idempotency_key": "create-no-step-up-test",
+        },
+    )
+    assert created.status_code == 201
+
+    response = client.patch(
+        f"/api/v1/patients/{created.json()['id']}",
+        json={
+            "expected_version": created.json()["version"],
+            "full_name": "Must Reverify",
+            "reason": "Database policy test",
+            "idempotency_key": "update-needs-step-up-test",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["clerk_error"]["reason"] == "reverification-error"
+
+
 def test_registration_role_cannot_decide_operations_recommendations() -> None:
     app.dependency_overrides[require_staff] = lambda: staff_principal("registration")
 
