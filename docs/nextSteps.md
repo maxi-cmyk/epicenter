@@ -225,13 +225,17 @@ Patient validation:
 
 ### 6. Implement the simplified nurse task flow
 
-**Status: Partial — core dashboard, review, kiosk, queue mutations, and authorization contracts exist; the one-task Today workflow, contextual tools, and full lifecycle states remain**
+**Status: Partial — core dashboard, review, kiosk, queue mutations, authorization contracts, and the gated single-ticket step workflow (see `docs/nurse-workflow.md`) exist; the one-task Today navigation/prioritization, contextual tools, and full Ongoing→Finished lifecycle remain**
 
 Completed foundation:
 
 - [x] Provide local Today/dashboard, review, kiosk, ticket-transition, document-result, and counter-assignment flows.
 - [x] Preserve the original ticket and waiting age when a case enters review.
 - [x] Carry idempotency and expected-version values through nurse mutations.
+- [x] Rebuild the single-ticket nurse task screen as an explicit, gated multi-step flow (identity/e-card → forms guidance → forms review → confirm package → billing & queue → summary) matching `docs/nurse-workflow.md`'s System/Patient/Nurse ordering, with per-step persisted confirmation state (`identity_confirmed`, `forms_confirmed`, `package_confirmed`, `billing_confirmed`, `physical_forms_received`) and dedicated backend endpoints for each new gate.
+- [x] Restore the needs-review evidence panel as a precursor gate that blocks entry into the step pipeline until the administrative exception is resolved, instead of folding it into one flat page section.
+- [x] Skip the package-confirmation step entirely for tickets with no payer documents on file, since there is nothing to recheck against.
+- [x] Wire the Incoming → Ongoing visit-phase transition into the summary step (previously a dead navigation-only link with no backend call).
 
 Navigation and daily workflow:
 
@@ -246,7 +250,7 @@ Navigation and daily workflow:
 Single visit task:
 
 - [ ] Put appointment details, original `Q-*` ticket/waiting age, readiness summary, source-backed exceptions, attestations, notifications, and permitted actions on one task screen.
-- [ ] Capture staff-performed red-flag escalation and manual identity/e-card attestations at physical contact; the system records who/when but never performs or infers the checks.
+- [x] Capture staff-performed manual identity/e-card attestations at physical contact; the system records who/when (`identity_confirmed_by`/`_at`) but never performs or infers the checks. Red-flag/clinical escalation capture (`clinical_escalation`) predates this task and remains a separate field.
 - [ ] Let staff confirm extracted facts, correct one evidenced field with a reason, request a missing document, send one curated patient-safe issue message, or retain the case under review without changing screens unnecessarily.
 - [ ] Complete accept, reject with a curated safe reason and next step, or keep under review from the same task, with Clerk reverification and an explicit commit summary for mutations.
 - [ ] Present corporate/issuer code, TPA, screening package, requested items, validity, and billing arrangement together as one prepared confirmation block instead of separate re-entry screens.
