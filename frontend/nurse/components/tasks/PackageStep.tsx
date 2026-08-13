@@ -2,11 +2,13 @@
 
 import { useReverification } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { confirmPackage } from "@/lib/api";
+import { hasDocuments } from "@/lib/task-steps";
 import type { QueueTicket } from "@epicenter/shared/contracts";
 import { Button } from "@epicenter/shared/ui/Button";
+import { LoadingBoard } from "@epicenter/shared/ui/LoadingBoard";
 
 import { TaskStepShell } from "./TaskStepShell";
 import styles from "./Task.module.css";
@@ -27,6 +29,13 @@ function PackageStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
 
   const reverifiedConfirmPackage = useReverification(confirmPackage);
   const packageValue = packageEdit ?? ticket.matched_package ?? "";
+  const skip = !hasDocuments(ticket);
+
+  useEffect(() => {
+    if (skip) router.replace(`/tasks/${ticket.id}/billing`);
+  }, [skip, router, ticket.id]);
+
+  if (skip) return <LoadingBoard />;
 
   const submit = async () => {
     setPending(true);
@@ -48,7 +57,7 @@ function PackageStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
   return (
     <section aria-labelledby="package-title" className={styles.section}>
       <h2 id="package-title">
-        Package recheck
+        Confirm package
         {ticket.package_confirmed ? <span className={styles.tpaConfirmedBadge}>Confirmed</span> : null}
       </h2>
       <p className={styles.hint}>

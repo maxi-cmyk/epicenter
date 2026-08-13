@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { confirmForms } from "@/lib/api";
+import { hasDocuments } from "@/lib/task-steps";
 import type { QueueTicket } from "@epicenter/shared/contracts";
 import { Button } from "@epicenter/shared/ui/Button";
 
@@ -36,7 +37,7 @@ function FormsReviewContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
     try {
       await reverifiedConfirmForms(ticket.id, ticket.version);
       await refresh();
-      router.push(`/tasks/${ticket.id}/package`);
+      router.push(`/tasks/${ticket.id}/${hasDocuments(ticket) ? "package" : "billing"}`);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not confirm the forms.");
     } finally {

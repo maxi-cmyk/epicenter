@@ -8,10 +8,20 @@ export const TASK_STEP_LABELS: Record<TaskStep, string> = {
   identity: "Identity & e-card",
   forms: "Forms guidance",
   "forms-review": "Forms review",
-  package: "Package recheck",
+  package: "Confirm package",
   billing: "Billing & queue",
   summary: "Summary",
 };
+
+/** Package confirmation only applies when the patient has payer paperwork on file to recheck against. */
+export function hasDocuments(ticket: QueueTicket): boolean {
+  return ticket.documents.length > 0;
+}
+
+/** The steps that actually appear in this ticket's flow (package is skipped without documents). */
+export function visibleSteps(ticket: QueueTicket): TaskStep[] {
+  return TASK_STEPS.filter((step) => step !== "package" || hasDocuments(ticket));
+}
 
 /** Whether the nurse is allowed to open this step's page yet, given what's confirmed so far. */
 export function isStepUnlocked(ticket: QueueTicket, step: TaskStep): boolean {
@@ -24,7 +34,7 @@ export function isStepUnlocked(ticket: QueueTicket, step: TaskStep): boolean {
     case "package":
       return ticket.forms_confirmed;
     case "billing":
-      return ticket.package_confirmed;
+      return ticket.forms_confirmed && isStepComplete(ticket, "package");
     case "summary":
       return ticket.billing_confirmed;
   }
@@ -41,7 +51,7 @@ export function isStepComplete(ticket: QueueTicket, step: TaskStep): boolean {
     case "forms-review":
       return ticket.forms_confirmed;
     case "package":
-      return ticket.package_confirmed;
+      return !hasDocuments(ticket) || ticket.package_confirmed;
     case "billing":
       return ticket.billing_confirmed;
     case "summary":
@@ -52,7 +62,7 @@ export function isStepComplete(ticket: QueueTicket, step: TaskStep): boolean {
 export function nextIncompleteStep(ticket: QueueTicket): TaskStep {
   if (!ticket.identity_confirmed) return "identity";
   if (!ticket.forms_confirmed) return "forms-review";
-  if (!ticket.package_confirmed) return "package";
+  if (hasDocuments(ticket) && !ticket.package_confirmed) return "package";
   if (!ticket.billing_confirmed) return "billing";
   return "summary";
 }

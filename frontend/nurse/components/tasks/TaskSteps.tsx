@@ -2,14 +2,14 @@ import { Check } from "lucide-react";
 import Link from "next/link";
 
 import type { QueueTicket } from "@epicenter/shared/contracts";
-import { isStepComplete, isStepUnlocked, TASK_STEP_LABELS, TASK_STEPS, type TaskStep } from "@/lib/task-steps";
+import { isStepComplete, isStepUnlocked, TASK_STEP_LABELS, type TaskStep, visibleSteps } from "@/lib/task-steps";
 
 import styles from "./Task.module.css";
 
 export function TaskSteps({ current, ticket }: { current: TaskStep; ticket: QueueTicket }) {
   return (
     <ol aria-label="Ticket workflow progress" className={styles.steps}>
-      {TASK_STEPS.map((step, index) => {
+      {visibleSteps(ticket).map((step, index) => {
         const unlocked = isStepUnlocked(ticket, step);
         const complete = isStepComplete(ticket, step);
         const isCurrent = step === current;

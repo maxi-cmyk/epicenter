@@ -23,21 +23,19 @@ export function IdentityStep({ ticketId }: { ticketId: string }) {
 function IdentityStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh: () => Promise<void> }) {
   const [identityChecked, setIdentityChecked] = useState(ticket.identity_confirmed);
   const [ecardChecked, setEcardChecked] = useState(ticket.ecard_verified);
-  const [ecardNotApplicable, setEcardNotApplicable] = useState(ticket.ecard_not_applicable);
-  const [ecardReason, setEcardReason] = useState(ticket.ecard_na_reason ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
   const reverifiedConfirmIdentity = useReverification(confirmIdentity);
 
-  const canSubmit = identityChecked && (ecardChecked || ecardNotApplicable) && (!ecardNotApplicable || ecardReason.trim() !== "");
+  const canSubmit = identityChecked && ecardChecked;
 
   const submit = async () => {
     setPending(true);
     setError("");
     try {
-      await reverifiedConfirmIdentity(ticket.id, ticket.version, ecardNotApplicable, ecardNotApplicable ? ecardReason.trim() : undefined);
+      await reverifiedConfirmIdentity(ticket.id, ticket.version);
       await refresh();
       router.push(`/tasks/${ticket.id}/forms`);
     } catch (submitError) {
@@ -64,31 +62,11 @@ function IdentityStepContent({ ticket, refresh }: { ticket: QueueTicket; refresh
           <label>
             <input
               checked={ecardChecked}
-              disabled={ecardNotApplicable}
               onChange={(event) => setEcardChecked(event.target.checked)}
               type="checkbox"
             />
             I manually validated the e-card using the approved in-person process.
           </label>
-          <label>
-            <input
-              checked={ecardNotApplicable}
-              onChange={(event) => {
-                setEcardNotApplicable(event.target.checked);
-                if (event.target.checked) setEcardChecked(false);
-              }}
-              type="checkbox"
-            />
-            Not applicable
-          </label>
-          {ecardNotApplicable ? (
-            <input
-              className={styles.reasonInput}
-              onChange={(event) => setEcardReason(event.target.value)}
-              placeholder="Reason e-card check is not applicable"
-              value={ecardReason}
-            />
-          ) : null}
         </div>
       </div>
       {ticket.identity_confirmed && ticket.identity_confirmed_by ? (

@@ -7,14 +7,14 @@ import { PatientFlowBoard } from "./PatientFlowBoard";
 import styles from "./Dashboard.module.css";
 
 export function DashboardView() {
-  const { data, source, loading, refresh } = useDashboard();
+  const { data, source, loading, refreshing, refresh } = useDashboard();
 
   return (
     <div className={styles.dashboard}>
       {loading || !data ? (
         <LoadingBoard />
       ) : (
-        <PatientFlowBoard loading={loading} onRefresh={refresh} tickets={data.tickets} />
+        <PatientFlowBoard loading={refreshing} onRefresh={refresh} tickets={data.tickets} />
       )}
 
       <div className={styles.contextBar}>
