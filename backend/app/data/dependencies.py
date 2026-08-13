@@ -10,8 +10,14 @@ from app.data.supabase_client import SupabaseDataApi
 
 
 @lru_cache
-def _supabase_repository(url: str, secret_key: str, clinic_id: str) -> SupabaseOperationsRepository:
-    return SupabaseOperationsRepository(SupabaseDataApi(url, secret_key), clinic_id=clinic_id)
+def _supabase_repository(
+    url: str, secret_key: str, clinic_id: str, use_synthetic_singpass: bool
+) -> SupabaseOperationsRepository:
+    return SupabaseOperationsRepository(
+        SupabaseDataApi(url, secret_key),
+        clinic_id=clinic_id,
+        use_synthetic_singpass=use_synthetic_singpass,
+    )
 
 
 def get_operations_repository(
@@ -24,7 +30,12 @@ def get_operations_repository(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Supabase persistence is selected but its server credentials are missing.",
         )
-    return _supabase_repository(settings.supabase_url, settings.supabase_secret_key, settings.clinic_id)
+    return _supabase_repository(
+        settings.supabase_url,
+        settings.supabase_secret_key,
+        settings.clinic_id,
+        settings.demo_mode,
+    )
 
 
 def get_demo_repository() -> DemoRepository:

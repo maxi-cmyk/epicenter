@@ -8,9 +8,13 @@ import openapiTS, { astToString } from "openapi-typescript";
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const backendRoot = resolve(frontendRoot, "../backend");
 const generatedPath = resolve(frontendRoot, "shared/src/contracts/api.generated.ts");
-const python = existsSync(resolve(backendRoot, ".venv/bin/python"))
-  ? resolve(backendRoot, ".venv/bin/python")
-  : "python3";
+const pythonCandidates = [
+  resolve(backendRoot, ".venv/Scripts/python.exe"),
+  resolve(backendRoot, ".venv/bin/python"),
+  "python",
+  "python3",
+];
+const python = pythonCandidates.find((candidate) => candidate === "python" || candidate === "python3" || existsSync(candidate));
 
 function loadOpenApiSchema() {
   const result = spawnSync(

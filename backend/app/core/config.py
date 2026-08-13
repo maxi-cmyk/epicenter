@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     # Comma-separated. Defaults cover both split-screen dev processes: the
     # patient screen (port 3000) and the nurse/staff screen (port 3001).
     frontend_origins: str = Field(
-        default="http://localhost:3000,http://localhost:3001",
+        default=(
+            "http://localhost:3000,http://127.0.0.1:3000,"
+            "http://localhost:3001,http://127.0.0.1:3001"
+        ),
         validation_alias=AliasChoices("EPICENTER_FRONTEND_ORIGINS", "EPICENTER_FRONTEND_ORIGIN"),
     )
     demo_mode: bool = True

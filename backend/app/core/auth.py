@@ -70,9 +70,15 @@ def require_clerk_identity(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ClerkIdentity:
-    if settings.demo_mode:
+    auth_header = request.headers.get("authorization", "")
+    has_bearer = auth_header.lower().startswith("bearer ")
+    # Fixture mode still accepts anonymous calls, but a real Clerk session is preferred
+    # so first-time onboarding can be keyed to a fresh email identity.
+    if settings.demo_mode and not (has_bearer and settings.clerk_configured):
         return ClerkIdentity(subject="synthetic-user", source="demo")
     if not settings.clerk_configured:
+        if settings.demo_mode:
+            return ClerkIdentity(subject="synthetic-user", source="demo")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Clerk authentication is not configured.",
@@ -89,9 +95,13 @@ def require_clerk_identity(
             ),
         )
     except Exception as exc:
+        if settings.demo_mode and not has_bearer:
+            return ClerkIdentity(subject="synthetic-user", source="demo")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Clerk session.") from exc
 
     if not request_state.is_signed_in or not request_state.payload:
+        if settings.demo_mode and not has_bearer:
+            return ClerkIdentity(subject="synthetic-user", source="demo")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid Clerk session required.")
     return ClerkIdentity(
         subject=str(request_state.payload["sub"]),
@@ -166,18 +176,115 @@ def require_reverified_staff(
     return principal
 
 
+def _clerk_primary_email(settings: Settings, clerk_user_id: str) -> str | None:
+    if not settings.clerk_secret_key or clerk_user_id.startswith("synthetic"):
+        return None
+    try:
+        from clerk_backend_api import Clerk
+
+        user = Clerk(bearer_auth=settings.clerk_secret_key).users.get(user_id=clerk_user_id)
+    except Exception:
+        return None
+    addresses = getattr(user, "email_addresses", None) or []
+    for address in addresses:
+        email = getattr(address, "email_address", None)
+        if email:
+            return str(email)
+    return None
+
+
+def _upsert_patient_account(
+    api: SupabaseDataApi,
+    *,
+    clerk_user_id: str,
+    patient_id: int,
+    email: str | None,
+) -> None:
+    existing = api.select(
+        "patient_accounts",
+        "id,patient_id,email,active",
+        filters={"clerk_user_id": f"eq.{clerk_user_id}"},
+        limit=1,
+    )
+    if existing:
+        payload: dict[str, object] = {"patient_id": patient_id, "active": True}
+        if email:
+            payload["email"] = email
+        api.update("patient_accounts", payload, filters={"clerk_user_id": f"eq.{clerk_user_id}"})
+        return
+    try:
+        api.insert(
+            "patient_accounts",
+            {
+                "clerk_user_id": clerk_user_id,
+                "patient_id": patient_id,
+                "email": email,
+                "active": True,
+            },
+        )
+    except SupabaseDataError as exc:
+        if exc.code != "23505":
+            raise
+
+
+def _synthetic_demo_principal(identity: ClerkIdentity, settings: Settings) -> PatientPrincipal:
+    """Map demo auth to the seeded synthetic patient when Supabase is available."""
+    if not settings.supabase_configured:
+        return PatientPrincipal(
+            subject=identity.subject,
+            source=identity.source,
+            patient_id=1,
+            source_record_key=settings.patient_demo_source_record_key,
+        )
+
+    api = SupabaseDataApi(settings.supabase_url, settings.supabase_secret_key)
+    try:
+        patients = api.select(
+            "patients",
+            "id,source_record_key",
+            filters={
+                "source_record_key": f"eq.{settings.patient_demo_source_record_key}",
+                "deleted_at": "is.null",
+            },
+            limit=2,
+        )
+        if len(patients) != 1:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Demo patient scenario is unavailable.",
+            )
+        patient_id = int(patients[0]["id"])
+        if identity.source == "clerk":
+            email = _clerk_primary_email(settings, identity.subject)
+            _upsert_patient_account(
+                api,
+                clerk_user_id=identity.subject,
+                patient_id=patient_id,
+                email=email,
+            )
+    except SupabaseDataError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Demo patient scenario could not be resolved.",
+        ) from exc
+    finally:
+        api.close()
+
+    return PatientPrincipal(
+        subject=identity.subject,
+        source=identity.source,
+        patient_id=patient_id,
+        source_record_key=str(patients[0]["source_record_key"]),
+    )
+
+
 def require_patient(
     identity: Annotated[ClerkIdentity, Depends(require_clerk_identity)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> PatientPrincipal:
     """Authorize a verified Clerk identity through exactly one active patient mapping."""
     if settings.demo_mode:
-        return PatientPrincipal(
-            subject="synthetic-patient",
-            source="demo",
-            patient_id=None,
-            source_record_key=settings.patient_demo_source_record_key,
-        )
+        return _synthetic_demo_principal(identity, settings)
     if not settings.supabase_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -221,15 +328,44 @@ def require_patient(
     )
 
 
+def _provision_clerk_patient(
+    api: SupabaseDataApi,
+    *,
+    clerk_user_id: str,
+    email: str | None,
+) -> dict[str, object]:
+    from hashlib import sha256
+
+    source_record_key = f"clerk:{clerk_user_id}"
+    existing = api.select(
+        "patients",
+        "id,source_record_key",
+        filters={"source_record_key": f"eq.{source_record_key}", "deleted_at": "is.null"},
+        limit=1,
+    )
+    if existing:
+        return existing[0]
+
+    display = (email.split("@")[0] if email and "@" in email else "New patient").replace(".", " ").strip()
+    display = display.title() if display else "New patient"
+    identifier_hash = sha256(f"clerk:{clerk_user_id}".encode("utf-8")).hexdigest()
+    return api.insert(
+        "patients",
+        {
+            "source_record_key": source_record_key,
+            "identifier_hash": identifier_hash,
+            "identifier_masked": "••••",
+            "full_name": display,
+            "email": email,
+            "is_synthetic": False,
+        },
+    )
+
+
 def activate_patient_mapping(identity: ClerkIdentity, settings: Settings) -> PatientPrincipal:
-    """Idempotently attach a verified demo patient identity to one synthetic scenario."""
+    """Attach a Clerk identity to one patient row, creating a personal patient when needed."""
     if settings.demo_mode:
-        return PatientPrincipal(
-            subject="synthetic-patient",
-            source="demo",
-            patient_id=1,
-            source_record_key=settings.patient_demo_source_record_key,
-        )
+        return _synthetic_demo_principal(identity, settings)
     if not settings.supabase_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -246,44 +382,34 @@ def activate_patient_mapping(identity: ClerkIdentity, settings: Settings) -> Pat
         )
         if len(existing) > 1:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Multiple patient mappings found.")
-        patient_filters = (
-            {"id": f"eq.{existing[0]['patient_id']}", "deleted_at": "is.null"}
-            if existing
-            else {
-                "source_record_key": f"eq.{settings.patient_demo_source_record_key}",
-                "deleted_at": "is.null",
-            }
-        )
-        patients = api.select("patients", "id,source_record_key", filters=patient_filters, limit=2)
-        if len(patients) != 1:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Demo patient scenario is unavailable.",
+        email = _clerk_primary_email(settings, identity.subject)
+        if existing:
+            patients = api.select(
+                "patients",
+                "id,source_record_key",
+                filters={"id": f"eq.{existing[0]['patient_id']}", "deleted_at": "is.null"},
+                limit=2,
             )
-        if not existing:
-            try:
-                api.insert(
-                    "patient_accounts",
-                    {
-                        "clerk_user_id": identity.subject,
-                        "patient_id": patients[0]["id"],
-                        "active": True,
-                    },
+            if len(patients) != 1:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Patient account mapping is unavailable.",
                 )
-            except SupabaseDataError as exc:
-                if exc.code != "23505":
-                    raise
-                replay = api.select(
-                    "patient_accounts",
-                    "patient_id",
-                    filters={"clerk_user_id": f"eq.{identity.subject}", "active": "eq.true"},
-                    limit=2,
+            if email:
+                _upsert_patient_account(
+                    api,
+                    clerk_user_id=identity.subject,
+                    patient_id=int(patients[0]["id"]),
+                    email=email,
                 )
-                if len(replay) != 1 or int(replay[0]["patient_id"]) != int(patients[0]["id"]):
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Patient activation conflicted.",
-                    ) from exc
+        else:
+            patients = [_provision_clerk_patient(api, clerk_user_id=identity.subject, email=email)]
+            _upsert_patient_account(
+                api,
+                clerk_user_id=identity.subject,
+                patient_id=int(patients[0]["id"]),
+                email=email,
+            )
     except SupabaseDataError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

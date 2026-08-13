@@ -31,6 +31,7 @@ def production_settings() -> Settings:
 class FakeDataApi:
     responses: dict[str, list[dict[str, object]]] = {}
     inserted: list[tuple[str, dict[str, object]]] = []
+    updated: list[tuple[str, dict[str, object]]] = []
 
     def __init__(self, _url: str, _secret: str) -> None:
         pass
@@ -43,14 +44,32 @@ class FakeDataApi:
 
     def insert(self, table: str, payload: dict[str, object]) -> dict[str, object]:
         self.inserted.append((table, payload))
+        if table == "patients":
+            return {
+                "id": 901,
+                "source_record_key": str(payload.get("source_record_key") or "clerk:user_patient"),
+                **payload,
+            }
         return payload
+
+    def update(
+        self,
+        table: str,
+        payload: dict[str, object],
+        *,
+        filters: dict[str, str],
+    ) -> list[dict[str, object]]:
+        self.updated.append((table, payload))
+        return [{**payload, **filters}]
 
 
 @pytest.fixture(autouse=True)
 def fake_data_api(monkeypatch: pytest.MonkeyPatch):
     FakeDataApi.responses = {}
     FakeDataApi.inserted = []
+    FakeDataApi.updated = []
     monkeypatch.setattr(auth, "SupabaseDataApi", FakeDataApi)
+    monkeypatch.setattr(auth, "_clerk_primary_email", lambda _settings, _user_id: "patient@example.test")
 
 
 def test_staff_mapping_requires_active_matching_clinic() -> None:
@@ -170,10 +189,10 @@ def test_unmapped_patient_is_denied_until_activation() -> None:
     assert caught.value.detail == "Patient account activation required."
 
 
-def test_patient_activation_creates_only_the_configured_synthetic_mapping() -> None:
+def test_patient_activation_creates_personal_clerk_patient() -> None:
     FakeDataApi.responses = {
         "patient_accounts": [],
-        "patients": [{"id": 107, "source_record_key": "registration:0107"}],
+        "patients": [],
     }
 
     principal = activate_patient_mapping(
@@ -181,10 +200,23 @@ def test_patient_activation_creates_only_the_configured_synthetic_mapping() -> N
         production_settings(),
     )
 
+    assert principal.patient_id == 901
+    assert principal.source_record_key == "clerk:user_patient"
+    assert FakeDataApi.inserted[0][0] == "patients"
+    assert FakeDataApi.inserted[0][1]["source_record_key"] == "clerk:user_patient"
+    assert FakeDataApi.inserted[1][0] == "patient_accounts"
+    assert FakeDataApi.inserted[1][1]["patient_id"] == 901
+    assert FakeDataApi.inserted[1][1]["email"] == "patient@example.test"
+
+
+def test_demo_mode_with_supabase_uses_seeded_patient_not_hardcoded_one() -> None:
+    FakeDataApi.responses = {
+        "patients": [{"id": 107, "source_record_key": "registration:0107"}],
+    }
+    settings = production_settings().model_copy(update={"demo_mode": True})
+
+    principal = require_patient(ClerkIdentity(subject="user_patient", source="clerk"), settings)
+
     assert principal.patient_id == 107
-    assert FakeDataApi.inserted == [
-        (
-            "patient_accounts",
-            {"clerk_user_id": "user_patient", "patient_id": 107, "active": True},
-        )
-    ]
+    assert principal.source_record_key == "registration:0107"
+    assert any(table == "patient_accounts" for table, _payload in FakeDataApi.updated + FakeDataApi.inserted)

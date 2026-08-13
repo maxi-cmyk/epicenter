@@ -13,6 +13,7 @@ Deliver Epicenter as two independent frontend applications—patient and nurse�
 | Expanded operational schema | Live and verified | The follow-up migration, operational seed, and expanded verification SQL all passed against the synthetic Supabase project. |
 | Shared backend boundary | Live and verified | Supabase repositories, transactional RPC calls, concurrency controls, audit, and protected staff routes passed local tests and the live persistence verifier. |
 | Auth | Complete locally | Patient signup/mapping, staff clinic/role authorization, strict Clerk reverification, and the real-session authorization suite pass against the development Clerk and hosted Supabase projects. Production credential handoff remains a deployment concern. |
+| Patient panel journey | In progress | Signed-in Home → Coverage → Questionnaire → Queue → Payment → Records is wired for the synthetic Loh Wei Ming / APT-DEMO-014 path, including patient-safe APIs and an appointment-scoped upload link. Kiosk parity and the full journey validation matrix remain. |
 | AI and MCP integration | Scoped, not started | OpenAI is the development/application LLM; custom Streamable HTTP MCP endpoints will remain client-neutral and be verified in Copilot Studio after deployment. |
 | Analytics presentation | Scoped, not started | Build the native dashboard and simulator from FastAPI/Supabase contracts. Power BI/Fabric is deferred to a future aggregate-only scale option. |
 | Deployment | Not started | Everything is still local. Railway and Vercel have not been deployed. |
@@ -193,7 +194,7 @@ Cross-panel acceptance criteria:
 
 ### 5. Finish the patient panel
 
-**Status: Partial — authentication, synthetic pre-arrival submission, coverage decision, and outcome contracts exist; the simplified appointment home and complete upload/questionnaire/queue journey remain**
+**Status: In progress — signed-in journey screens and patient-safe APIs are wired for the synthetic demo path; broader validation and hosted persistence for every journey branch remain**
 
 Completed foundation:
 
@@ -204,17 +205,19 @@ Completed foundation:
 
 Simplified patient experience:
 
-- [ ] Make one upcoming-appointment card the signed-in home state, showing appointment time/location, completion summary, one primary next action, and secondary access to queue, payment, and history.
-- [ ] Support the separate appointment-scoped upload link without turning it into a full account or exposing a public patient lookup.
-- [ ] Implement the Singpass Login/Myinfo adapter contract and exact field comparison; keep the hackathon response visibly synthetic until a real approved sandbox is connected.
-- [ ] Implement the check-first coverage branch exactly: show prior issuer/date, then `Yes, same coverage` or `No, upload new document`; reuse the source document but re-run current validity and eligibility rules.
-- [ ] Complete camera/file upload, preview, replace, progress, processing, timeout, unsupported/oversized file, extraction failure, and retry states without losing the selected file or claiming approval.
-- [ ] Show only patient-safe accepted, rejected, or under-review outcomes, with one curated reason/next action when the patient can resolve the issue.
-- [ ] Add the appointment-selected General Health or Occupational Health questionnaire with consented read-only prefill, conditional fields, autosave, resume, review, and explicit submission.
-- [ ] Reuse confirmed identity/contact/allergy data across registration, questionnaire, TPA preview, pharmacy confirmation, and billing without silently overwriting source records.
-- [ ] Ask patients only for genuinely missing, changed, appointment-specific, consent, or acknowledgement fields; show prefilled source/provenance instead of repeating editable entry controls.
-- [ ] Show one live `Q-*` ticket, assigned counter, current stage, last-updated/stale state, refresh/realtime recovery, and completion; never expose internal ready/review routing as a second queue.
-- [ ] Add demo payment and visit/coverage history states while clearly labelling mocked payment and preventing edits to immutable evidence/audit history.
+- [x] Make one upcoming-appointment card the signed-in home state, showing appointment time/location, completion summary, one primary next action, and secondary access to queue, payment, and history.
+- [x] Support the separate appointment-scoped upload link without turning it into a full account or exposing a public patient lookup.
+- [x] Implement the Singpass Login/Myinfo adapter contract and exact field comparison; keep the hackathon response visibly synthetic until a real approved sandbox is connected.
+- [x] Implement the check-first coverage branch exactly: show prior issuer/date, then `Yes, same coverage` or `No, upload new document`; reuse the source document but re-run current validity and eligibility rules.
+- [x] Complete camera/file upload, preview, replace, progress, processing, timeout, unsupported/oversized file, extraction failure, and retry states without losing the selected file or claiming approval.
+- [x] Show only patient-safe accepted, rejected, or under-review outcomes, with one curated reason/next action when the patient can resolve the issue.
+- [x] Add the appointment-selected General Health or Occupational Health questionnaire with consented read-only prefill, conditional fields, autosave, resume, review, and explicit submission.
+- [x] Persist first-time signup onboarding (Singpass confirm, insurance step, questionnaire answers, completion) to Supabase via `patient_onboarding_states` / `appointment_questionnaire_responses` when `persistence_mode=supabase`.
+- [x] Reuse confirmed identity/contact/allergy data across registration, questionnaire, TPA preview, pharmacy confirmation, and billing without silently overwriting source records.
+- [x] Ask patients only for genuinely missing, changed, appointment-specific, consent, or acknowledgement fields; show prefilled source/provenance instead of repeating editable entry controls.
+- [x] Show one live `Q-*` ticket, assigned counter, current stage, last-updated/stale state, refresh/realtime recovery, and completion; never expose internal ready/review routing as a second queue.
+- [x] Add demo payment and visit/coverage history states while clearly labelling mocked payment and preventing edits to immutable evidence/audit history.
+- [x] Persist signed-in home / queue / payment / records from Supabase (`epicenter_get_patient_*` RPCs + `payments`), scoped to the Clerk-linked patient account (demo maps to seeded `registration:0107` and stores the Clerk email on `patient_accounts`).
 
 Patient validation:
 
@@ -385,14 +388,12 @@ Validation and safety:
 
 ## Immediate next actions
 
-1. Complete Tasks 5–8 (patient panel, nurse task flow, CRUD, simulator) — in progress by team.
-2. Apply `supabase/migrations/20260812100000_document_jobs_and_worker_rpcs.sql` to the hosted Supabase project.
-3. Deploy epicenter-api-mcp and epicenter-worker to Railway; set all env vars from `.env.example`.
-4. Create separate Vercel projects for patient and nurse apps; allowlist Railway origin in backend CORS.
-5. Run `/healthz` on the Railway domain and confirm all three providers show `configured`.
-6. Wire the nurse assistant FastAPI route and build the UI component (remaining Task 9 items).
-7. Run Copilot Studio discovery smoke test against the deployed MCP endpoints.
-8. Provision production nurse identities and distribute judge credentials outside the repository.
+1. Continue Task 5 remaining polish (tokenized-upload persistence, Singpass sandbox decision, broader journey matrix) while Task 6 nurse Today workflow proceeds in parallel.
+2. Complete remaining Tasks 6–8 (nurse task flow, CRUD, simulator) — in progress by team.
+3. Apply `supabase/migrations/20260812100000_document_jobs_and_worker_rpcs.sql` to the hosted Supabase project.
+4. Start the client-neutral MCP / nurse assistant UI only after the protected operational workflows are stable; use OpenAI during development and run the Copilot Studio compatibility check after deployment.
+5. Deploy Railway/Vercel after the backend release gate passes locally and against the synthetic Supabase project; then allowlist origins and run `/healthz`.
+6. Provision production nurse identities and distribute judge credentials outside the repository as part of Task 11.
 
 ## Open questions
 

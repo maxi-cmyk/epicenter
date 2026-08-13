@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from statistics import median
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.data.supabase_client import SupabaseDataApi, SupabaseDataError
 from app.domain.models import (
@@ -14,21 +14,50 @@ from app.domain.models import (
     DocumentProcessingRequest,
     KioskCheckInRequest,
     Metric,
+    MockPaymentRequest,
+    OnboardingAdvanceRequest,
+    OnboardingStep,
+    PatientAppointmentSummary,
+    PatientCoverageStatus,
     PatientCreateRequest,
     PatientDeleteRequest,
+    PatientHome,
     PatientList,
+    PatientNextAction,
+    PatientNotificationBanner,
+    PatientOnboardingState,
+    PatientPaymentStatus,
+    PatientPaymentSummary,
+    PatientQuestionnaire,
+    PatientQuestionnaireStatus,
+    PatientQueueStatus,
     PatientRecord,
     PatientSubmissionOutcome,
     PatientUpdateRequest,
+    PatientVisitHistory,
+    PatientVisitRecord,
     PreArrivalSubmissionRequest,
     PreArrivalSubmissionResult,
+    PriorCoverageSummary,
     QueueTicket,
+    QuestionnaireSaveRequest,
     RecommendationDecisionRequest,
     RegistrationValidationRequest,
     RegistrationValidationResult,
     ReviewCase,
     SimulatorSnapshot,
+    SingpassProfileField,
     TicketTransitionRequest,
+    UploadLinkSession,
+    VisitPhase,
+)
+from app.services.questionnaire_catalog import (
+    build_general_health_fields,
+    build_general_health_prefill,
+    missing_required_fields,
+    singpass_dummy_fields,
+    singpass_field_templates,
+    singpass_sex_value,
 )
 
 
@@ -46,6 +75,47 @@ class OperationsRepository(Protocol):
     def submit_prearrival(
         self, request: PreArrivalSubmissionRequest, actor: str, patient_id: int | None = None
     ) -> PreArrivalSubmissionResult: ...
+
+    def submit_onboarding_coverage(
+        self,
+        *,
+        file_name: str,
+        actor: str,
+        patient_id: int | None,
+        idempotency_key: str,
+    ) -> PreArrivalSubmissionResult: ...
+
+    def get_onboarding_state(self, subject: str, patient_id: int | None = None) -> PatientOnboardingState: ...
+
+    def advance_onboarding(
+        self, request: OnboardingAdvanceRequest, subject: str, patient_id: int | None = None
+    ) -> PatientOnboardingState: ...
+
+    def get_patient_home(self, patient_id: int | None = None) -> PatientHome: ...
+
+    def get_prior_coverage(
+        self, appointment_id: str, patient_id: int | None = None, *, first_visit: bool = False
+    ) -> PriorCoverageSummary: ...
+
+    def get_patient_queue(self, patient_id: int | None = None) -> PatientQueueStatus: ...
+
+    def get_patient_payment(self, patient_id: int | None = None) -> PatientPaymentSummary: ...
+
+    def submit_mock_payment(
+        self, request: MockPaymentRequest, actor: str, patient_id: int | None = None
+    ) -> PatientPaymentSummary: ...
+
+    def get_patient_records(self, patient_id: int | None = None) -> PatientVisitHistory: ...
+
+    def get_patient_questionnaire(
+        self, appointment_id: str, patient_id: int | None = None
+    ) -> PatientQuestionnaire: ...
+
+    def save_patient_questionnaire(
+        self, request: QuestionnaireSaveRequest, actor: str, patient_id: int | None = None
+    ) -> PatientQuestionnaire: ...
+
+    def resolve_upload_link(self, token: str) -> UploadLinkSession: ...
 
     def transition_ticket(self, ticket_id: str, request: TicketTransitionRequest, actor: str) -> QueueTicket: ...
 
@@ -134,10 +204,250 @@ def _patient_from_row(row: dict[str, object]) -> PatientRecord:
     )
 
 
+def _parse_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    text = str(value).replace("Z", "+00:00")
+    return datetime.fromisoformat(text)
+
+
+def _parse_date(value: object) -> date:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    return date.fromisoformat(str(value)[:10])
+
+
+def _patient_home_from_row(row: dict[str, Any]) -> PatientHome:
+    appointment_raw = row.get("appointment")
+    appointment = None
+    if isinstance(appointment_raw, dict):
+        scheduled = _parse_datetime(appointment_raw.get("scheduled_at"))
+        if scheduled is not None:
+            appointment = PatientAppointmentSummary(
+                appointment_id=str(appointment_raw.get("appointment_id") or ""),
+                scheduled_at=scheduled,
+                clinic_name=str(appointment_raw.get("clinic_name") or ""),
+                location=str(appointment_raw.get("location") or ""),
+                appointment_type=str(appointment_raw.get("appointment_type") or ""),
+                questionnaire_type=str(appointment_raw.get("questionnaire_type") or "general_health"),
+            )
+    notification_raw = row.get("notification")
+    notification = None
+    if isinstance(notification_raw, dict):
+        notification = PatientNotificationBanner(
+            category=str(notification_raw.get("category") or ""),
+            message=str(notification_raw.get("message") or ""),
+            next_action=str(notification_raw.get("next_action") or ""),
+        )
+    outcome_raw = row.get("outcome")
+    return PatientHome(
+        synthetic=bool(row.get("synthetic", True)),
+        patient_display_name=str(row.get("patient_display_name") or ""),
+        appointment=appointment,
+        coverage_status=PatientCoverageStatus(str(row.get("coverage_status") or "not_started")),
+        coverage_summary=str(row.get("coverage_summary") or ""),
+        questionnaire_status=PatientQuestionnaireStatus(str(row.get("questionnaire_status") or "not_started")),
+        queue_summary=str(row.get("queue_summary") or ""),
+        payment_status=PatientPaymentStatus(str(row.get("payment_status") or "not_ready")),
+        payment_summary=str(row.get("payment_summary") or ""),
+        primary_action=PatientNextAction(str(row.get("primary_action") or "none")),
+        primary_action_label=str(row.get("primary_action_label") or ""),
+        primary_action_href=str(row.get("primary_action_href") or "/"),
+        outcome=PatientSubmissionOutcome(str(outcome_raw)) if outcome_raw else None,
+        outcome_message=str(row["outcome_message"]) if row.get("outcome_message") else None,
+        notification=notification,
+        recent_visit_summary=str(row["recent_visit_summary"]) if row.get("recent_visit_summary") else None,
+    )
+
+
+def _patient_queue_from_row(row: dict[str, Any]) -> PatientQueueStatus:
+    phase_raw = row.get("visit_phase")
+    updated = _parse_datetime(row.get("updated_at")) or datetime.now(UTC)
+    patients_ahead = row.get("patients_ahead")
+    return PatientQueueStatus(
+        synthetic=bool(row.get("synthetic", True)),
+        available=bool(row.get("available")),
+        ticket_id=str(row["ticket_id"]) if row.get("ticket_id") else None,
+        visit_phase=VisitPhase(str(phase_raw)) if phase_raw else None,
+        status_label=str(row.get("status_label") or ""),
+        status_detail=str(row.get("status_detail") or ""),
+        counter_label=str(row["counter_label"]) if row.get("counter_label") else None,
+        patients_ahead=int(patients_ahead) if patients_ahead is not None else None,
+        updated_at=updated,
+        stale=bool(row.get("stale", False)),
+        payment_ready=bool(row.get("payment_ready", False)),
+    )
+
+
+def _patient_payment_from_row(row: dict[str, Any]) -> PatientPaymentSummary:
+    return PatientPaymentSummary(
+        synthetic=bool(row.get("synthetic", True)),
+        mocked=bool(row.get("mocked", True)),
+        appointment_id=str(row["appointment_id"]) if row.get("appointment_id") else None,
+        package_label=str(row.get("package_label") or ""),
+        amount_covered=str(row.get("amount_covered") or ""),
+        amount_patient_payable=str(row.get("amount_patient_payable") or ""),
+        status=PatientPaymentStatus(str(row.get("status") or "not_ready")),
+        status_detail=str(row.get("status_detail") or ""),
+        receipt_reference=str(row["receipt_reference"]) if row.get("receipt_reference") else None,
+        paid_at=_parse_datetime(row.get("paid_at")),
+        failure_reason=str(row["failure_reason"]) if row.get("failure_reason") else None,
+        version=int(row.get("version") or 1),
+    )
+
+
+def _patient_records_from_row(row: dict[str, Any]) -> PatientVisitHistory:
+    visits_raw = row.get("visits")
+    visits: list[PatientVisitRecord] = []
+    if isinstance(visits_raw, list):
+        for item in visits_raw:
+            if not isinstance(item, dict):
+                continue
+            outcome_raw = item.get("outcome")
+            visits.append(
+                PatientVisitRecord(
+                    appointment_id=str(item.get("appointment_id") or ""),
+                    visited_on=_parse_date(item.get("visited_on")),
+                    visit_label=str(item.get("visit_label") or ""),
+                    package_label=str(item["package_label"]) if item.get("package_label") else None,
+                    coverage_label=str(item["coverage_label"]) if item.get("coverage_label") else None,
+                    questionnaire_summary=(
+                        str(item["questionnaire_summary"]) if item.get("questionnaire_summary") else None
+                    ),
+                    outcome=PatientSubmissionOutcome(str(outcome_raw)) if outcome_raw else None,
+                )
+            )
+    return PatientVisitHistory(synthetic=bool(row.get("synthetic", True)), visits=visits)
+
+
+def _onboarding_from_row(row: dict[str, object], *, allow_manual_singpass: bool = False) -> PatientOnboardingState:
+    authenticated = bool(row.get("singpass_authenticated"))
+    profile = row.get("singpass_profile")
+    fields: list[SingpassProfileField] = []
+    if isinstance(profile, list) and profile:
+        for item in profile:
+            if not isinstance(item, dict):
+                continue
+            editable = bool(item.get("editable", False))
+            if allow_manual_singpass and authenticated and not row.get("completed"):
+                # Keep the confirm step editable until the patient leaves Singpass.
+                current_step = str(row.get("current_step") or "singpass")
+                editable = editable or current_step == "singpass"
+            fields.append(
+                SingpassProfileField(
+                    field_id=str(item.get("field_id") or ""),
+                    label=str(item.get("label") or ""),
+                    value=str(item.get("value") or "") if authenticated else "",
+                    source=str(
+                        item.get("source")
+                        or (
+                            "Patient-provided (Singpass adapter offline)"
+                            if allow_manual_singpass
+                            else "Singpass / Myinfo (synthetic)"
+                        )
+                    ),
+                    editable=editable,
+                )
+            )
+    if not fields:
+        if allow_manual_singpass:
+            fields = [
+                SingpassProfileField(
+                    field_id=str(item["field_id"]),
+                    label=str(item["label"]),
+                    value=str(item["value"]) if authenticated else "",
+                    source=str(item["source"]),
+                    editable=bool(item["editable"]) if authenticated else False,
+                )
+                for item in singpass_field_templates(editable=True)
+            ]
+        else:
+            fields = [
+                SingpassProfileField(
+                    field_id=item["field_id"],
+                    label=item["label"],
+                    value=item["value"] if authenticated else "",
+                )
+                for item in singpass_dummy_fields()
+            ]
+    completed = bool(row.get("completed"))
+    appointment_id = str(row.get("appointment_id") or "")
+    return PatientOnboardingState(
+        completed=completed,
+        current_step=OnboardingStep(str(row.get("current_step") or "singpass")),
+        appointment_id=appointment_id or "pending-booking",
+        singpass_authenticated=authenticated,
+        singpass_fields=fields,
+        insurance_completed=bool(row.get("insurance_completed")),
+        questionnaire_completed=bool(row.get("questionnaire_completed")),
+        next_href="/" if completed else "/onboarding",
+    )
+
+
+def _answers_from_payload(raw: object) -> dict[str, str | None]:
+    if not isinstance(raw, dict):
+        return {}
+    answers: dict[str, str | None] = {}
+    for key, value in raw.items():
+        if value is None:
+            answers[str(key)] = None
+        else:
+            answers[str(key)] = str(value)
+    return answers
+
+
+def _questionnaire_from_row(
+    row: dict[str, object],
+    *,
+    singpass_profile: list[dict[str, object]] | None = None,
+    use_synthetic_singpass: bool = True,
+) -> PatientQuestionnaire:
+    answers = _answers_from_payload(row.get("answers"))
+    if singpass_profile is not None:
+        profile: list[dict[str, object]] | None = singpass_profile
+    elif use_synthetic_singpass:
+        profile = [dict(item) for item in singpass_dummy_fields()]
+    else:
+        profile = []
+    if "gender" not in answers or not answers.get("gender"):
+        sex = singpass_sex_value(profile)
+        if sex:
+            answers = {**answers, "gender": sex}
+    status_raw = str(row.get("status") or "draft")
+    status = (
+        PatientQuestionnaireStatus.SUBMITTED
+        if status_raw == "submitted"
+        else PatientQuestionnaireStatus.DRAFT
+        if status_raw == "draft"
+        else PatientQuestionnaireStatus.NOT_STARTED
+    )
+    return PatientQuestionnaire(
+        appointment_id=str(row["appointment_id"]),
+        questionnaire_type="general_health",
+        title="General Health Screening Questionnaire",
+        status=status,
+        prefill=build_general_health_prefill(profile),
+        fields=build_general_health_fields(answers),
+        declaration_acknowledged=bool(row.get("declaration_acknowledged")),
+        version=int(row.get("version") or 1),
+    )
+
+
 class SupabaseOperationsRepository:
-    def __init__(self, api: SupabaseDataApi, *, clinic_id: str = "clinic_harbourfront") -> None:
+    def __init__(
+        self,
+        api: SupabaseDataApi,
+        *,
+        clinic_id: str = "clinic_harbourfront",
+        use_synthetic_singpass: bool = True,
+    ) -> None:
         self.api = api
         self.clinic_id = clinic_id
+        self.use_synthetic_singpass = use_synthetic_singpass
 
     def snapshot(self) -> DashboardSnapshot:
         generated_at = datetime.now(UTC)
@@ -508,3 +818,320 @@ class SupabaseOperationsRepository:
             limit=limit,
         )
         return [AuditRecord(**row) for row in rows]
+
+    def get_patient_home(self, patient_id: int | None = None) -> PatientHome:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for home.", code="PT422", status_code=422)
+        row = self.api.rpc("epicenter_get_patient_home", {"p_patient_id": patient_id})
+        return _patient_home_from_row(row)
+
+    def get_onboarding_state(self, subject: str, patient_id: int | None = None) -> PatientOnboardingState:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for onboarding.", code="PT422", status_code=422)
+        try:
+            row = self.api.rpc(
+                "epicenter_get_onboarding",
+                {
+                    "p_clerk_user_id": subject,
+                    "p_patient_id": patient_id,
+                    "p_appointment_reference": "",
+                },
+            )
+        except SupabaseDataError as exc:
+            # Demo patient ids shifted after seeding; rebind stale onboarding rows once.
+            if "onboarding_patient_mismatch" not in str(exc):
+                raise
+            updated = self.api.update(
+                "patient_onboarding_states",
+                {"patient_id": patient_id},
+                filters={"clerk_user_id": f"eq.{subject}"},
+            )
+            if not updated:
+                raise
+            row = self.api.rpc(
+                "epicenter_get_onboarding",
+                {
+                    "p_clerk_user_id": subject,
+                    "p_patient_id": patient_id,
+                    "p_appointment_reference": "",
+                },
+            )
+        return self._finalize_onboarding_row(row, subject=subject, patient_id=patient_id)
+
+    def _resolve_onboarding_appointment(
+        self, appointment_id: str, *, subject: str, patient_id: int
+    ) -> str:
+        normalized = (appointment_id or "").strip()
+        if not normalized or normalized in {"pending-booking", "PENDING"}:
+            return "pending-booking"
+        owned = self.api.select(
+            "appointments",
+            "id",
+            filters={
+                "appointment_reference": f"eq.{normalized}",
+                "patient_id": f"eq.{patient_id}",
+                "deleted_at": "is.null",
+            },
+            limit=1,
+        )
+        if owned:
+            return normalized
+        # Personal accounts often still carry the old seeded APT-DEMO-014 default.
+        self.api.update(
+            "patient_onboarding_states",
+            {"appointment_reference": "pending-booking"},
+            filters={"clerk_user_id": f"eq.{subject}"},
+        )
+        return "pending-booking"
+
+    def _finalize_onboarding_row(
+        self, row: dict[str, object], *, subject: str, patient_id: int
+    ) -> PatientOnboardingState:
+        state = _onboarding_from_row(row, allow_manual_singpass=not self.use_synthetic_singpass)
+        resolved_appointment = self._resolve_onboarding_appointment(
+            state.appointment_id, subject=subject, patient_id=patient_id
+        )
+        if resolved_appointment != state.appointment_id:
+            state = state.model_copy(update={"appointment_id": resolved_appointment})
+        if state.completed or not (state.singpass_authenticated and state.insurance_completed):
+            return state
+        responses = self.api.select(
+            "appointment_questionnaire_responses",
+            "status",
+            filters={"patient_id": f"eq.{patient_id}", "status": "eq.submitted"},
+            limit=1,
+        )
+        if not responses:
+            return state
+        updated = self.api.update(
+            "patient_onboarding_states",
+            {
+                "questionnaire_completed": True,
+                "current_step": "complete",
+                "completed": True,
+            },
+            filters={"clerk_user_id": f"eq.{subject}"},
+        )
+        if updated:
+            healed = _onboarding_from_row(updated[0], allow_manual_singpass=not self.use_synthetic_singpass)
+            return healed.model_copy(update={"appointment_id": resolved_appointment})
+        return state
+
+    def advance_onboarding(
+        self, request: OnboardingAdvanceRequest, subject: str, patient_id: int | None = None
+    ) -> PatientOnboardingState:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for onboarding.", code="PT422", status_code=422)
+        if request.singpass_fields is not None:
+            profile: list[dict[str, object]] = [
+                {
+                    "field_id": item.field_id,
+                    "label": item.label,
+                    "value": item.value,
+                    "source": item.source,
+                    "editable": item.editable,
+                }
+                for item in request.singpass_fields
+            ]
+        elif self.use_synthetic_singpass:
+            profile = [
+                {
+                    "field_id": item["field_id"],
+                    "label": item["label"],
+                    "value": item["value"],
+                    "source": "Singpass / Myinfo (synthetic)",
+                    "editable": False,
+                }
+                for item in singpass_dummy_fields()
+            ]
+        else:
+            profile = list(singpass_field_templates(editable=True))
+        row = self.api.rpc(
+            "epicenter_advance_onboarding",
+            {
+                "p_clerk_user_id": subject,
+                "p_patient_id": patient_id,
+                "p_step": request.step.value,
+                "p_singpass_authenticated": request.singpass_authenticated,
+                "p_insurance_completed": request.insurance_completed,
+                "p_questionnaire_completed": request.questionnaire_completed,
+                "p_singpass_profile": profile,
+                "p_appointment_reference": "",
+                "p_actor_reference": subject,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        if request.step == OnboardingStep.SINGPASS and request.singpass_fields:
+            self._sync_patient_from_singpass(patient_id, request.singpass_fields)
+        return self._finalize_onboarding_row(row, subject=subject, patient_id=patient_id)
+
+    def _sync_patient_from_singpass(self, patient_id: int, fields: list[SingpassProfileField]) -> None:
+        values = {item.field_id: item.value.strip() for item in fields if item.value and item.value.strip()}
+        if not values:
+            return
+        payload: dict[str, object] = {"is_synthetic": False}
+        if values.get("full_name"):
+            payload["full_name"] = values["full_name"]
+        if values.get("email"):
+            payload["email"] = values["email"]
+        if values.get("contact_mobile"):
+            payload["contact_mobile"] = values["contact_mobile"]
+        if values.get("address"):
+            payload["address"] = values["address"]
+        if values.get("postal_code"):
+            payload["postal_code"] = values["postal_code"]
+        if values.get("sex"):
+            payload["sex"] = values["sex"]
+        if values.get("nationality"):
+            payload["nationality"] = values["nationality"]
+        if values.get("id_masked"):
+            payload["identifier_masked"] = values["id_masked"]
+        if values.get("date_of_birth"):
+            raw = values["date_of_birth"]
+            for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                try:
+                    payload["date_of_birth"] = datetime.strptime(raw, fmt).date().isoformat()
+                    break
+                except ValueError:
+                    continue
+        self.api.update("patients", payload, filters={"id": f"eq.{patient_id}"})
+
+    def submit_onboarding_coverage(
+        self,
+        *,
+        file_name: str,
+        actor: str,
+        patient_id: int | None,
+        idempotency_key: str,
+    ) -> PreArrivalSubmissionResult:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for coverage upload.", code="PT422", status_code=422)
+        row = self.api.rpc(
+            "epicenter_submit_onboarding_coverage",
+            {
+                "p_patient_id": patient_id,
+                "p_file_name": file_name,
+                "p_clinic_id": self.clinic_id,
+                "p_actor_reference": actor,
+                "p_idempotency_key": idempotency_key,
+            },
+        )
+        return PreArrivalSubmissionResult(
+            processing_reference=str(row.get("processing_reference") or row.get("id") or ""),
+            outcome=PatientSubmissionOutcome(str(row.get("outcome") or "under_review")),
+            message="Coverage was saved to your profile for staff review. No appointment is required yet.",
+            next_action=str(
+                row.get("patient_next_action")
+                or "Continue onboarding. You can book an appointment after these steps."
+            ),
+        )
+
+    def get_prior_coverage(
+        self, appointment_id: str, patient_id: int | None = None, *, first_visit: bool = False
+    ) -> PriorCoverageSummary:
+        from app.data.demo_repository import demo_repository
+
+        return demo_repository.get_prior_coverage(appointment_id, patient_id, first_visit=first_visit)
+
+    def get_patient_queue(self, patient_id: int | None = None) -> PatientQueueStatus:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for queue.", code="PT422", status_code=422)
+        row = self.api.rpc("epicenter_get_patient_queue", {"p_patient_id": patient_id})
+        return _patient_queue_from_row(row)
+
+    def get_patient_payment(self, patient_id: int | None = None) -> PatientPaymentSummary:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for payment.", code="PT422", status_code=422)
+        row = self.api.rpc("epicenter_get_patient_payment", {"p_patient_id": patient_id})
+        return _patient_payment_from_row(row)
+
+    def submit_mock_payment(
+        self, request: MockPaymentRequest, actor: str, patient_id: int | None = None
+    ) -> PatientPaymentSummary:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for payment.", code="PT422", status_code=422)
+        row = self.api.rpc(
+            "epicenter_submit_mock_payment",
+            {
+                "p_patient_id": patient_id,
+                "p_appointment_reference": request.appointment_id,
+                "p_expected_version": request.expected_version,
+                "p_idempotency_key": request.idempotency_key,
+                "p_actor_reference": actor,
+            },
+        )
+        return _patient_payment_from_row(row)
+
+    def get_patient_records(self, patient_id: int | None = None) -> PatientVisitHistory:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for records.", code="PT422", status_code=422)
+        row = self.api.rpc("epicenter_get_patient_records", {"p_patient_id": patient_id})
+        return _patient_records_from_row(row)
+
+    def _singpass_profile_for_patient(self, patient_id: int) -> list[dict[str, object]]:
+        rows = self.api.select(
+            "patient_onboarding_states",
+            "singpass_profile",
+            filters={"patient_id": f"eq.{patient_id}"},
+            order="updated_at.desc",
+            limit=1,
+        )
+        if not rows:
+            return []
+        profile = rows[0].get("singpass_profile")
+        if not isinstance(profile, list):
+            return []
+        return [item for item in profile if isinstance(item, dict)]
+
+    def get_patient_questionnaire(
+        self, appointment_id: str, patient_id: int | None = None
+    ) -> PatientQuestionnaire:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for questionnaire.", code="PT422", status_code=422)
+        row = self.api.rpc(
+            "epicenter_get_questionnaire",
+            {
+                "p_appointment_reference": appointment_id,
+                "p_patient_id": patient_id,
+            },
+        )
+        return _questionnaire_from_row(
+            row,
+            singpass_profile=self._singpass_profile_for_patient(patient_id),
+            use_synthetic_singpass=self.use_synthetic_singpass,
+        )
+
+    def save_patient_questionnaire(
+        self, request: QuestionnaireSaveRequest, actor: str, patient_id: int | None = None
+    ) -> PatientQuestionnaire:
+        if patient_id is None:
+            raise SupabaseDataError("Patient identity is required for questionnaire.", code="PT422", status_code=422)
+        answers = {field_id: value for field_id, value in request.answers.items() if value is not None}
+        if request.submit:
+            fields = build_general_health_fields(answers)
+            missing = missing_required_fields(fields, answers)
+            if missing or not request.declaration_acknowledged:
+                raise ValueError("Complete the required visible answers and declaration before submitting.")
+        row = self.api.rpc(
+            "epicenter_save_questionnaire",
+            {
+                "p_appointment_reference": request.appointment_id,
+                "p_patient_id": patient_id,
+                "p_answers": answers,
+                "p_declaration_acknowledged": request.declaration_acknowledged,
+                "p_submit": request.submit,
+                "p_expected_version": request.expected_version,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _questionnaire_from_row(
+            row,
+            singpass_profile=self._singpass_profile_for_patient(patient_id),
+            use_synthetic_singpass=self.use_synthetic_singpass,
+        )
+
+    def resolve_upload_link(self, token: str) -> UploadLinkSession:
+        from app.data.demo_repository import demo_repository
+
+        return demo_repository.resolve_upload_link(token)
