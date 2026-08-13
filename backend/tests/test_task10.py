@@ -14,7 +14,7 @@ from app.mcp.protocol import MAX_TOOL_RESULT_CHARS, tool_result
 from app.services.document_classification import classify_document
 
 ROOT = Path(__file__).resolve().parents[2]
-TASK10_MIGRATION = (ROOT / "supabase/migrations/20260813150000_task10_ai_document_governance.sql").read_text()
+TASK10_MIGRATION = (ROOT / "supabase/migrations/20260813150001_task10_ai_document_governance.sql").read_text()
 
 
 def principal(subject: str) -> StaffPrincipal:

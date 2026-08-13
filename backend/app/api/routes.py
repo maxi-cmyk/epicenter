@@ -18,6 +18,7 @@ from app.domain.models import (
     BillingConfirmRequest,
     DashboardSnapshot,
     DocumentConfirmRequest,
+    DocumentUnconfirmRequest,
     DocumentProcessingRequest,
     FormsConfirmRequest,
     IdentityConfirmRequest,
@@ -207,6 +208,26 @@ def confirm_document(
     except SupabaseDataError as exc:
         _raise_repository_error(exc)
     return ActionResult(success=True, message="Document confirmed by staff.", ticket=ticket)
+
+
+@router.post("/tickets/{ticket_id}/documents/{document_id}/unconfirm", response_model=ActionResult)
+def unconfirm_document(
+    ticket_id: str,
+    document_id: str,
+    request: DocumentUnconfirmRequest,
+    repository: Repository,
+    principal: Principal,
+) -> ActionResult:
+    _require_roles(principal, "registration", "operations_admin")
+    try:
+        ticket = repository.unconfirm_document(ticket_id, document_id, request, principal.subject)
+    except (KeyError, StopIteration) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc) or "Ticket not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SupabaseDataError as exc:
+        _raise_repository_error(exc)
+    return ActionResult(success=True, message="Document confirmation undone.", ticket=ticket)
 
 
 @router.post("/tickets/{ticket_id}/package/confirm", response_model=ActionResult)

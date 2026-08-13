@@ -14,6 +14,7 @@ from app.domain.models import (
     Document,
     DocumentCategory,
     DocumentConfirmRequest,
+    DocumentUnconfirmRequest,
     DocumentProcessingRequest,
     FormsConfirmRequest,
     IdentityConfirmRequest,
@@ -903,6 +904,40 @@ class DemoRepository:
             )
             updated_documents = list(current.documents)
             updated_documents[doc_index] = corrected_doc
+            updated = current.model_copy(update={"documents": updated_documents, "version": current.version + 1})
+            self._snapshot.tickets[index] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
+
+    def unconfirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentUnconfirmRequest, actor: str = "synthetic-staff"
+    ) -> QueueTicket:
+        with self._lock:
+            key = ("document_unconfirm", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, QueueTicket):
+                return deepcopy(existing)
+            index = next(index for index, ticket in enumerate(self._snapshot.tickets) if ticket.id == ticket_id)
+            current = self._snapshot.tickets[index]
+            if current.version != request.expected_version:
+                raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
+            doc_index = next(
+                (i for i, doc in enumerate(current.documents) if doc.id == document_id),
+                None,
+            )
+            if doc_index is None:
+                raise KeyError(f"No document {document_id} on file for {ticket_id}")
+            current_doc = current.documents[doc_index]
+            reverted_doc = current_doc.model_copy(
+                update={
+                    "confirmed": False,
+                    "confirmed_by": None,
+                    "confirmed_at": None,
+                    "version": current_doc.version + 1,
+                }
+            )
+            updated_documents = list(current.documents)
+            updated_documents[doc_index] = reverted_doc
             updated = current.model_copy(update={"documents": updated_documents, "version": current.version + 1})
             self._snapshot.tickets[index] = updated
             self._idempotent_results[key] = deepcopy(updated)

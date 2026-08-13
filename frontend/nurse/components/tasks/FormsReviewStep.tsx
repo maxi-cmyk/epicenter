@@ -20,7 +20,7 @@ export function FormsReviewStep({ ticketId }: { ticketId: string }) {
 }
 
 function FormsReviewContent({ ticket, refresh }: { ticket: QueueTicket; refresh: () => Promise<void> }) {
-  const [physicalFormsChecked, setPhysicalFormsChecked] = useState(false);
+  const [physicalFormsChecked, setPhysicalFormsChecked] = useState(ticket.forms_confirmed);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -77,8 +77,11 @@ function FormsReviewContent({ ticket, refresh }: { ticket: QueueTicket; refresh:
         />
         I checked the physical form filling is correct.
       </label>
+      {!physicalFormsChecked ? (
+        <p className={styles.error}>Confirm the physical forms were checked before approving.</p>
+      ) : null}
 
-      <Button disabled={pending || !allElectronicConfirmed} onClick={() => void submit()}>
+      <Button disabled={pending || !allElectronicConfirmed || !physicalFormsChecked} onClick={() => void submit()}>
         {pending ? "Confirming…" : ticket.forms_confirmed ? "Continue" : "Approve forms & continue"}
       </Button>
       {error ? <p className={styles.error}>{error}</p> : null}

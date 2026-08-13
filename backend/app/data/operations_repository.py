@@ -17,6 +17,7 @@ from app.domain.models import (
     DocumentCategory,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
+    DocumentUnconfirmRequest,
     FormsConfirmRequest,
     IdentityConfirmRequest,
     KioskCheckInRequest,
@@ -184,6 +185,10 @@ class OperationsRepository(Protocol):
 
     def confirm_document(
         self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
+    ) -> QueueTicket: ...
+
+    def unconfirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentUnconfirmRequest, actor: str
     ) -> QueueTicket: ...
 
     def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket: ...
@@ -1001,6 +1006,21 @@ class SupabaseOperationsRepository:
                 "p_reference_number": request.reference_number,
                 "p_valid_from": request.valid_from.isoformat() if request.valid_from else None,
                 "p_valid_to": request.valid_to.isoformat() if request.valid_to else None,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _ticket_from_row(row)
+
+    def unconfirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentUnconfirmRequest, actor: str
+    ) -> QueueTicket:
+        row = self.api.rpc(
+            "epicenter_unconfirm_document",
+            {
+                "p_ticket_id": ticket_id,
+                "p_document_id": document_id,
+                "p_expected_version": request.expected_version,
                 "p_actor_reference": actor,
                 "p_idempotency_key": request.idempotency_key,
             },
