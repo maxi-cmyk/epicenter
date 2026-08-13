@@ -48,6 +48,7 @@ export type ReadinessState = components["schemas"]["ReadinessState"];
 export type RecordChecklist = components["schemas"]["RecordChecklist"];
 export type ReviewCase = components["schemas"]["ReviewCase"];
 export type ServiceTarget = components["schemas"]["ServiceTarget"];
+export type SimulatorSnapshot = components["schemas"]["SimulatorSnapshot"];
 export type TpaSubmission = components["schemas"]["TpaSubmission"];
 export type TpaSubmissionConfirmRequest = components["schemas"]["TpaSubmissionConfirmRequest"];
 export type TpaSubmissionStatus = components["schemas"]["TpaSubmissionStatus"];

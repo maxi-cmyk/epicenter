@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton, useUser } from "@clerk/nextjs";
-import { Database, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Database, LayoutDashboard, ShieldCheck, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,6 +19,7 @@ const NAVIGATION: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/database", label: "Database", icon: Database },
   { href: "/audit", label: "Audit trail", icon: ShieldCheck },
+  { href: "/simulator", label: "Simulator", icon: Waypoints },
 ];
 
 export function SideNavigation() {
@@ -45,9 +46,9 @@ function NavigationView({ displayName, role, userButton = false }: { displayName
           <small>Clinic readiness</small>
         </span>
       </Link>
-      <nav aria-label="Primary navigation" className={styles.navigation}>
+      <nav aria-label="Nurse panel" className={styles.navigation}>
         {NAVIGATION.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          const active = href === "/" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link aria-current={active ? "page" : undefined} className={active ? styles.activeLink : styles.navLink} href={href} key={href}>
               <Icon aria-hidden="true" size={19} />

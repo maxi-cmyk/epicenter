@@ -453,6 +453,7 @@ def _patient_queue_from_row(row: dict[str, Any]) -> PatientQueueStatus:
         visit_phase=VisitPhase(str(phase_raw)) if phase_raw else None,
         status_label=str(row.get("status_label") or ""),
         status_detail=str(row.get("status_detail") or ""),
+        queue_number=str(row["queue_number"]) if row.get("queue_number") else None,
         counter_label=str(row["counter_label"]) if row.get("counter_label") else None,
         patients_ahead=int(patients_ahead) if patients_ahead is not None else None,
         updated_at=updated,

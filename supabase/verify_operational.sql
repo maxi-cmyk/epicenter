@@ -26,8 +26,8 @@ begin
   end if;
 
   select count(*) into actual from public.review_cases where resolved_at is null;
-  if actual <> 2 then
-    raise exception 'expected 2 unresolved review cases, found %', actual;
+  if actual <> 3 then
+    raise exception 'expected 3 unresolved review cases, found %', actual;
   end if;
 
   select count(*) into actual from public.simulator_snapshots where active;

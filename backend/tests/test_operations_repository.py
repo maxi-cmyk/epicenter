@@ -30,7 +30,7 @@ class FakeApi:
                     "original_ordering_at": "2026-08-12T09:34:00+00:00",
                     "waiting_minutes": 8,
                     "expected_counter_number": None,
-                    "counter_number": "Kiosk A",
+                    "counter_number": "S2",
                     "processing_stage": "Document extraction",
                     "service_target": "on_track",
                     "staff_confirmed": False,

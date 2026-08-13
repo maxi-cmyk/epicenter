@@ -57,7 +57,7 @@ export function QueueWorkspace() {
     <div className={styles.page}>
       <div className={styles.queueHeader}>
         <PageHeader
-          description="Your queue ticket appears after the clinic books and checks you in."
+          description="Your queue number and counter appear once the clinic assigns them to this visit."
           title="Queue status"
         />
         <Button
@@ -73,17 +73,21 @@ export function QueueWorkspace() {
       {queue ? (
         <section className={styles.panel}>
           <div className={styles.statusHero}>
-            <strong>{queue.ticket_id ?? "No appointment has been made"}</strong>
+            <strong>{queue.queue_number ?? queue.ticket_id ?? "No appointment has been made"}</strong>
             <p>{queue.status_label === "No active ticket" ? "No appointment has been made" : queue.status_label}</p>
           </div>
           <dl className={styles.summaryList}>
             <div>
-              <dt>Status</dt>
-              <dd>{queue.status_detail}</dd>
+              <dt>Queue number</dt>
+              <dd>{queue.queue_number ?? queue.ticket_id ?? "Assigned at check-in"}</dd>
             </div>
             <div>
               <dt>Counter</dt>
               <dd>{queue.counter_label ?? "Assigned at check-in"}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{queue.status_detail}</dd>
             </div>
             <div>
               <dt>Patients ahead</dt>

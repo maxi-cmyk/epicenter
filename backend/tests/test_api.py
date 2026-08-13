@@ -248,6 +248,7 @@ def test_patient_home_exposes_one_upcoming_appointment_and_next_action() -> None
     body = response.json()
     assert body["patient_display_name"] == "Loh Wei Ming"
     assert body["appointment"]["appointment_id"] == "APT-DEMO-014"
+    assert "Counter" in body["queue_summary"]
     assert body["primary_action"] == "confirm_coverage"
     assert "confidence" not in body
     assert "readiness_reason" not in body
@@ -330,6 +331,8 @@ def test_patient_coverage_questionnaire_and_queue_journey() -> None:
     queue = client.get("/api/v1/patient/queue")
     assert queue.status_code == 200
     assert queue.json()["ticket_id"] == "Q-014"
+    assert queue.json()["queue_number"]
+    assert queue.json()["counter_label"]
     assert "needs_review" not in queue.json()["status_detail"].lower() or "staff member" in queue.json()["status_detail"]
 
     payment = client.post(

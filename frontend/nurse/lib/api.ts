@@ -9,6 +9,7 @@ import type {
   PatientRecord,
   PatientUpdateRequest,
   ReadinessState,
+  SimulatorSnapshot,
   VisitPhase,
 } from "@epicenter/shared/contracts";
 import type { AuditQuery } from "@epicenter/shared/ui/AuditPanel";
@@ -255,4 +256,12 @@ export function markPhysicalFormsReceived(ticketId: string, expectedVersion: num
     method: "POST",
     body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
   });
+}
+
+export async function fetchSimulatorSnapshots(): Promise<SimulatorSnapshot[] | null> {
+  try {
+    return await request<SimulatorSnapshot[]>("/simulator/snapshots");
+  } catch {
+    return null;
+  }
 }
