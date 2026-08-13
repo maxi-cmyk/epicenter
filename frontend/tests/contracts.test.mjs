@@ -7,6 +7,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 test("routes stay split into focused workspaces", () => {
   assert.match(read("nurse/app/page.tsx"), /DashboardView/);
   assert.match(read("nurse/app/review/page.tsx"), /redirect\("\/"\)/);
+  assert.match(read("nurse/app/simulator/page.tsx"), /SimulatorWorkspace/);
   assert.match(read("nurse/app/kiosk/page.tsx"), /KioskWorkspace/);
   assert.match(read("patient/app/page.tsx"), /HomeWorkspace/);
   assert.match(read("patient/app/onboarding/page.tsx"), /OnboardingWorkspace/);
@@ -108,10 +109,18 @@ test("the dashboard labels all demo data honestly", () => {
   const navigation = read("nurse/components/layout/SideNavigation.tsx");
   const dashboard = read("nurse/components/dashboard/DashboardView.tsx");
   assert.match(navigation, /Clinic readiness/);
+  assert.match(navigation, /Simulator/);
   assert.match(dashboard, /Demo data only — confirmations are disabled/);
   assert.doesNotMatch(dashboard, /Clinic API connected/);
   assert.ok(dashboard.indexOf("styles.contextBar") < dashboard.indexOf("{loading ?"));
-  assert.match(read("nurse\/lib\/api.ts"), /Reconnect to live clinic data before recording a confirmation/);
+  assert.match(read("nurse/lib/api.ts"), /Reconnect to live clinic data before recording a confirmation/);
+});
+
+test("the patient queue shows the assigned queue number and counter", () => {
+  const queue = read("patient/components/queue/QueueWorkspace.tsx");
+  assert.match(queue, /Queue number/);
+  assert.match(queue, /queue\.queue_number/);
+  assert.match(queue, /queue\.counter_label/);
 });
 
 test("the desktop board elevates exceptions without removing the three visit phases", () => {
@@ -125,6 +134,10 @@ test("the desktop board elevates exceptions without removing the three visit pha
   assert.doesNotMatch(board, /aria-keyshortcuts/);
   assert.match(ticket, /Needs confirmation/);
   assert.match(ticket, /card_finished/);
+  assert.match(ticket, /<dt>Queue<\/dt>/);
+  assert.match(ticket, /<dt>Counter<\/dt>/);
+  assert.match(ticket, /isFastLane/);
+  assert.match(ticket, /intake_type === "booked"/);
   assert.doesNotMatch(ticket, />Docs</);
 });
 
@@ -157,7 +170,7 @@ test("the visual QA auth bypass is development-only", () => {
   assert.match(nurseAuth, /NEXT_PUBLIC_E2E_BYPASS_AUTH/);
   assert.match(patientAuth, /NODE_ENV === "development"/);
   assert.match(patientAuth, /NEXT_PUBLIC_E2E_BYPASS_AUTH/);
-  assert.doesNotMatch(read("nurse\/.env.example"), /E2E_BYPASS/);
+  assert.doesNotMatch(read("nurse/.env.example"), /E2E_BYPASS/);
 });
 
 test("patient signup and nurse provisioning stay separate", () => {

@@ -45,6 +45,7 @@ export type ReadinessState = components["schemas"]["ReadinessState"];
 export type RecordChecklist = components["schemas"]["RecordChecklist"];
 export type ReviewCase = components["schemas"]["ReviewCase"];
 export type ServiceTarget = components["schemas"]["ServiceTarget"];
+export type SimulatorSnapshot = components["schemas"]["SimulatorSnapshot"];
 export type SingpassProfileField = components["schemas"]["SingpassProfileField"];
 export type UploadLinkSession = components["schemas"]["UploadLinkSession"];
 export type VisitPhase = components["schemas"]["VisitPhase"];

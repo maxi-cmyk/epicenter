@@ -85,23 +85,6 @@ class SupabaseDataApi:
             raise SupabaseDataError(f"Insert into {table} returned an invalid response.")
         return result[0]
 
-    def update(
-        self,
-        table: str,
-        payload: dict[str, Any],
-        *,
-        filters: dict[str, str],
-    ) -> list[dict[str, Any]]:
-        """PATCH (update) rows matching filters."""
-        result = self._request(
-            "PATCH",
-            table,
-            params=filters,
-            payload=payload,
-            prefer="return=representation",
-        )
-        return list(result or [])
-
     def patch(
         self,
         table: str,
@@ -110,7 +93,19 @@ class SupabaseDataApi:
         filters: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         """PATCH (update) rows matching filters."""
-        return self.update(table, payload, filters=dict(filters or {}))
+        params = dict(filters or {})
+        result = self._request("PATCH", table, params=params, payload=payload, prefer="return=representation")
+        return list(result or [])
+
+    def update(
+        self,
+        table: str,
+        payload: dict[str, Any],
+        *,
+        filters: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        """Compatibility alias for callers that describe PATCH as update."""
+        return self.patch(table, payload, filters=filters)
 
     def rpc(self, function_name: str, parameters: dict[str, Any]) -> Any:
         """Call a Postgres function via PostgREST. Returns whatever the function returns."""

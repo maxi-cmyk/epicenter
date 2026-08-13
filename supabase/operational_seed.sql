@@ -62,11 +62,11 @@ values
     'Q-014', 'clinic_harbourfront',
     (select id from public.patients where identifier_hash = '4e487c99807bebe1c81bf3cded10ceb92f1c8d3ed0d48cbe822ad578a45854b5'),
     'P-0417', 'Loh Wei Ming', 'appointment_014', 'APT-DEMO-014', 'booked', 'incoming',
-    '2026-08-11 08:00:00+00', true, true, 'pass', 'clean', 'ready',
-    'all_prerequisites_passed', '2026-08-12 10:00:00+00', null,
-    '2026-08-12 10:00:00+00', 0, 'Q-014', 'Counter 2', null, null,
-    'Ready before arrival', 'on_track', true, false, '2026-08-12 09:10:00+00', null,
-    'accepted', 'administrative_checks_complete', 'Keep your queue ticket for arrival.', '2026-08-12 09:10:00+00'
+    '2026-08-11 08:00:00+00', true, true, 'pass', 'ambiguous', 'needs_review',
+    'ambiguous_match', '2026-08-12 10:00:00+00', null,
+    '2026-08-12 10:00:00+00', 0, 'Q-014', 'S2', null, null,
+    'Insurance eligibility review', 'approaching', false, false, null, null,
+    'under_review', 'insurance_review_required', 'Clinic staff will confirm your insurance cover at registration.', null
   ),
   (
     'Q-015', 'clinic_harbourfront',
@@ -74,7 +74,7 @@ values
     'P-0398', 'Tan Kai Xuan', 'appointment_015', 'APT-DEMO-015', 'booked', 'incoming',
     '2026-08-11 08:05:00+00', false, false, 'needs_review', 'no_match', 'needs_review',
     'missing_document', '2026-08-12 10:15:00+00', null,
-    '2026-08-12 10:15:00+00', 0, 'Q-015', 'Review 1', null, null,
+    '2026-08-12 10:15:00+00', 0, 'Q-015', 'S1', null, null,
     'Awaiting coverage document', 'approaching', false, false, null, null,
     'under_review', 'coverage_document_required', 'Upload a current coverage document.', null
   ),
@@ -82,7 +82,7 @@ values
     'Q-017', 'clinic_harbourfront', null, 'P-0442', 'Mei Chen', null, null,
     'walk_in', 'ongoing', null, true, true, 'needs_review', 'no_match', 'processing',
     'processing', null, '2026-08-12 09:34:00+00', '2026-08-12 09:34:00+00',
-    8, null, null, 'Q-017', 'Kiosk A', 'Document extraction', 'on_track', false, false, null, null,
+    8, null, null, 'Q-017', 'S2', 'Document extraction', 'on_track', false, false, null, null,
     'under_review', 'clinic_review_required', 'Continue with the nurse-supervised check-in.', '2026-08-12 09:34:00+00'
   ),
   (
@@ -91,14 +91,14 @@ values
     'P-0451', 'Amir Loh', null, null, 'walk_in', 'ongoing', null, true, false,
     'needs_review', 'no_match', 'needs_review', 'expired_document', null,
     '2026-08-12 09:24:00+00', '2026-08-12 09:24:00+00', 18, null, null, 'Q-018',
-    'Review 2', 'Voucher review', 'approaching', false, false, null, null,
+    'S3', 'Voucher review', 'approaching', false, false, null, null,
     'under_review', 'coverage_document_expired', 'Clinic staff are reviewing your coverage.', '2026-08-12 09:24:00+00'
   ),
   (
     'Q-019', 'clinic_harbourfront', null, 'P-0458', 'Priya Nair', null, null,
     'walk_in', 'ongoing', null, true, true, 'pass', 'clean', 'ready',
     'all_prerequisites_passed', null, '2026-08-12 09:37:00+00',
-    '2026-08-12 09:37:00+00', 5, null, null, 'Q-019', 'Counter 3',
+    '2026-08-12 09:37:00+00', 5, null, null, 'Q-019', 'S4',
     'Waiting to be called', 'on_track', true, false, '2026-08-12 09:39:00+00', null,
     'accepted', 'administrative_checks_complete', 'Wait for your counter to be called.', '2026-08-12 09:39:00+00'
   ),
@@ -106,8 +106,8 @@ values
     'Q-011', 'clinic_harbourfront', null, 'P-0371', 'Siti Rahman', 'appointment_011',
     'APT-DEMO-011', 'booked', 'finished', '2026-08-10 08:00:00+00', true, true,
     'pass', 'clean', 'ready', 'completed', '2026-08-12 08:30:00+00',
-    '2026-08-12 08:22:00+00', '2026-08-12 08:30:00+00', 0, 'Q-011', 'Counter 1',
-    'Q-011', 'Counter 1', 'Completed 09:08', 'on_track', true, false,
+    '2026-08-12 08:22:00+00', '2026-08-12 08:30:00+00', 0, 'Q-011', 'F1',
+    'Q-011', 'F1', 'Completed 09:08', 'on_track', true, false,
     '2026-08-12 08:25:00+00', '2026-08-12 09:08:00+00',
     'accepted', 'visit_completed', 'No further action is needed.', '2026-08-12 08:25:00+00'
   )
@@ -169,6 +169,10 @@ insert into public.review_cases (
   evidence_summary, next_action
 )
 values
+  ('R-014', 'Q-014', 'ambiguous_match', 'Insurance eligibility needs confirmation',
+    'Meridian_referral.pdf',
+    'WELL2 booked · Meridian referral letter on file — cover does not match automatically',
+    'Confirm insurer cover at the slow counter'),
   ('R-015', 'Q-015', 'missing_document', 'Coverage document missing', null,
     'Reminder sent 08:16 · no upload received', 'Contact patient'),
   ('R-018', 'Q-018', 'expired_document', 'Voucher validity expired', 'Bluepeak_voucher.pdf',
@@ -289,9 +293,9 @@ insert into public.eligibility_matches (
 )
 values (
     'MATCH-014', 'DOC-014', 'appointment_014', 'RULE-MRDEB-REFERRAL-V1',
-    'clean',
-    '{"rule_version":"demo-v1","issuer_code":"MRDEB","document_type":"medical_referral_letter"}',
-    '[]', 'confirmed', 'synthetic-seed', '2026-08-12 09:10:00+00'
+    'ambiguous',
+    '{"rule_version":"demo-v1","issuer_code":"MRDEB","document_type":"medical_referral_letter","booked_package":"WELL2"}',
+    '["ambiguous_match"]', 'pending_review', null, null
   )
 on conflict (id) do update set
   matched_rule_id = excluded.matched_rule_id,
@@ -399,9 +403,9 @@ insert into public.counter_allocations (
   assigned_staff_id, active, updated_by_staff_id
 )
 values
-  ('counter_1', 'clinic_harbourfront', '2026-08-12', 'Counter 1', 'ready', 'staff_noor', true, 'staff_aisyah'),
-  ('counter_2', 'clinic_harbourfront', '2026-08-12', 'Counter 2', 'ready', 'staff_aisyah', true, 'staff_aisyah'),
-  ('counter_4', 'clinic_harbourfront', '2026-08-12', 'Counter 4', 'review', null, true, 'staff_aisyah')
+  ('counter_1', 'clinic_harbourfront', '2026-08-12', 'F1', 'ready', 'staff_noor', true, 'staff_aisyah'),
+  ('counter_2', 'clinic_harbourfront', '2026-08-12', 'F2', 'ready', 'staff_aisyah', true, 'staff_aisyah'),
+  ('counter_4', 'clinic_harbourfront', '2026-08-12', 'S1', 'review', null, true, 'staff_aisyah')
 on conflict (id) do update set
   workstream = excluded.workstream,
   assigned_staff_id = excluded.assigned_staff_id,
@@ -433,7 +437,7 @@ values
   (
     'A-008', 'clinic_harbourfront', '2026-08-12 08:55:00+00', '2026-08-12 09:10:00+00',
     'Ready arrivals', '{"current_wait_minutes":12,"estimated_staff_minutes":24}',
-    'Counter 2 · Nurse Noor', 'staff_noor', 'Counter 2',
+    'F2 · Nurse Noor', 'staff_noor', 'F2',
     '["Registration-trained","Minimum review coverage retained","Break window clear"]',
     'A short ready-arrival increase can be covered without removing review capacity.',
     '{"expected_wait_minutes":7,"ready_p90_delta_seconds":-240}', 'approved',
@@ -442,9 +446,9 @@ values
   (
     'A-009', 'clinic_harbourfront', '2026-08-12 09:35:00+00', '2026-08-12 09:48:00+00',
     'Assisted review', '{"current_wait_minutes":18,"estimated_staff_minutes":42}',
-    'Counter 4 · Nur Aisyah', 'staff_aisyah', 'Counter 4',
+    'S1 · Nur Aisyah', 'staff_aisyah', 'S1',
     '["Registration-trained","Minimum ready coverage retained","Break window clear","No reassignment in last 30 min"]',
-    'Two review cases are approaching the 20-minute service target while Counter 4 has been idle for 7 minutes.',
+    'Two review cases are approaching the 20-minute service target while S1 has been idle for 7 minutes.',
     '{"expected_wait_minutes":9,"review_p90_delta_seconds":-360}', 'pending', null, null, null
   )
 on conflict (id) do update set

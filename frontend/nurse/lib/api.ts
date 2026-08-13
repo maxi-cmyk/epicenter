@@ -9,6 +9,7 @@ import type {
   PatientRecord,
   PatientUpdateRequest,
   ReadinessState,
+  SimulatorSnapshot,
   VisitPhase,
 } from "@epicenter/shared/contracts";
 import type { AuditQuery } from "@epicenter/shared/ui/AuditPanel";
@@ -198,6 +199,17 @@ export function confirmDocument(
   });
 }
 
+export function unconfirmDocument(ticketId: string, documentId: string, expectedVersion: number) {
+  requireLiveOperationalData();
+  return request<ActionResult>(`/tickets/${ticketId}/documents/${documentId}/unconfirm`, {
+    method: "POST",
+    body: JSON.stringify({
+      expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+    }),
+  });
+}
+
 export function confirmPackage(ticketId: string, expectedVersion: number, correctedPackage?: string) {
   requireLiveOperationalData();
   return request<ActionResult>(`/tickets/${ticketId}/package/confirm`, {
@@ -255,4 +267,12 @@ export function markPhysicalFormsReceived(ticketId: string, expectedVersion: num
     method: "POST",
     body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
   });
+}
+
+export async function fetchSimulatorSnapshots(): Promise<SimulatorSnapshot[] | null> {
+  try {
+    return await request<SimulatorSnapshot[]>("/simulator/snapshots");
+  } catch {
+    return null;
+  }
 }

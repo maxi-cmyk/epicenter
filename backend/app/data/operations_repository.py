@@ -17,6 +17,7 @@ from app.domain.models import (
     DocumentCategory,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
+    DocumentUnconfirmRequest,
     FormsConfirmRequest,
     IdentityConfirmRequest,
     KioskCheckInRequest,
@@ -170,6 +171,10 @@ class OperationsRepository(Protocol):
 
     def confirm_document(
         self, ticket_id: str, document_id: str, request: DocumentConfirmRequest, actor: str
+    ) -> QueueTicket: ...
+
+    def unconfirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentUnconfirmRequest, actor: str
     ) -> QueueTicket: ...
 
     def confirm_package(self, ticket_id: str, request: PackageConfirmRequest, actor: str) -> QueueTicket: ...
@@ -439,6 +444,7 @@ def _patient_queue_from_row(row: dict[str, Any]) -> PatientQueueStatus:
         visit_phase=VisitPhase(str(phase_raw)) if phase_raw else None,
         status_label=str(row.get("status_label") or ""),
         status_detail=str(row.get("status_detail") or ""),
+        queue_number=str(row["queue_number"]) if row.get("queue_number") else None,
         counter_label=str(row["counter_label"]) if row.get("counter_label") else None,
         patients_ahead=int(patients_ahead) if patients_ahead is not None else None,
         updated_at=updated,
@@ -966,6 +972,21 @@ class SupabaseOperationsRepository:
                 "p_reference_number": request.reference_number,
                 "p_valid_from": request.valid_from.isoformat() if request.valid_from else None,
                 "p_valid_to": request.valid_to.isoformat() if request.valid_to else None,
+                "p_actor_reference": actor,
+                "p_idempotency_key": request.idempotency_key,
+            },
+        )
+        return _ticket_from_row(row)
+
+    def unconfirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentUnconfirmRequest, actor: str
+    ) -> QueueTicket:
+        row = self.api.rpc(
+            "epicenter_unconfirm_document",
+            {
+                "p_ticket_id": ticket_id,
+                "p_document_id": document_id,
+                "p_expected_version": request.expected_version,
                 "p_actor_reference": actor,
                 "p_idempotency_key": request.idempotency_key,
             },

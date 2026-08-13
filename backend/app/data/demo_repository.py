@@ -15,6 +15,7 @@ from app.domain.models import (
     DocumentCategory,
     DocumentConfirmRequest,
     DocumentProcessingRequest,
+    DocumentUnconfirmRequest,
     FormsConfirmRequest,
     IdentityConfirmRequest,
     IntakeType,
@@ -74,6 +75,10 @@ def _at(hour: int, minute: int) -> datetime:
     return datetime(2026, 8, 12, hour, minute, tzinfo=UTC)
 
 
+def _ticket_assignment(ticket: QueueTicket) -> tuple[str, str | None]:
+    return ticket.queue_number or ticket.id, ticket.actual_room or ticket.expected_room
+
+
 def _checklist(
     *,
     patient: PatientSummary,
@@ -121,14 +126,14 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 patient_name="Loh Wei Ming",
                 intake_type=IntakeType.BOOKED,
                 visit_phase=VisitPhase.INCOMING,
-                readiness_state=ReadinessState.READY,
-                readiness_reason="all_prerequisites_passed",
+                readiness_state=ReadinessState.NEEDS_REVIEW,
+                readiness_reason="ambiguous_match",
                 scheduled_at=_at(10, 0),
                 original_ordering_at=_at(10, 0),
                 waiting_minutes=0,
-                expected_room="Room 2 · Dr Farah",
-                processing_stage="Ready before arrival",
-                staff_confirmed=True,
+                expected_room="S2",
+                processing_stage="Insurance eligibility review",
+                service_target=ServiceTarget.APPROACHING,
                 is_checkup=True,
                 matched_package="WELL2 — Comprehensive Screen",
                 billing_code="WELL2-STD",
@@ -143,9 +148,9 @@ def build_demo_snapshot() -> DashboardSnapshot:
                         address="12 Function Place",
                     ),
                     coverage_status=ChecklistStatus.PASS,
-                    coverage_detail="Meridian (MRDEB) · voucher",
-                    eligibility_status=ChecklistStatus.PASS,
-                    eligibility_detail="WELL2 — Comprehensive Screen",
+                    coverage_detail="Meridian (MRDEB) · referral letter",
+                    eligibility_status=ChecklistStatus.PENDING,
+                    eligibility_detail="WELL2 booked · Meridian referral on file",
                     general_status=ChecklistStatus.PASS,
                     general_detail="Verified",
                 ),
@@ -161,7 +166,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 scheduled_at=_at(10, 15),
                 original_ordering_at=_at(10, 15),
                 waiting_minutes=0,
-                expected_room="Review 1",
+                expected_room="S1",
                 processing_stage="Awaiting coverage document",
                 service_target=ServiceTarget.APPROACHING,
                 record_checklist=_checklist(
@@ -191,7 +196,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(9, 34),
                 original_ordering_at=_at(9, 34),
                 waiting_minutes=8,
-                actual_room="Kiosk A",
+                actual_room="S2",
                 processing_stage="Document extraction",
                 record_checklist=_checklist(
                     patient=PatientSummary(
@@ -218,7 +223,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(9, 24),
                 original_ordering_at=_at(9, 24),
                 waiting_minutes=18,
-                actual_room="Review 2",
+                actual_room="S3",
                 processing_stage="Voucher review",
                 service_target=ServiceTarget.APPROACHING,
                 matched_package="Executive screening",
@@ -252,7 +257,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(9, 37),
                 original_ordering_at=_at(9, 37),
                 waiting_minutes=5,
-                actual_room="Room 3 · Dr Wong",
+                actual_room="S4",
                 processing_stage="Waiting to be called",
                 staff_confirmed=True,
                 matched_package="PEE226 — Basic Screen",
@@ -286,7 +291,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 checked_in_at=_at(9, 20),
                 original_ordering_at=_at(9, 20),
                 waiting_minutes=22,
-                actual_room="Room 2 · Dr Farah",
+                actual_room="S1",
                 processing_stage="Consultation in progress",
                 staff_confirmed=True,
                 matched_package="TPA-GP01 — GP Consultation",
@@ -380,7 +385,7 @@ def build_demo_snapshot() -> DashboardSnapshot:
                 completed_at=_at(9, 8),
                 original_ordering_at=_at(8, 30),
                 waiting_minutes=0,
-                actual_room="Room 1 · Dr Tan",
+                actual_room="F1",
                 processing_stage="Completed 09:08",
                 staff_confirmed=True,
                 matched_package="WELL2 — Comprehensive Screen",
@@ -412,6 +417,18 @@ def build_demo_snapshot() -> DashboardSnapshot:
         ],
         review_cases=[
             ReviewCase(
+                id="R-014",
+                ticket_id="Q-014",
+                patient_name="Loh Wei Ming",
+                reason_code="ambiguous_match",
+                reason_label="Insurance eligibility needs confirmation",
+                document_name="Meridian_referral.pdf",
+                evidence_summary="WELL2 booked · Meridian referral letter on file — cover does not match automatically",
+                waiting_minutes=0,
+                service_target=ServiceTarget.APPROACHING,
+                next_action="Confirm insurer cover at the slow counter",
+            ),
+            ReviewCase(
                 id="R-015",
                 ticket_id="Q-015",
                 patient_name="Tan Kai Xuan",
@@ -441,9 +458,9 @@ def build_demo_snapshot() -> DashboardSnapshot:
             pressured_workstream="Assisted review",
             rationale=(
                 "Two review cases are approaching the 20-minute service target "
-                "while Counter 4 has been idle for 7 minutes."
+                "while S1 has been idle for 7 minutes."
             ),
-            qualified_resource="Counter 4 · Nur Aisyah",
+            qualified_resource="S1 · Nur Aisyah",
             current_wait_minutes=18,
             expected_wait_minutes=9,
             expires_at=_at(9, 48),
@@ -762,7 +779,16 @@ class DemoRepository:
             if isinstance(existing, QueueTicket):
                 return deepcopy(existing)
             highest = max(int(ticket.id.removeprefix("Q-")) for ticket in self._snapshot.tickets)
-            ticket = create_walk_in_ticket(f"Q-{highest + 1:03d}", request)
+            ticket = create_walk_in_ticket(
+                f"Q-{highest + 1:03d}",
+                request,
+                occupied_counters=[
+                    room
+                    for existing in self._snapshot.tickets
+                    for room in (existing.actual_room, existing.expected_room)
+                    if room
+                ],
+            )
             self._snapshot.tickets.insert(0, ticket)
             self._snapshot.generated_at = datetime.now(UTC)
             self._idempotent_results[key] = deepcopy(ticket)
@@ -837,6 +863,40 @@ class DemoRepository:
             )
             updated_documents = list(current.documents)
             updated_documents[doc_index] = corrected_doc
+            updated = current.model_copy(update={"documents": updated_documents, "version": current.version + 1})
+            self._snapshot.tickets[index] = updated
+            self._idempotent_results[key] = deepcopy(updated)
+            return deepcopy(updated)
+
+    def unconfirm_document(
+        self, ticket_id: str, document_id: str, request: DocumentUnconfirmRequest, actor: str = "synthetic-staff"
+    ) -> QueueTicket:
+        with self._lock:
+            key = ("document_unconfirm", request.idempotency_key)
+            existing = self._idempotent_results.get(key)
+            if isinstance(existing, QueueTicket):
+                return deepcopy(existing)
+            index = next(index for index, ticket in enumerate(self._snapshot.tickets) if ticket.id == ticket_id)
+            current = self._snapshot.tickets[index]
+            if current.version != request.expected_version:
+                raise ValueError("The ticket changed since it was loaded. Refresh and try again.")
+            doc_index = next(
+                (i for i, doc in enumerate(current.documents) if doc.id == document_id),
+                None,
+            )
+            if doc_index is None:
+                raise KeyError(f"No document {document_id} on file for {ticket_id}")
+            current_doc = current.documents[doc_index]
+            reverted_doc = current_doc.model_copy(
+                update={
+                    "confirmed": False,
+                    "confirmed_by": None,
+                    "confirmed_at": None,
+                    "version": current_doc.version + 1,
+                }
+            )
+            updated_documents = list(current.documents)
+            updated_documents[doc_index] = reverted_doc
             updated = current.model_copy(update={"documents": updated_documents, "version": current.version + 1})
             self._snapshot.tickets[index] = updated
             self._idempotent_results[key] = deepcopy(updated)
@@ -1230,6 +1290,11 @@ class DemoRepository:
                 PatientPaymentStatus.MOCKED_PAID: "Demo payment recorded",
                 PatientPaymentStatus.MOCK_FAILED: "Demo payment failed — retry available",
             }[payment]
+            ticket = next(item for item in self._snapshot.tickets if item.id == "Q-014")
+            queue_number, counter_label = _ticket_assignment(ticket)
+            queue_summary = (
+                f"{queue_number} · Counter {counter_label}" if counter_label else queue_number
+            )
             return PatientHome(
                 patient_display_name=patient.full_name,
                 appointment=PatientAppointmentSummary(
@@ -1243,7 +1308,7 @@ class DemoRepository:
                 coverage_status=coverage,
                 coverage_summary=coverage_summary,
                 questionnaire_status=questionnaire,
-                queue_summary="Available after staff check-in",
+                queue_summary=queue_summary,
                 payment_status=payment,
                 payment_summary=payment_summary,
                 primary_action=action,
@@ -1300,17 +1365,8 @@ class DemoRepository:
     def get_patient_queue(self, patient_id: int | None = None) -> PatientQueueStatus:
         with self._lock:
             ticket = next(ticket for ticket in self._snapshot.tickets if ticket.id == "Q-014")
+            queue_number, counter_label = _ticket_assignment(ticket)
             checked_in = ticket.checked_in_at is not None or ticket.visit_phase != VisitPhase.INCOMING
-            if not checked_in:
-                return PatientQueueStatus(
-                    available=False,
-                    ticket_id=ticket.id,
-                    visit_phase=ticket.visit_phase,
-                    status_label="Before check-in",
-                    status_detail="Queue status will appear after staff check-in.",
-                    counter_label=ticket.actual_room or ticket.expected_room or ticket.queue_number,
-                    updated_at=self._snapshot.generated_at,
-                )
             if ticket.readiness_state == ReadinessState.NEEDS_REVIEW:
                 detail = "A staff member is reviewing your registration."
                 label = "Additional review needed"
@@ -1320,6 +1376,9 @@ class DemoRepository:
             elif ticket.visit_phase == VisitPhase.FINISHED:
                 detail = "Your visit is complete."
                 label = "Finished"
+            elif not checked_in:
+                detail = "Your queue number and counter are ready. Keep this ticket for arrival."
+                label = "Ticket reserved"
             else:
                 detail = "Waiting to be called. Keep this ticket — you will not take another number."
                 label = "Waiting"
@@ -1329,7 +1388,8 @@ class DemoRepository:
                 visit_phase=ticket.visit_phase,
                 status_label=label,
                 status_detail=detail,
-                counter_label=ticket.actual_room or ticket.expected_room or ticket.queue_number,
+                queue_number=queue_number,
+                counter_label=counter_label,
                 patients_ahead=2 if ticket.visit_phase == VisitPhase.ONGOING else 0,
                 updated_at=self._snapshot.generated_at,
                 payment_ready=self._journey["payment_status"]

@@ -454,6 +454,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tickets/{ticket_id}/documents/{document_id}/unconfirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unconfirm Document */
+        post: operations["unconfirm_document_api_v1_tickets__ticket_id__documents__document_id__unconfirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tickets/{ticket_id}/forms/confirm": {
         parameters: {
             query?: never;
@@ -1034,6 +1051,13 @@ export interface components {
             /** Staff Confirmed */
             staff_confirmed: boolean;
         };
+        /** DocumentUnconfirmRequest */
+        DocumentUnconfirmRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
         /** FormsConfirmRequest */
         FormsConfirmRequest: {
             /** Expected Version */
@@ -1414,6 +1438,8 @@ export interface components {
              * @default false
              */
             payment_ready: boolean;
+            /** Queue Number */
+            queue_number?: string | null;
             /**
              * Stale
              * @default false
@@ -2881,6 +2907,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DocumentConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unconfirm_document_api_v1_tickets__ticket_id__documents__document_id__unconfirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+                ticket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentUnconfirmRequest"];
             };
         };
         responses: {

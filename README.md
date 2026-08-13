@@ -1,16 +1,31 @@
 # Epicenter
 
-Epicenter is a synthetic outpatient administrative-readiness demo. It turns varied coverage documents into evidence-backed readiness states, keeps every patient on one persistent ticket, and presents constrained operational recommendations for staff approval. OpenAI is the application LLM during development and is accessed only through the backend; the deployed custom MCP endpoints remain compatible with Copilot Studio as required by the publication brief.
+Epicenter is a synthetic outpatient administrative-readiness demo. It turns varied coverage documents into evidence-backed readiness states, keeps every patient on one persistent ticket, and routes that ticket to a labelled registration counter. OpenAI is the application LLM during development and is accessed only through the backend; the deployed custom MCP endpoints remain compatible with Copilot Studio as required by the publication brief.
+
+## What the demo shows
+
+Two independently built Next.js applications share one FastAPI contract:
+
+| App | Port | What it covers |
+| --- | --- | --- |
+| Patient | 3000 | Home, coverage upload, questionnaire, queue (number + assigned counter), payment, records |
+| Nurse | 3001 | Today board (Incoming / Ongoing / Finished), gated registration tasks, walk-in kiosk, Database, Audit, Simulator |
+
+**Registration routing.** Walk-ins always go to slow counters (`S1`–`S4`). Only booked patients with no outstanding issues (`intake_type` `booked` and `readiness_state` `ready`) go to fast counters (`F1`–`F2`). The assigned queue number and counter are visible on both the patient queue screen and the nurse dashboard.
+
+**Nurse task flow.** Opening a ticket walks through gated steps: Identity & e-card → Forms guidance → Forms review → Confirm package (when documents are on file) → Billing & queue → Summary. Exceptions stay on the same ticket. See [`docs/nurse-workflow.md`](docs/nurse-workflow.md).
+
+**Simulator.** The nurse Simulator tab replays a deterministic clinic-day model (`serial_baseline`, `single_ticket`, `dynamic_allocation`) with playback controls. The engine lives in `frontend/nurse/lib/simulation/` and must not write operational patient or queue tables. See [`docs/simulator.md`](docs/simulator.md).
 
 ## Repository
 
 - `frontend/patient/` — independently built Next.js patient registration and pre-arrival experience with public patient-only Clerk enrollment.
-- `frontend/nurse/` — independently built Next.js staff operations, assisted review and supervised kiosk experience with Clerk authentication.
+- `frontend/nurse/` — independently built Next.js staff operations, gated task flow, walk-in kiosk, Database, Audit, and Simulator, with Clerk authentication.
 - `frontend/shared/` — generated data contracts, design tokens and safe presentation primitives shared by both apps.
 - `backend/` — FastAPI domain services, Clerk JWT-protected HTTP API, and the server-side OpenAI integration for document intelligence and reviewed assistant tools.
-- `docs/` — PRD, design, architecture, simulator, pitch and supporting research.
+- `docs/` — PRD, design, architecture, simulator, nurse workflow, pitch and supporting research.
 
-See [`docs/openai_integration.md`](docs/openai_integration.md) for the native analytics dashboard, OpenAI Responses API integration, Copilot-compatible MCP contract, and deferred Power BI/Fabric scalability option.
+See [`docs/openai_integration.md`](docs/openai_integration.md) for the native analytics dashboard, OpenAI Responses API integration, Copilot-compatible MCP contract, and deferred Power BI/Fabric scalability option. Delivery status lives in [`docs/nextSteps.md`](docs/nextSteps.md).
 
 ## OpenAI configuration
 
@@ -42,13 +57,22 @@ python3 -m venv .venv
 .venv/bin/uvicorn app.main:app --reload
 ```
 
+On Windows PowerShell:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements-dev.txt
+.\.venv\Scripts\uvicorn app.main:app --reload
+```
+
 With `EPICENTER_SUPABASE_URL` and `EPICENTER_SUPABASE_SECRET_KEY` present,
 `EPICENTER_PERSISTENCE_MODE=auto` makes the local FastAPI process use the
 hosted Supabase project. Set `EPICENTER_PERSISTENCE_MODE=demo` when you want an
 isolated in-memory run. Set it to `supabase` to fail closed if the server
 credentials are missing.
 
-Terminal 2 — patient screen (port 3000, Patient Pre-check only):
+Terminal 2 — patient screen (port 3000):
 
 ```bash
 cd frontend
@@ -56,7 +80,7 @@ npm install
 npm run patient
 ```
 
-Terminal 3 — nurse screen (port 3001, Readiness Board + Assisted Review + Walk-in kiosk):
+Terminal 3 — nurse screen (port 3001):
 
 ```bash
 cd frontend
@@ -66,6 +90,8 @@ npm run nurse
 Open `http://localhost:3000` for patient and `http://localhost:3001` for nurse. All frontends use the same local API. The nurse board can show its clearly labelled synthetic fallback when the API is unavailable; patient submissions fail visibly, preserve the selection, and offer retry rather than pretending the action completed.
 
 The frontend commands are independent: any app can run by itself without starting the other frontend processes.
+
+Walk-in kiosk (nurse app): `http://localhost:3001/kiosk`.
 
 ## Sign-in and account roles
 
@@ -118,7 +144,7 @@ Keep provider-specific Clerk User IDs out of the seed SQL and repository. Re-run
 
 On every protected request, FastAPI requires a valid Clerk session and exactly one active staff mapping for `EPICENTER_CLINIC_ID`. Patient, unmapped, disabled, and wrong-clinic identities receive `403` instead of staff access. An email address alone never grants a nurse role.
 
-Every currently implemented staff mutation also requires a recent Clerk verification. If the strongest configured factor is older than ten minutes, Clerk opens its verification prompt and automatically retries the action after verification succeeds. In the development instance, choose **Use another method → Email code** when needed and enter `424242` for a `+clerk_test` account.
+Every currently implemented staff mutation also requires a recent Clerk verification. If the strongest configured factor is older than ten minutes, Clerk opens its verification prompt and automatically retries the action after verification succeeds. Database Update and Delete require password reverification in the UI. In the development instance, choose **Use another method → Email code** when needed and enter `424242` for a `+clerk_test` account.
 
 ### Switching from demo to real local sessions
 
@@ -185,4 +211,11 @@ cd backend && .venv/bin/pytest -q && .venv/bin/ruff check app tests
 cd frontend && npm test && npm run typecheck && npm run lint && npm run build
 ```
 
-Local `.env` and `.env.local` files contain development-only configuration and are ignored. Copy each app's `.env.example` when setting up another machine. No real patient data or live provider integration is included.
+On Windows PowerShell:
+
+```powershell
+cd backend; .\.venv\Scripts\pytest -q; .\.venv\Scripts\ruff check app tests
+cd frontend; npm test; npm run typecheck; npm run lint; npm run build
+```
+
+Local `.env` and `.env.local` files contain development-only configuration and are ignored. Copy `frontend/patient/.env.example` and `frontend/nurse/.env.example` into each app when setting up another machine. No real patient data or live provider integration is included.
